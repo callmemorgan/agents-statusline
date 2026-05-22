@@ -4,7 +4,6 @@ A fast, dependency-free statusline renderer for [Claude Code](https://claude.ai/
 
 Claude Code pipes a JSON payload to this binary on every turn. It renders a three-line colored summary:
 
-![claude-statusline example](https://github.com/user-attachments/assets/placeholder)
 
 ## Features
 
