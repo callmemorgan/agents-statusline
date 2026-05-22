@@ -66,6 +66,17 @@ Or edit `~/.config/claude-statusline/config.json` directly:
 - Missing config = all segments in default order.
 - Empty array `[]` = hide the statusline entirely.
 
+## Testing
+
+See [TESTING.md](TESTING.md) for manual validation procedures. There are no automated tests — the tool is validated by piping JSON payloads and inspecting the 3-line output.
+
+Quick smoke test:
+
+```bash
+go build -o claude-statusline main.go
+echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline
+```
+
 ## Why Go?
 
 - **Zero dependencies** — standard library only
