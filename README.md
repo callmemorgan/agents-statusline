@@ -1,6 +1,8 @@
 # claude-statusline
 
-A fast, dependency-free statusline renderer for [Claude Code](https://claude.ai/code).
+A fast statusline renderer for [Claude Code](https://claude.ai/code).
+
+The core renderer is standard-library-only. The interactive `--configure` TUI uses [tview](https://github.com/rivo/tview) for panes, scrollable lists, and live preview.
 
 Claude Code pipes a JSON payload to this binary on every turn. It renders a three-line colored summary:
 
@@ -41,11 +43,20 @@ claude config set statusline.command "/path/to/claude-statusline"
 
 ## Configuration
 
-Segments are controlled by an **ordered array** — both visibility and display order:
-
 ```bash
 claude-statusline --configure
 ```
+
+Opens an interactive TUI with a scrollable segment list, live statusline preview, and keyboard-driven editing:
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Navigate segments |
+| `Space` | Toggle segment on/off |
+| `1` / `2` / `3` | Move segment to that line (also enables it) |
+| `r` | Reset to defaults |
+| `s` | Save and exit |
+| `q` | Quit without saving |
 
 Or edit `~/.config/claude-statusline/config.json` directly:
 
@@ -84,9 +95,9 @@ echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./c
 
 ## Why Go?
 
-- **Zero dependencies** — standard library only
 - **Fast** — parses JSON and renders in <1ms
 - **Portable** — single static binary
+- **Core renderer is zero-dependency** — standard library only; the interactive `--configure` TUI adds `tview`
 
 ## License
 

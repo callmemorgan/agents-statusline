@@ -15,19 +15,20 @@
 ## Technology Stack
 
 - **Go 1.26** — Single-file implementation.
-- **Standard library only** — Zero external dependencies.
+- **Runtime: standard library only** — The JSON-to-statusline renderer has zero external dependencies.
+- **Configure mode: tview** — `claude-statusline --configure` uses `github.com/rivo/tview` for panes, scrollable lists, and live preview.
 
 ## Project Structure
 
 ```
 .
-├── main.go                  # Go implementation (single file, ~520 lines)
+├── main.go                  # Go implementation (single file)
 ├── go.mod                   # Go module: github.com/callmemorgan/claude-statusline
 ├── .gitignore               # Ignores built binary
 └── AGENTS.md                # This file
 ```
 
-There are no sub-packages, no vendored dependencies, and no generated code.
+There are no sub-packages and no generated code. The only external dependencies are `tview` and `tcell`, used exclusively by `--configure`.
 
 ## Build and Run
 
@@ -126,7 +127,13 @@ Statusline segments are controlled by an **ordered array** of segment IDs in `~/
 | `context-window` | 3 | Context window usage bar |
 | `rate-limits` | 3 | 5-hour and 7-day quota bars |
 
-**Interactive setup:** `claude-statusline --configure` opens a live-preview editor where you can set the segment order by typing numbers or IDs, or move segments between lines with `line <id> <n>`.
+**Interactive setup:** `claude-statusline --configure` opens a TUI with three panes:
+
+1. **Segment list** (fixed-height scrollbox) — all 15 segments with `•` toggle indicators and `[Ln]` line overrides.
+2. **Preview pane** — live-rendered statusline (no-colour) that updates as you toggle/line-change segments.
+3. **Help bar** — keyboard shortcuts.
+
+Keys: `↑/↓` navigate, `Space` toggle, `1/2/3` set line, `r` reset, `s` save, `q` quit.
 
 ### Color Palette
 
@@ -176,7 +183,7 @@ Read from `~/.claude/settings.json` (`effortLevel` field) or from the JSON paylo
 
 ## Code Style Guidelines
 
-- **Go**: Keep everything in `package main`. Use plain structs with JSON tags. Prefer explicit error handling with early returns. No external dependencies.
+- **Go**: Keep everything in `package main`. Use plain structs with JSON tags. Prefer explicit error handling with early returns. Minimise external dependencies; new runtime code should stay stdlib-only.
 - **Naming**: Go uses camelCase.
 - **Comments**: Explain *why* for non-obvious logic.
 
@@ -212,6 +219,6 @@ Users can place the resulting binary anywhere on their `$PATH` and configure Cla
 
 ## Conventions for Contributors
 
-- Keep the binary dependency-free (standard library only).
+- Keep the runtime renderer dependency-free (standard library only). The `--configure` TUI may use `tview`.
 - Respect `NO_COLOR` and `TERM=dumb` for any new color output.
 - Keep the three-line output contract: line 1 = location/meta, line 2 = model/duration/tokens, line 3 = progress bars (these are the natural lines; `lines` overrides allow users to rearrange).

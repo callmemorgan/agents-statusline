@@ -111,43 +111,46 @@ echo '{"model":{"display_name":"Claude"},"cost":{"total_cost_usd":0.42}}' | ./cl
 
 Expect: both segments fall back to their natural lines.
 
-## --configure interactive mode
+## --configure interactive TUI
 
 ```bash
-# Run configure and type: 5,4,8,9,14  then  done
 ./claude-statusline --configure
+```
 
+A TUI opens with three panes: a scrollable segment list, a live preview, and a help bar.
+
+### Basic toggle and save
+
+1. Navigate with `↑`/`↓`.
+2. Press `Space` to toggle segments on/off.
+3. Press `s` to save and exit.
+
+```bash
 # Verify the saved config
 cat ~/.config/claude-statusline/config.json
 
 # Verify the normal pipe respects the new order
 echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline
-
-# Run configure again and type: reset  then  done
-./claude-statusline --configure
 ```
-
-Expect: after `reset`, config is restored to all 15 defaults.
 
 ### Line assignment in --configure
 
+1. Navigate to `model`.
+2. Press `1` to move it to line 1 (also enables it).
+3. Navigate to `cost`.
+4. Press `2` to move it to line 2.
+5. Press `s` to save.
+
 ```bash
-# Start with a minimal config
-cat > ~/.config/claude-statusline/config.json <<'EOF'
-{"segments":["model","directory","cost"]}
-EOF
-
-# Run configure and type:
-#   line model 1
-#   line cost 2
-#   done
-./claude-statusline --configure
-
 # Verify the saved config includes lines
 cat ~/.config/claude-statusline/config.json
 ```
 
 Expect: config contains `"lines": {"model": 1, "cost": 2}`. Preview shows `model` on line 1 and `cost` on line 2.
+
+### Reset to defaults
+
+Press `r` at any time to reset to all 15 defaults. Then `s` to save or `q` to quit without saving.
 
 ## Edge cases
 

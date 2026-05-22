@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -11,6 +10,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+	"golang.org/x/term"
 )
 
 const (
@@ -199,17 +202,43 @@ func main() {
 // ─── Configure Mode ──────────────────────────────────────────────────
 
 func runConfigure() {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Fprintln(os.Stderr, "claude-statusline --configure requires an interactive terminal.")
+		fmt.Fprintf(os.Stderr, "Edit %s directly, or run from a terminal.\n", configPath())
+		os.Exit(1)
+	}
+
 	cfg := loadConfig()
-	scanner := bufio.NewScanner(os.Stdin)
 	segments := allSegmentInfos()
 
-	for {
-		clearScreen()
-		printHeader()
-		printPreview(cfg)
-		fmt.Println()
-		fmt.Println("Available segments:")
-		for i, s := range segments {
+	app := tview.NewApplication()
+
+	// Scrollable list of all segments with toggle state.
+	list := tview.NewList().
+		SetHighlightFullLine(true).
+		SetSelectedBackgroundColor(tcell.ColorDarkSlateGrey)
+	list.SetBorder(true)
+
+	// Live preview of the statusline (plain text — no ANSI / tview colour tags).
+	preview := tview.NewTextView().
+		SetWrap(false)
+
+	previewBox := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(preview, 0, 1, false)
+	previewBox.SetBorder(true).SetTitle(" Preview ")
+
+	// Fixed-height help bar.
+	help := tview.NewTextView().
+		SetTextAlign(tview.AlignCenter).
+		SetText(" space toggle • 1/2/3 line • ↑/↓ nav • r reset • s save • q quit ")
+
+	// Update list items and preview from current cfg.
+	updateUI := func() {
+		currentIdx := list.GetCurrentItem()
+
+		list.Clear()
+		for _, s := range segments {
 			enabled := false
 			for _, id := range cfg.Segments {
 				if id == s.id {
@@ -221,125 +250,121 @@ func runConfigure() {
 			if enabled {
 				mark = "• "
 			}
-			fmt.Printf("  %s%2d. %-20s %s\n", mark, i+1, s.id, s.desc)
-		}
-		fmt.Println()
-		if len(cfg.Segments) == 0 {
-			fmt.Println("Current order: (none — statusline will be hidden)")
-		} else {
-			fmt.Printf("Current order: %s\n", formatSegmentOrder(cfg))
-		}
-		fmt.Println()
-		fmt.Println("Commands:")
-		fmt.Println("  <n>,<m>,...   set order using numbers (e.g. 3,1,5,2)")
-		fmt.Println("  <id>,<id>,... set order using IDs (e.g. model,directory,git-branch)")
-		fmt.Println("  line <id> <n> move segment to line 1, 2, or 3 (e.g. line model 1)")
-		fmt.Println("  reset         restore defaults")
-		fmt.Println("  done          save and exit")
-		fmt.Println()
-		fmt.Print("> ")
 
-		if !scanner.Scan() {
-			break
-		}
-		line := strings.TrimSpace(scanner.Text())
-		if line == "done" || line == "" {
-			break
-		}
-		if line == "reset" {
-			cfg = defaultConfig()
-			continue
+			line := s.line
+			if override, ok := cfg.Lines[s.id]; ok && override >= 1 && override <= 3 {
+				line = override
+			}
+			lineStr := ""
+			if line != s.line {
+				lineStr = fmt.Sprintf(" [L%d]", line)
+			}
+
+			// Escape '[' so tview doesn't treat it as a colour tag.
+			desc := strings.ReplaceAll(s.desc, "[", "[[")
+			mainText := fmt.Sprintf("%s%s%s", mark, s.id, lineStr)
+			list.AddItem(mainText, "  "+desc, 0, nil)
 		}
 
-		// Handle "line <id> <n>" command
-		if strings.HasPrefix(line, "line ") {
-			tokens := strings.Fields(line)
-			if len(tokens) == 3 {
-				id := tokens[1]
-				n, err := strconv.Atoi(tokens[2])
-				if err == nil && n >= 1 && n <= 3 {
-					if s, ok := segmentByID(id); ok {
-						if cfg.Lines == nil {
-							cfg.Lines = make(map[string]int)
-						}
-						if s.line == n {
-							delete(cfg.Lines, id) // clean: remove redundant overrides
-						} else {
-							cfg.Lines[id] = n
-						}
+		if currentIdx >= 0 && currentIdx < len(segments) {
+			list.SetCurrentItem(currentIdx)
+		}
+		list.SetTitle(fmt.Sprintf(" Segments (%d/%d) ", len(cfg.Segments), len(segments)))
+
+		// Refresh preview (no colours — tview TextView without DynamicColors).
+		p := samplePayload()
+		lines := buildStatusline(p, palette{}, cfg)
+		previewText := strings.TrimSpace(strings.Join(lines, "\n"))
+		if previewText == "" {
+			previewText = "(statusline hidden — no segments enabled)"
+		}
+		preview.SetText(previewText)
+	}
+
+	updateUI()
+
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case ' ':
+				idx := list.GetCurrentItem()
+				if idx < 0 || idx >= len(segments) {
+					return nil
+				}
+				id := segments[idx].id
+				found := -1
+				for i, segID := range cfg.Segments {
+					if segID == id {
+						found = i
+						break
 					}
 				}
-			}
-			continue
-		}
-
-		parts := strings.Split(line, ",")
-		newSegments := []string{}
-		seen := map[string]bool{}
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			if part == "" {
-				continue
-			}
-			// Try number first
-			if n, err := strconv.Atoi(part); err == nil && n >= 1 && n <= len(segments) {
-				id := segments[n-1].id
-				if !seen[id] {
-					newSegments = append(newSegments, id)
-					seen[id] = true
+				if found >= 0 {
+					cfg.Segments = append(cfg.Segments[:found], cfg.Segments[found+1:]...)
+				} else {
+					cfg.Segments = append(cfg.Segments, id)
 				}
-				continue
-			}
-			// Try ID
-			for _, s := range segments {
-				if s.id == part && !seen[part] {
-					newSegments = append(newSegments, part)
-					seen[part] = true
-					break
+				updateUI()
+				return nil
+			case '1', '2', '3':
+				idx := list.GetCurrentItem()
+				if idx < 0 || idx >= len(segments) {
+					return nil
 				}
+				id := segments[idx].id
+				n := int(event.Rune() - '0')
+				if cfg.Lines == nil {
+					cfg.Lines = make(map[string]int)
+				}
+				if segments[idx].line == n {
+					delete(cfg.Lines, id)
+				} else {
+					cfg.Lines[id] = n
+				}
+				// Ensure the segment is enabled when assigning a line.
+				enabled := false
+				for _, segID := range cfg.Segments {
+					if segID == id {
+						enabled = true
+						break
+					}
+				}
+				if !enabled {
+					cfg.Segments = append(cfg.Segments, id)
+				}
+				updateUI()
+				return nil
+			case 'r', 'R':
+				cfg = defaultConfig()
+				updateUI()
+				return nil
+			case 's', 'S':
+				if err := saveConfig(cfg); err != nil {
+					preview.SetText(fmt.Sprintf("Error saving: %v", err))
+					return nil
+				}
+				app.Stop()
+				fmt.Printf("Saved to %s\n", configPath())
+				return nil
+			case 'q', 'Q':
+				app.Stop()
+				return nil
 			}
 		}
-		if len(newSegments) > 0 {
-			cfg.Segments = newSegments
-		}
-	}
+		return event
+	})
 
-	clearScreen()
-	printHeader()
-	printPreview(cfg)
-	fmt.Println()
-	if len(cfg.Segments) == 0 {
-		fmt.Println("All segments disabled. Statusline will be hidden.")
-	} else {
-		fmt.Printf("Final order: %s\n", formatSegmentOrder(cfg))
-	}
-	if err := saveConfig(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
+	flex := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(list, 12, 0, true).
+		AddItem(previewBox, 0, 1, false).
+		AddItem(help, 1, 0, false)
+
+	if err := app.SetRoot(flex, true).EnableMouse(true).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Saved to %s\n", configPath())
-}
-
-func clearScreen() {
-	fmt.Print("\x1b[2J\x1b[H")
-}
-
-func printHeader() {
-	fmt.Println("══════════════════════════════════════════════════════════")
-	fmt.Println("          claude-statusline — configuration")
-	fmt.Println("══════════════════════════════════════════════════════════")
-	fmt.Println()
-}
-
-func printPreview(cfg config) {
-	colors := currentPalette()
-	p := samplePayload()
-	lines := buildStatusline(p, colors, cfg)
-	fmt.Println("Preview:")
-	fmt.Println()
-	fmt.Println(lines[0])
-	fmt.Println(lines[1])
-	fmt.Println(lines[2])
 }
 
 func samplePayload() payload {
@@ -872,27 +897,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func formatSegmentOrder(cfg config) string {
-	parts := []string{}
-	for _, id := range cfg.Segments {
-		s, ok := segmentByID(id)
-		if !ok {
-			parts = append(parts, id)
-			continue
-		}
-		line := s.line
-		if override, ok := cfg.Lines[id]; ok && override >= 1 && override <= 3 {
-			line = override
-		}
-		if line != s.line {
-			parts = append(parts, fmt.Sprintf("%s (line %d)", id, line))
-		} else {
-			parts = append(parts, id)
-		}
-	}
-	return strings.Join(parts, ", ")
 }
 
 func safeLine(lines []string, idx int) string {
