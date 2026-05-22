@@ -22,7 +22,8 @@ const (
 // ─── Config ──────────────────────────────────────────────────────────
 
 type config struct {
-	Segments []string `json:"segments"`
+	Segments []string       `json:"segments"`
+	Lines    map[string]int `json:"lines"`
 }
 
 func defaultConfig() config {
@@ -33,6 +34,7 @@ func defaultConfig() config {
 			"model", "version", "duration", "api-efficiency", "tokens",
 			"context-window", "rate-limits",
 		},
+		Lines: nil,
 	}
 }
 
@@ -59,6 +61,7 @@ func loadConfig() config {
 	if loaded.Segments != nil {
 		cfg.Segments = loaded.Segments
 	}
+	cfg.Lines = loaded.Lines
 	return cfg
 }
 
@@ -224,12 +227,13 @@ func runConfigure() {
 		if len(cfg.Segments) == 0 {
 			fmt.Println("Current order: (none — statusline will be hidden)")
 		} else {
-			fmt.Printf("Current order: %s\n", strings.Join(cfg.Segments, ", "))
+			fmt.Printf("Current order: %s\n", formatSegmentOrder(cfg))
 		}
 		fmt.Println()
 		fmt.Println("Commands:")
 		fmt.Println("  <n>,<m>,...   set order using numbers (e.g. 3,1,5,2)")
 		fmt.Println("  <id>,<id>,... set order using IDs (e.g. model,directory,git-branch)")
+		fmt.Println("  line <id> <n> move segment to line 1, 2, or 3 (e.g. line model 1)")
 		fmt.Println("  reset         restore defaults")
 		fmt.Println("  done          save and exit")
 		fmt.Println()
@@ -244,6 +248,28 @@ func runConfigure() {
 		}
 		if line == "reset" {
 			cfg = defaultConfig()
+			continue
+		}
+
+		// Handle "line <id> <n>" command
+		if strings.HasPrefix(line, "line ") {
+			tokens := strings.Fields(line)
+			if len(tokens) == 3 {
+				id := tokens[1]
+				n, err := strconv.Atoi(tokens[2])
+				if err == nil && n >= 1 && n <= 3 {
+					if s, ok := segmentByID(id); ok {
+						if cfg.Lines == nil {
+							cfg.Lines = make(map[string]int)
+						}
+						if s.line == n {
+							delete(cfg.Lines, id) // clean: remove redundant overrides
+						} else {
+							cfg.Lines[id] = n
+						}
+					}
+				}
+			}
 			continue
 		}
 
@@ -285,7 +311,7 @@ func runConfigure() {
 	if len(cfg.Segments) == 0 {
 		fmt.Println("All segments disabled. Statusline will be hidden.")
 	} else {
-		fmt.Printf("Final order: %s\n", strings.Join(cfg.Segments, ", "))
+		fmt.Printf("Final order: %s\n", formatSegmentOrder(cfg))
 	}
 	if err := saveConfig(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
@@ -600,7 +626,11 @@ func buildStatusline(p payload, c palette, cfg config) []string {
 	for _, id := range cfg.Segments {
 		if s, ok := segmentByID(id); ok {
 			if rendered, show := s.render(p, c); show {
-				switch s.line {
+				line := s.line
+				if override, ok := cfg.Lines[id]; ok && override >= 1 && override <= 3 {
+					line = override
+				}
+				switch line {
 				case 1:
 					line1Parts = append(line1Parts, rendered)
 				case 2:
@@ -842,6 +872,27 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func formatSegmentOrder(cfg config) string {
+	parts := []string{}
+	for _, id := range cfg.Segments {
+		s, ok := segmentByID(id)
+		if !ok {
+			parts = append(parts, id)
+			continue
+		}
+		line := s.line
+		if override, ok := cfg.Lines[id]; ok && override >= 1 && override <= 3 {
+			line = override
+		}
+		if line != s.line {
+			parts = append(parts, fmt.Sprintf("%s (line %d)", id, line))
+		} else {
+			parts = append(parts, id)
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 func safeLine(lines []string, idx int) string {

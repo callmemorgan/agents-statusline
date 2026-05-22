@@ -58,11 +58,16 @@ Or edit `~/.config/claude-statusline/config.json` directly:
     "cost",
     "context-window",
     "rate-limits"
-  ]
+  ],
+  "lines": {
+    "model": 1,
+    "cost": 2
+  }
 }
 ```
 
-- Segments render on their natural line (line 1 = workspace meta, line 2 = model/duration, line 3 = progress bars).
+- `segments` controls which segments appear and in what order.
+- `lines` optionally overrides which line a segment renders on (1, 2, or 3). Segments not listed use their natural line.
 - Missing config = all segments in default order.
 - Empty array `[]` = hide the statusline entirely.
 

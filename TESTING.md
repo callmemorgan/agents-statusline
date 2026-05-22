@@ -71,6 +71,46 @@ echo '{}' | ./claude-statusline
 
 Expect: defaults (all segments) because the old format is ignored.
 
+### Line overrides
+
+```bash
+cat > ~/.config/claude-statusline/config.json <<'EOF'
+{
+  "segments": ["model", "directory", "cost", "context-window"],
+  "lines": {
+    "model": 1,
+    "cost": 2,
+    "context-window": 2
+  }
+}
+EOF
+echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"cost":{"total_cost_usd":0.42}}' | ./claude-statusline
+```
+
+Expect: `model` on line 1, `directory` on line 1 (natural), `cost` on line 2 (override), `context-window` on line 2 (override).
+
+### Empty lines object = natural lines
+
+```bash
+cat > ~/.config/claude-statusline/config.json <<'EOF'
+{"segments":["model","cost"],"lines":{}}
+EOF
+echo '{"model":{"display_name":"Claude"},"cost":{"total_cost_usd":0.42}}' | ./claude-statusline
+```
+
+Expect: `model` on line 2 (natural), `cost` on line 1 (natural).
+
+### Invalid line numbers ignored
+
+```bash
+cat > ~/.config/claude-statusline/config.json <<'EOF'
+{"segments":["model","cost"],"lines":{"model":0,"cost":99}}
+EOF
+echo '{"model":{"display_name":"Claude"},"cost":{"total_cost_usd":0.42}}' | ./claude-statusline
+```
+
+Expect: both segments fall back to their natural lines.
+
 ## --configure interactive mode
 
 ```bash
@@ -88,6 +128,26 @@ echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./c
 ```
 
 Expect: after `reset`, config is restored to all 15 defaults.
+
+### Line assignment in --configure
+
+```bash
+# Start with a minimal config
+cat > ~/.config/claude-statusline/config.json <<'EOF'
+{"segments":["model","directory","cost"]}
+EOF
+
+# Run configure and type:
+#   line model 1
+#   line cost 2
+#   done
+./claude-statusline --configure
+
+# Verify the saved config includes lines
+cat ~/.config/claude-statusline/config.json
+```
+
+Expect: config contains `"lines": {"model": 1, "cost": 2}`. Preview shows `model` on line 1 and `cost` on line 2.
 
 ## Edge cases
 

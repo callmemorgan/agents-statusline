@@ -70,7 +70,7 @@ Detects the git branch by walking up the directory tree, reading `.git/HEAD` dir
 
 ### Configuration
 
-Statusline segments are controlled by an **ordered array** of segment IDs in `~/.config/claude-statusline/config.json`. The array determines both *which* segments appear and *in what order*:
+Statusline segments are controlled by an **ordered array** of segment IDs in `~/.config/claude-statusline/config.json`. The array determines both *which* segments appear and *in what order*. An optional `lines` object can override which line each segment renders on:
 
 ```json
 {
@@ -90,13 +90,19 @@ Statusline segments are controlled by an **ordered array** of segment IDs in `~/
     "tokens",
     "context-window",
     "rate-limits"
-  ]
+  ],
+  "lines": {
+    "model": 1,
+    "cost": 2
+  }
 }
 ```
 
 **Behavior:**
-- Segments render on their natural line (line 1 = workspace meta, line 2 = model/duration, line 3 = progress bars).
-- Missing config file = all segments in default order.
+- `segments` controls visibility and order.
+- `lines` maps segment IDs to line numbers (1, 2, or 3). Segments not listed use their natural line.
+- Invalid line numbers or unknown segment IDs in `lines` are silently ignored.
+- Missing config file = all segments in default order with no line overrides.
 - Empty array `"segments": []` = hide the statusline entirely.
 - Omitted segments = hidden.
 
@@ -120,7 +126,7 @@ Statusline segments are controlled by an **ordered array** of segment IDs in `~/
 | `context-window` | 3 | Context window usage bar |
 | `rate-limits` | 3 | 5-hour and 7-day quota bars |
 
-**Interactive setup:** `claude-statusline --configure` opens a live-preview editor where you can set the segment order by typing numbers or IDs.
+**Interactive setup:** `claude-statusline --configure` opens a live-preview editor where you can set the segment order by typing numbers or IDs, or move segments between lines with `line <id> <n>`.
 
 ### Color Palette
 
@@ -208,4 +214,4 @@ Users can place the resulting binary anywhere on their `$PATH` and configure Cla
 
 - Keep the binary dependency-free (standard library only).
 - Respect `NO_COLOR` and `TERM=dumb` for any new color output.
-- Keep the three-line output contract: line 1 = location/meta, line 2 = model/duration/tokens, line 3 = progress bars.
+- Keep the three-line output contract: line 1 = location/meta, line 2 = model/duration/tokens, line 3 = progress bars (these are the natural lines; `lines` overrides allow users to rearrange).
