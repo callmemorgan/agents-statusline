@@ -353,7 +353,7 @@ func runConfigure() {
 	// Fixed-height help bar.
 	help := tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).
-		SetText(" space toggle • 1-9 line • ←/→ reorder • ↑/↓ nav • r reset • s save • q quit ")
+		SetText(" space toggle • 1-9 line • ←/→ reorder • ↑/↓ nav • ⇧↑/↓ move row • r reset • s save • q quit")
 
 	// Update list items and preview from current cfg.
 	updateUI := func() {
@@ -489,6 +489,57 @@ func runConfigure() {
 				app.Stop()
 				return nil
 			}
+		case tcell.KeyUp, tcell.KeyDown:
+			// Unmodified Up/Down: pass through for list navigation.
+			if event.Modifiers()&tcell.ModShift == 0 {
+				return event
+			}
+			// Shift+Up / Shift+Down: swap the entire row with the adjacent row.
+			idx := list.GetCurrentItem()
+			if idx < 0 || idx >= len(segments) {
+				return nil
+			}
+			id := segments[idx].id
+			myLine := effectiveLine(id, cfg)
+			targetLine := myLine - 1
+			if event.Key() == tcell.KeyDown {
+				targetLine = myLine + 1
+			}
+			if targetLine < 1 || targetLine > 9 {
+				return nil
+			}
+			if cfg.Lines == nil {
+				cfg.Lines = make(map[string]int)
+			}
+			// Snapshot which segments are on each line before reassigning.
+			var onMyLine, onTargetLine []string
+			for _, sid := range cfg.Segments {
+				el := effectiveLine(sid, cfg)
+				if el == myLine {
+					onMyLine = append(onMyLine, sid)
+				} else if el == targetLine {
+					onTargetLine = append(onTargetLine, sid)
+				}
+			}
+			assignLine := func(sid string, line int) {
+				naturalLine := 1
+				if s, ok := segmentByID(sid); ok {
+					naturalLine = s.line
+				}
+				if line == naturalLine {
+					delete(cfg.Lines, sid)
+				} else {
+					cfg.Lines[sid] = line
+				}
+			}
+			for _, sid := range onMyLine {
+				assignLine(sid, targetLine)
+			}
+			for _, sid := range onTargetLine {
+				assignLine(sid, myLine)
+			}
+			updateUI()
+			return nil
 		case tcell.KeyLeft, tcell.KeyRight:
 			idx := list.GetCurrentItem()
 			if idx < 0 || idx >= len(segments) {
