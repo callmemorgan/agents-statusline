@@ -754,20 +754,6 @@ func renderContextWindow(p payload, c palette) (string, bool) {
 	return result, true
 }
 
-func renderRateLimits(p payload, c palette) (string, bool) {
-	parts := []string{}
-	if seg, ok := rateLimitSegment("5h", p.RateLimits.FiveHour, 5*3600, c); ok {
-		parts = append(parts, seg)
-	}
-	if seg, ok := rateLimitSegment("7d", p.RateLimits.SevenDay, 7*24*3600, c); ok {
-		parts = append(parts, seg)
-	}
-	if len(parts) == 0 {
-		return "", false
-	}
-	return strings.Join(parts, " "+c.Dim+"│"+c.Rst+" "), true
-}
-
 func renderRateLimit5h(p payload, c palette) (string, bool) {
 	return rateLimitSegment("5h", p.RateLimits.FiveHour, 5*3600, c)
 }
@@ -837,7 +823,6 @@ func allSegmentInfos() []segmentInfo {
 		{id: "api-efficiency", line: 2, desc: "API efficiency percentage", render: renderAPIEfficiency},
 		{id: "tokens", line: 2, desc: "Input / output token counts", render: renderTokens},
 		{id: "context-window", line: 3, desc: "Context window usage bar", render: renderContextWindow},
-		{id: "rate-limits", line: 3, desc: "5-hour and 7-day quota bars (combined)", render: renderRateLimits},
 		{id: "rate-limit-5h", line: 3, desc: "5-hour quota bar", render: renderRateLimit5h},
 		{id: "rate-limit-7d", line: 3, desc: "7-day quota bar", render: renderRateLimit7d},
 	}
