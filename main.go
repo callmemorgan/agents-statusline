@@ -392,6 +392,9 @@ func runConfigure() {
 		// Refresh preview (no colours — tview TextView without DynamicColors).
 		p := samplePayload()
 		lines := buildStatusline(p, palette{}, cfg)
+		for i, l := range lines {
+			lines[i] = strings.TrimLeft(l, " ")
+		}
 		previewText := strings.TrimSpace(strings.Join(lines, "\n"))
 		if previewText == "" {
 			previewText = "(statusline hidden — no segments enabled)"
