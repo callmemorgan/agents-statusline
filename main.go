@@ -528,8 +528,8 @@ func runConfigure() {
 
 	topRow := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
-		AddItem(list, 0, 2, true).
-		AddItem(descView, 0, 1, false)
+		AddItem(list, 0, 1, true).
+		AddItem(descView, 0, 3, false)
 
 	flex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
