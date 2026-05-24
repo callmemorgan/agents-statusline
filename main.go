@@ -332,10 +332,12 @@ func runConfigure() {
 	// Scrollable list of all segments with toggle state.
 	list := tview.NewList().
 		SetHighlightFullLine(true).
-		SetSelectedBackgroundColor(tcell.ColorDarkSlateGrey)
+		SetSelectedBackgroundColor(tcell.ColorDarkSlateGrey).
+		ShowSecondaryText(false)
 	list.SetBorder(true)
 
 	// Live preview of the statusline (plain text — no ANSI / tview colour tags).
+	// Fixed at 12 rows (10 content + 2 border) — max 9 statusline lines plus padding.
 	preview := tview.NewTextView().
 		SetWrap(false)
 
@@ -509,8 +511,8 @@ func runConfigure() {
 
 	flex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(list, 12, 0, true).
-		AddItem(previewBox, 0, 1, false).
+		AddItem(list, 0, 1, true).
+		AddItem(previewBox, 12, 0, false).
 		AddItem(help, 1, 0, false)
 
 	if err := app.SetRoot(flex, true).EnableMouse(true).Run(); err != nil {
