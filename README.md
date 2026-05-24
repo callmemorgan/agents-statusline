@@ -119,7 +119,9 @@ Config lives at `~/.config/claude-statusline/config.json`:
 
 Add your own segments with any executable — a shell script, Python script, or binary. Each plugin runs on every turn, and its stdout becomes the segment content. Empty output hides the segment automatically.
 
-### Config
+### Single-field plugin
+
+One segment, whole stdout is the value:
 
 ```json
 {
@@ -135,11 +137,34 @@ Add your own segments with any executable — a shell script, Python script, or 
 }
 ```
 
+### Multi-field plugin
+
+One command, multiple independent segments. The command runs **once** per turn; each field reads its value from a `key:value` line in stdout:
+
+```json
+{
+  "plugins": [
+    {
+      "command": "~/.config/claude-statusline/plugins/memory.sh",
+      "timeout_ms": 200,
+      "fields": [
+        {"id": "mem-used", "line": 1, "desc": "RAM used"},
+        {"id": "mem-swap", "line": 1, "desc": "Swap used"},
+        {"id": "mem-free", "line": 3, "desc": "Free RAM"}
+      ]
+    }
+  ]
+}
+```
+
+Each field ID is an independent segment — independently togglable, positionable, and reorderable in the TUI.
+
 - `id` — segment identifier (used in `segments` list and TUI)
 - `command` — path to the executable; `~` is expanded
 - `line` — default line (1–9); overridable via TUI or `lines` config
 - `desc` — shown in the TUI description panel
 - `timeout_ms` — kill the process after this many ms (default: 200); hidden if it times out or exits non-zero
+- `fields` — multi-field mode; output must use `key:value` lines; mutually exclusive with top-level `id`
 
 Plugin IDs are **auto-appended** to `segments` if not already present, so they appear immediately without editing the list manually.
 
@@ -156,16 +181,23 @@ The binary exposes these to every plugin:
 | `STATUSLINE_PRODUCT` | `antigravity` or empty for Claude Code |
 | `STATUSLINE_PAYLOAD` | Full JSON payload (for advanced use) |
 
-### Example: memory + swap (macOS)
+### Example: memory + swap (macOS, multi-field)
 
 ```sh
 #!/bin/zsh
 # ~/.config/claude-statusline/plugins/memory.sh
 vm_stat | awk '
+  /Pages free/     { free=$3 }
   /Pages active/   { active=$3 }
   /Pages inactive/ { inactive=$3 }
   /Pages wired/    { wired=$4 }
-  END { printf "mem:%.1fGB\n", (active+inactive+wired)*4096/1073741824 }
+  /Pages occupied by compressor/ { swap=$5 }
+  END {
+    used  = (active + inactive + wired) * 4096 / 1073741824
+    avail = free * 4096 / 1073741824
+    s     = swap * 4096 / 1073741824
+    printf "mem-used:%.1fGB\nmem-free:%.1fGB\nmem-swap:%.1fGB\n", used, avail, s
+  }
 '
 ```
 

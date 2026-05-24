@@ -26,12 +26,19 @@ const (
 
 // ─── Config ──────────────────────────────────────────────────────────
 
+type pluginField struct {
+	ID   string `json:"id"`
+	Line int    `json:"line"`
+	Desc string `json:"desc"`
+}
+
 type pluginDef struct {
-	ID        string `json:"id"`
-	Command   string `json:"command"`
-	Line      int    `json:"line"`
-	Desc      string `json:"desc"`
-	TimeoutMS int    `json:"timeout_ms"`
+	ID        string        `json:"id"`
+	Command   string        `json:"command"`
+	Line      int           `json:"line"`
+	Desc      string        `json:"desc"`
+	TimeoutMS int           `json:"timeout_ms"`
+	Fields    []pluginField `json:"fields"`
 }
 
 type config struct {
@@ -83,7 +90,14 @@ func loadConfig() config {
 		inSegments[id] = true
 	}
 	for _, p := range cfg.Plugins {
-		if p.ID != "" && !inSegments[p.ID] {
+		if len(p.Fields) > 0 {
+			for _, f := range p.Fields {
+				if f.ID != "" && !inSegments[f.ID] {
+					cfg.Segments = append(cfg.Segments, f.ID)
+					inSegments[f.ID] = true
+				}
+			}
+		} else if p.ID != "" && !inSegments[p.ID] {
 			cfg.Segments = append(cfg.Segments, p.ID)
 		}
 	}
@@ -332,31 +346,94 @@ func printDebugSchema(raw []byte, p payload) {
 
 var registeredSegments []segmentInfo
 
+// pluginCache holds per-command parsed output within a single buildStatusline
+// call so multi-field plugins run their command only once per turn.
+var pluginCache map[string]map[string]string
+
+func clearPluginCache() {
+	pluginCache = map[string]map[string]string{}
+}
+
 func initSegments(plugins []pluginDef) {
 	registeredSegments = allSegmentInfos()
 	for _, p := range plugins {
 		def := p
-		line := def.Line
-		if line < 1 {
-			line = 1
+		if len(def.Fields) > 0 {
+			// Multi-field plugin: register one segment per field.
+			for _, f := range def.Fields {
+				field := f
+				line := field.Line
+				if line < 1 {
+					line = 1
+				}
+				desc := field.Desc
+				if desc == "" {
+					desc = field.ID
+				}
+				registeredSegments = append(registeredSegments, segmentInfo{
+					id:   field.ID,
+					line: line,
+					desc: desc + " [plugin]",
+					render: func(pay payload, c palette) (string, bool) {
+						out := runPluginField(def, pay, field.ID)
+						return out, out != ""
+					},
+				})
+			}
+		} else {
+			// Single-field plugin: whole stdout is the segment value.
+			line := def.Line
+			if line < 1 {
+				line = 1
+			}
+			desc := def.Desc
+			if desc == "" {
+				desc = def.ID
+			}
+			registeredSegments = append(registeredSegments, segmentInfo{
+				id:   def.ID,
+				line: line,
+				desc: desc + " [plugin]",
+				render: func(pay payload, c palette) (string, bool) {
+					out := runPluginRaw(def, pay)
+					return out, out != ""
+				},
+			})
 		}
-		desc := def.Desc
-		if desc == "" {
-			desc = def.ID
-		}
-		registeredSegments = append(registeredSegments, segmentInfo{
-			id:   def.ID,
-			line: line,
-			desc: desc + " [plugin]",
-			render: func(pay payload, c palette) (string, bool) {
-				out := runPlugin(def, pay)
-				return out, out != ""
-			},
-		})
 	}
 }
 
-func runPlugin(def pluginDef, p payload) string {
+// runPluginField runs a multi-field plugin (cached per command) and returns
+// the value for the requested field ID.
+func runPluginField(def pluginDef, p payload, fieldID string) string {
+	if pluginCache == nil {
+		pluginCache = map[string]map[string]string{}
+	}
+	if _, ok := pluginCache[def.Command]; !ok {
+		raw := runPluginRaw(def, p)
+		pluginCache[def.Command] = parseKeyValueOutput(raw)
+	}
+	return pluginCache[def.Command][fieldID]
+}
+
+// parseKeyValueOutput parses "key:value" lines from plugin stdout.
+func parseKeyValueOutput(raw string) map[string]string {
+	result := map[string]string{}
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if idx := strings.IndexByte(line, ':'); idx > 0 {
+			key := strings.TrimSpace(line[:idx])
+			val := strings.TrimSpace(line[idx+1:])
+			if key != "" {
+				result[key] = val
+			}
+		}
+	}
+	return result
+}
+
+// runPluginRaw executes the plugin command and returns the full trimmed stdout.
+func runPluginRaw(def pluginDef, p payload) string {
 	timeout := time.Duration(def.TimeoutMS) * time.Millisecond
 	if timeout <= 0 {
 		timeout = 200 * time.Millisecond
@@ -999,6 +1076,7 @@ func segmentByID(id string) (segmentInfo, bool) {
 // ─── Statusline Builder ──────────────────────────────────────────────
 
 func buildStatusline(p payload, c palette, cfg config) []string {
+	clearPluginCache()
 	parts := map[int][]string{}
 	for _, id := range cfg.Segments {
 		if s, ok := segmentByID(id); ok {
