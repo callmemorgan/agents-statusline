@@ -115,6 +115,66 @@ Config lives at `~/.config/claude-statusline/config.json`:
 - Empty array `[]` — hides the statusline entirely.
 - Blank lines (no active segments) are collapsed automatically.
 
+## Plugins
+
+Add your own segments with any executable — a shell script, Python script, or binary. Each plugin runs on every turn, and its stdout becomes the segment content. Empty output hides the segment automatically.
+
+### Config
+
+```json
+{
+  "plugins": [
+    {
+      "id": "memory",
+      "command": "~/.config/claude-statusline/plugins/memory.sh",
+      "line": 1,
+      "desc": "RAM usage",
+      "timeout_ms": 200
+    }
+  ]
+}
+```
+
+- `id` — segment identifier (used in `segments` list and TUI)
+- `command` — path to the executable; `~` is expanded
+- `line` — default line (1–9); overridable via TUI or `lines` config
+- `desc` — shown in the TUI description panel
+- `timeout_ms` — kill the process after this many ms (default: 200); hidden if it times out or exits non-zero
+
+Plugin IDs are **auto-appended** to `segments` if not already present, so they appear immediately without editing the list manually.
+
+### Environment variables
+
+The binary exposes these to every plugin:
+
+| Variable | Value |
+|----------|-------|
+| `STATUSLINE_MODEL` | Model display name |
+| `STATUSLINE_DIR` | Current working directory |
+| `STATUSLINE_BRANCH` | Git branch |
+| `STATUSLINE_SESSION` | Session name or conversation ID |
+| `STATUSLINE_PRODUCT` | `antigravity` or empty for Claude Code |
+| `STATUSLINE_PAYLOAD` | Full JSON payload (for advanced use) |
+
+### Example: memory + swap (macOS)
+
+```sh
+#!/bin/zsh
+# ~/.config/claude-statusline/plugins/memory.sh
+vm_stat | awk '
+  /Pages active/   { active=$3 }
+  /Pages inactive/ { inactive=$3 }
+  /Pages wired/    { wired=$4 }
+  END { printf "mem:%.1fGB\n", (active+inactive+wired)*4096/1073741824 }
+'
+```
+
+```sh
+chmod +x ~/.config/claude-statusline/plugins/memory.sh
+```
+
+Plugin segments appear in `--configure` with a `[plugin]` label alongside built-in segments — same toggle, line assignment, and reorder controls.
+
 ## Debug
 
 ```bash

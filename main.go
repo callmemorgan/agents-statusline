@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,9 +26,18 @@ const (
 
 // ─── Config ──────────────────────────────────────────────────────────
 
+type pluginDef struct {
+	ID        string `json:"id"`
+	Command   string `json:"command"`
+	Line      int    `json:"line"`
+	Desc      string `json:"desc"`
+	TimeoutMS int    `json:"timeout_ms"`
+}
+
 type config struct {
 	Segments []string       `json:"segments"`
 	Lines    map[string]int `json:"lines"`
+	Plugins  []pluginDef    `json:"plugins"`
 }
 
 func defaultConfig() config {
@@ -65,6 +76,17 @@ func loadConfig() config {
 		cfg.Segments = loaded.Segments
 	}
 	cfg.Lines = loaded.Lines
+	cfg.Plugins = loaded.Plugins
+	// Auto-append plugin IDs that aren't already in the segments list.
+	inSegments := make(map[string]bool, len(cfg.Segments))
+	for _, id := range cfg.Segments {
+		inSegments[id] = true
+	}
+	for _, p := range cfg.Plugins {
+		if p.ID != "" && !inSegments[p.ID] {
+			cfg.Segments = append(cfg.Segments, p.ID)
+		}
+	}
 	return cfg
 }
 
@@ -214,6 +236,7 @@ func main() {
 
 	colors := currentPalette()
 	cfg := loadConfig()
+	initSegments(cfg.Plugins)
 	lines := buildStatusline(p, colors, cfg)
 
 	elapsedMS := float64(time.Since(start).Microseconds()) / 1000.0
@@ -305,6 +328,68 @@ func printDebugSchema(raw []byte, p payload) {
 	fmt.Printf("  effort         = %q\n", p.Effort.Level)
 }
 
+// ─── Plugin System ───────────────────────────────────────────────────
+
+var registeredSegments []segmentInfo
+
+func initSegments(plugins []pluginDef) {
+	registeredSegments = allSegmentInfos()
+	for _, p := range plugins {
+		def := p
+		line := def.Line
+		if line < 1 {
+			line = 1
+		}
+		desc := def.Desc
+		if desc == "" {
+			desc = def.ID
+		}
+		registeredSegments = append(registeredSegments, segmentInfo{
+			id:   def.ID,
+			line: line,
+			desc: desc + " [plugin]",
+			render: func(pay payload, c palette) (string, bool) {
+				out := runPlugin(def, pay)
+				return out, out != ""
+			},
+		})
+	}
+}
+
+func runPlugin(def pluginDef, p payload) string {
+	timeout := time.Duration(def.TimeoutMS) * time.Millisecond
+	if timeout <= 0 {
+		timeout = 200 * time.Millisecond
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	home, _ := os.UserHomeDir()
+	cmd := strings.Replace(def.Command, "~", home, 1)
+	c := exec.CommandContext(ctx, cmd)
+
+	session := p.SessionName
+	if session == "" {
+		session = p.ConversationID
+	}
+	c.Env = append(os.Environ(),
+		"STATUSLINE_MODEL="+p.Model.DisplayName,
+		"STATUSLINE_DIR="+p.Workspace.CurrentDir,
+		"STATUSLINE_BRANCH="+p.Worktree.Branch,
+		"STATUSLINE_SESSION="+session,
+		"STATUSLINE_PRODUCT="+p.Product,
+	)
+	if raw, err := json.Marshal(p); err == nil {
+		c.Env = append(c.Env, "STATUSLINE_PAYLOAD="+string(raw))
+	}
+
+	out, err := c.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // ─── Configure Mode ──────────────────────────────────────────────────
 
 func effectiveLine(id string, cfg config) int {
@@ -325,7 +410,8 @@ func runConfigure() {
 	}
 
 	cfg := loadConfig()
-	segments := allSegmentInfos()
+	initSegments(cfg.Plugins)
+	segments := registeredSegments
 
 	app := tview.NewApplication()
 
@@ -902,7 +988,7 @@ func allSegmentInfos() []segmentInfo {
 }
 
 func segmentByID(id string) (segmentInfo, bool) {
-	for _, s := range allSegmentInfos() {
+	for _, s := range registeredSegments {
 		if s.id == id {
 			return s, true
 		}
