@@ -234,9 +234,47 @@ type palette struct {
 	Session string
 }
 
+// ─── Help ────────────────────────────────────────────────────────────
+
+func printHelp() {
+	fmt.Println(`claude-statusline — statusline renderer for Claude Code and Antigravity CLI
+
+Usage:
+  claude-statusline [--help|-h] [--configure] [--debug]
+
+Modes:
+  (none)       Read JSON payload from stdin and print the statusline.
+  --configure  Launch an interactive TUI to toggle, order, and assign
+               segments to lines. Saves to ~/.config/claude-statusline/config.json
+  --debug      Read JSON from stdin and print a schema-comparison table
+               showing which fields were detected for Claude Code vs agy.
+  --help, -h   Show this help message.
+
+Configuration:
+  ~/.config/claude-statusline/config.json
+
+Environment:
+  NO_COLOR=1   Disable ANSI colours.
+  TERM=dumb    Disable ANSI colours.
+
+Segments (built-in):
+  vim-mode, sandbox, session-name, agent-state, agent-name,
+  directory, git-branch, artifact-count, lines-changed,
+  cache-percent, plan-tier, cost, model, version, duration,
+  api-efficiency, tokens, context-window, rate-limit-5h, rate-limit-7d
+
+Examples:
+  echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | claude-statusline
+  claude-statusline --configure`)
+}
+
 // ─── Main ────────────────────────────────────────────────────────────
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--help" || os.Args[1] == "-h") {
+		printHelp()
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "--configure" {
 		runConfigure()
 		return

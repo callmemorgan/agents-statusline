@@ -181,28 +181,31 @@ The binary exposes these to every plugin:
 | `STATUSLINE_PRODUCT` | `antigravity` or empty for Claude Code |
 | `STATUSLINE_PAYLOAD` | Full JSON payload (for advanced use) |
 
-### Example: memory + swap (macOS, multi-field)
+### Example: memory + swap (cross-platform, multi-field)
+
+A full working example lives at [`examples/plugins/memory.sh`](examples/plugins/memory.sh). It reports `mem-used`, `swap-used`, and `%-mem-used`, and works on both macOS (`vm_stat`/`sysctl`) and Linux (`/proc/meminfo`).
 
 ```sh
-#!/bin/zsh
-# ~/.config/claude-statusline/plugins/memory.sh
-vm_stat | awk '
-  /Pages free/     { free=$3 }
-  /Pages active/   { active=$3 }
-  /Pages inactive/ { inactive=$3 }
-  /Pages wired/    { wired=$4 }
-  /Pages occupied by compressor/ { swap=$5 }
-  END {
-    used  = (active + inactive + wired) * 4096 / 1073741824
-    avail = free * 4096 / 1073741824
-    s     = swap * 4096 / 1073741824
-    printf "mem-used:%.1fGB\nmem-free:%.1fGB\nmem-swap:%.1fGB\n", used, avail, s
-  }
-'
+cp examples/plugins/memory.sh ~/.config/claude-statusline/plugins/memory.sh
+chmod +x ~/.config/claude-statusline/plugins/memory.sh
 ```
 
-```sh
-chmod +x ~/.config/claude-statusline/plugins/memory.sh
+Add to your config:
+
+```json
+{
+  "plugins": [
+    {
+      "command": "~/.config/claude-statusline/plugins/memory.sh",
+      "timeout_ms": 200,
+      "fields": [
+        {"id": "mem-used",   "line": 1, "desc": "RAM used"},
+        {"id": "swap-used",  "line": 1, "desc": "Swap used"},
+        {"id": "%-mem-used", "line": 1, "desc": "RAM % used"}
+      ]
+    }
+  ]
+}
 ```
 
 Plugin segments appear in `--configure` with a `[plugin]` label alongside built-in segments — same toggle, line assignment, and reorder controls.
