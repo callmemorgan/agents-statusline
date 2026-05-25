@@ -1,0 +1,40 @@
+{
+  "_comment": "claude-statusline example config. Copy to ~/.config/claude-statusline/config.json and edit.",
+  "segments": [
+    "vim-mode",
+    "sandbox",
+    "session-name",
+    "agent-state",
+    "directory",
+    "git-branch",
+    "artifact-count",
+    "lines-changed",
+    "cache-percent",
+    "cost",
+    "model",
+    "version",
+    "duration",
+    "api-efficiency",
+    "tokens",
+    "context-window",
+    "rate-limit-5h",
+    "rate-limit-7d",
+    "plan-tier"
+  ],
+  "lines": {
+    "cost": 1,
+    "model": 2,
+    "context-window": 3
+  },
+  "plugins": [
+    {
+      "_comment": "Single-field plugin — whole stdout becomes the segment value.",
+      "id": "memory",
+      "command": "~/.config/claude-statusline/plugins/memory.sh",
+      "line": 1,
+      "desc": "RAM usage",
+      "timeout_ms": 200
+    }
+  ]
+}
+

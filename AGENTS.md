@@ -87,7 +87,11 @@ Fields are optional; missing or zero values cause segments to hide themselves au
 
 ## Configuration
 
-Statusline segments are controlled by `~/.config/claude-statusline/config.json`:
+Statusline segments are controlled by `~/.config/claude-statusline/config.json`. An annotated example is provided at [`config.json.example`](config.json.example):
+
+```bash
+cp config.json.example ~/.config/claude-statusline/config.json
+```
 
 ```json
 {

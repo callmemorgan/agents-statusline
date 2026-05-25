@@ -132,7 +132,11 @@ Opens an interactive TUI: a scrollable segment list on the left, a live descript
 
 ### Manual config
 
-Config lives at `~/.config/claude-statusline/config.json`:
+Config lives at `~/.config/claude-statusline/config.json`. An annotated example is provided at [`config.json.example`](config.json.example):
+
+```bash
+cp config.json.example ~/.config/claude-statusline/config.json
+```
 
 ```json
 {
