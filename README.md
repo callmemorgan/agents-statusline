@@ -1,10 +1,12 @@
 # claude-statusline
 
-A fast statusline renderer for [Claude Code](https://claude.ai/code) and [Antigravity CLI](https://antigravity.dev) (agy).
+A fast statusline renderer for [Claude Code](https://claude.ai/code) and [Antigravity CLI](https://antigravity.dev) (`agy`).
 
-Both tools pipe a JSON payload to this binary on every turn. It renders a colored, multi-line summary in your terminal. The number of lines is fully configurable — segments are assigned to lines 1–9 and empty lines are collapsed automatically.
+Both tools pipe a JSON payload to this binary on every turn. It renders a colored, multi-line summary in your terminal. The number of lines is fully configurable — segments are assigned to lines 1–9 and empty lines collapse automatically.
 
 The core renderer has no dependencies. The interactive `--configure` TUI uses [tview](https://github.com/rivo/tview).
+
+---
 
 ## Install
 
@@ -19,6 +21,8 @@ git clone https://github.com/callmemorgan/claude-statusline.git
 cd claude-statusline
 go build -o claude-statusline .
 ```
+
+---
 
 ## Wiring it up
 
@@ -42,32 +46,69 @@ Add to your agy config:
 
 The binary auto-detects which tool is calling it via the `product` field in the payload and hides segments that aren't applicable (e.g. rate limits are hidden under agy, plan tier is hidden under Claude Code).
 
-## Segments
+---
 
-| Segment | Default line | Source |
-|---------|-------------|--------|
-| `vim-mode` | 1 | Claude Code |
-| `sandbox` | 1 | agy |
-| `session-name` | 1 | both (UUIDs from agy are trimmed to 8 chars) |
-| `agent-state` | 1 | agy |
-| `agent-name` | 1 | Claude Code |
-| `directory` | 1 | both |
-| `git-branch` | 1 | both |
-| `artifact-count` | 1 | agy |
-| `lines-changed` | 1 | Claude Code |
-| `cache-percent` | 1 | Claude Code |
-| `plan-tier` | 1 | agy |
-| `cost` | 1 | Claude Code |
-| `model` | 2 | both |
-| `version` | 2 | both |
-| `duration` | 2 | Claude Code |
-| `api-efficiency` | 2 | Claude Code |
-| `tokens` | 2 | both |
-| `context-window` | 3 | both |
-| `rate-limit-5h` | 3 | Claude Code |
-| `rate-limit-7d` | 3 | Claude Code |
+## What it looks like
+
+**Claude Code (default config):**
+
+```
+ my-project /Users/me/code/my-project feature/test +128/-45 cache:12.34% $1.23 │ 0.3ms
+ [Claude Sonnet 4.6 ⬆] v2.1.90 01:00:41 (API:65%) ↑1.2M ↓89k
+ ctx [##############------] 72% >200k
+ 5h [########------------] 45% (2h30m) │ 7d [###-----------------] 12% (3d4h)
+```
+
+**agy (default config):**
+
+```
+ fbce29fe /Users/me/code/my-project feature/test artifacts:2 Google AI Pro
+ [Gemini 3.5 Flash (High)] v1.0.2 ↑116.7k ↓35.4k
+ ctx [#-------------------] 11%
+```
 
 Segments that receive no data from the active tool hide themselves automatically — no configuration needed.
+
+---
+
+## Segments
+
+| Segment | Default line | Source | Description |
+|---------|-------------|--------|-------------|
+| `vim-mode` | 1 | Claude Code | Vim mode indicator, e.g. `[normal]` or `[INSERT]` |
+| `sandbox` | 1 | agy | `[SANDBOX]` indicator when sandbox mode is enabled |
+| `session-name` | 1 | both | Session name (Claude Code) or conversation ID (agy). UUIDs are truncated to 8 chars |
+| `agent-state` | 1 | agy | Agent working status, e.g. `[working]` — green when active |
+| `agent-name` | 1 | Claude Code | Agent name when running with `--agent` |
+| `directory` | 1 | both | Current / project directory. Shows `project→subdir` when inside a project subdirectory |
+| `git-branch` | 1 | both | Git branch and worktree name. Falls back to reading `.git/HEAD` if not in payload |
+| `artifact-count` | 1 | agy | Number of generated artifacts |
+| `lines-changed` | 1 | Claude Code | Session cumulative lines added/removed, e.g. `+128/-45` |
+| `cache-percent` | 1 | Claude Code | Cache read percentage from `context_window.current_usage` |
+| `plan-tier` | 1 | agy | Subscription plan tier |
+| `cost` | 1 | Claude Code | Estimated session cost in USD, e.g. `$1.23` |
+| `model` | 2 | both | Model name with effort badge (⬇ → ⬆ ⬆⬆ ⬆⬆⬆) |
+| `version` | 2 | both | Tool version |
+| `duration` | 2 | Claude Code | Elapsed session wall-clock time in `HH:MM:SS` |
+| `api-efficiency` | 2 | Claude Code | Percentage of time spent in API calls vs. total elapsed |
+| `tokens` | 2 | both | Input/output token counts in compact notation (`↑1.2M ↓89k`) |
+| `context-window` | 3 | both | 20-char progress bar with color-coded context usage % |
+| `rate-limit-5h` | 3 | Claude Code | 5-hour rate limit bar with countdown timer (Pro/Max only) |
+| `rate-limit-7d` | 3 | Claude Code | 7-day rate limit bar with countdown timer (Pro/Max only) |
+
+### Color coding
+
+- **Model**: magenta
+- **Directory**: cyan
+- **Git**: green
+- **Changes / Cost**: yellow
+- **Duration**: blue
+- **Context / Rate limits**: green (< 60%), yellow (60–80%), red (> 80%)
+- **Agent**: bright magenta
+- **Vim**: bright white
+- **Session**: bright cyan
+
+---
 
 ## Configuration
 
@@ -83,9 +124,11 @@ Opens an interactive TUI: a scrollable segment list on the left, a live descript
 | `Space` | Toggle segment on/off |
 | `1`–`9` | Move segment to that line (enables it if disabled) |
 | `←` / `→` | Reorder segment within its current line |
+| `Shift+↑` / `Shift+↓` | Swap all segments on the current line with the adjacent line |
 | `r` | Reset to defaults |
 | `s` | Save and exit |
 | `q` | Quit without saving |
+| `h` | Open help (README); `q`/`Esc` to close |
 
 ### Manual config
 
@@ -114,6 +157,46 @@ Config lives at `~/.config/claude-statusline/config.json`:
 - `lines` — override which line a segment renders on (1–9). Omit a segment to use its natural line.
 - Empty array `[]` — hides the statusline entirely.
 - Blank lines (no active segments) are collapsed automatically.
+
+### Common configurations
+
+**Minimal — model + context only:**
+
+```json
+{
+  "segments": ["model", "context-window"]
+}
+```
+
+**Git-focused — directory + branch on line 1, model + tokens on line 2:**
+
+```json
+{
+  "segments": ["directory", "git-branch", "model", "tokens", "context-window"],
+  "lines": {
+    "model": 2,
+    "tokens": 2,
+    "context-window": 2
+  }
+}
+```
+
+**Cost tracking — cost + duration on line 1:**
+
+```json
+{
+  "segments": ["session-name", "directory", "cost", "duration", "model", "tokens", "context-window"],
+  "lines": {
+    "cost": 1,
+    "duration": 1,
+    "model": 2,
+    "tokens": 2,
+    "context-window": 3
+  }
+}
+```
+
+---
 
 ## Plugins
 
@@ -210,6 +293,96 @@ Add to your config:
 
 Plugin segments appear in `--configure` with a `[plugin]` label alongside built-in segments — same toggle, line assignment, and reorder controls.
 
+---
+
+## JSON Payload Reference
+
+### Claude Code fields
+
+Claude Code sends this JSON structure via stdin:
+
+```json
+{
+  "cwd": "/current/working/directory",
+  "session_id": "abc123...",
+  "session_name": "my-session",
+  "transcript_path": "/path/to/transcript.jsonl",
+  "version": "2.1.90",
+  "model": {
+    "id": "claude-opus-4-7",
+    "display_name": "Opus"
+  },
+  "workspace": {
+    "current_dir": "/current/working/directory",
+    "project_dir": "/original/project/directory",
+    "added_dirs": [],
+    "git_worktree": "feature-xyz"
+  },
+  "cost": {
+    "total_cost_usd": 0.01234,
+    "total_duration_ms": 45000,
+    "total_api_duration_ms": 2300,
+    "total_lines_added": 156,
+    "total_lines_removed": 23
+  },
+  "context_window": {
+    "total_input_tokens": 15500,
+    "total_output_tokens": 1200,
+    "context_window_size": 200000,
+    "used_percentage": 8,
+    "remaining_percentage": 92,
+    "current_usage": {
+      "input_tokens": 8500,
+      "output_tokens": 1200,
+      "cache_creation_input_tokens": 5000,
+      "cache_read_input_tokens": 2000
+    }
+  },
+  "exceeds_200k_tokens": false,
+  "effort": { "level": "high" },
+  "thinking": { "enabled": true },
+  "rate_limits": {
+    "five_hour": { "used_percentage": 23.5, "resets_at": 1738425600 },
+    "seven_day": { "used_percentage": 41.2, "resets_at": 1738857600 }
+  },
+  "vim": { "mode": "NORMAL" },
+  "agent": { "name": "security-reviewer" },
+  "worktree": { "name": "my-feature", "branch": "worktree-my-feature" }
+}
+```
+
+**Fields that may be absent:**
+- `session_name` — only when set via `--name` or `/rename`
+- `workspace.git_worktree` — only inside a linked git worktree
+- `effort` — only when the model supports reasoning effort
+- `vim` — only when vim mode is enabled
+- `agent` — only when running with `--agent`
+- `worktree` — only during `--worktree` sessions
+- `rate_limits` — only for Claude Pro/Max subscribers after the first API response
+
+**Fields that may be `null`:**
+- `context_window.current_usage` — before the first API call and after `/compact`
+- `context_window.used_percentage` / `context_window.remaining_percentage` — early in the session
+
+### agy fields
+
+agy sends a similar payload with these additional fields:
+
+```json
+{
+  "product": "antigravity",
+  "conversation_id": "fbce29fe-...",
+  "agent_state": "working",
+  "sandbox": { "enabled": false },
+  "artifact_count": 3,
+  "plan_tier": "Google AI Pro"
+}
+```
+
+The binary detects agy by the `product: "antigravity"` field and automatically hides Claude Code-specific segments.
+
+---
+
 ## Debug
 
 ```bash
@@ -217,6 +390,37 @@ echo '{"product":"antigravity",...}' | claude-statusline --debug
 ```
 
 Prints a field presence table comparing the received payload against the Claude Code and agy schemas, plus all parsed values. Useful for diagnosing missing segments or unexpected payload shapes.
+
+---
+
+## Troubleshooting
+
+**Status line not appearing**
+
+- Verify your binary is executable and on your `$PATH`
+- Check that the tool is actually piping JSON (test with `--debug`)
+- Claude Code: run `claude --debug` to log exit code and stderr from statusline invocations
+- Ensure workspace trust is accepted (statusline requires the same trust as hooks)
+
+**Segments are hidden unexpectedly**
+
+- Check `--debug` output to see if the fields are present in the payload
+- Remember: zero values hide `cost`, `duration`, `lines-changed`, etc.
+- `rate_limits` only appears for Claude Pro/Max after the first API call
+- `agent-name` only appears when running with `--agent`
+- `vim-mode` only appears when vim mode is enabled
+
+**Colors not showing**
+
+- Set `NO_COLOR=1` or `TERM=dumb` to disable colors intentionally
+- If colors appear garbled, your terminal may not support the ANSI sequences used
+
+**Context percentage looks wrong**
+
+- `used_percentage` is calculated from input tokens only (not output tokens)
+- It may differ slightly from `/context` output due to timing of calculation
+
+---
 
 ## Why Go?
 

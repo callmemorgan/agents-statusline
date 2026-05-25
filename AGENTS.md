@@ -139,6 +139,65 @@ Statusline segments are controlled by `~/.config/claude-statusline/config.json`:
 
 Segments that receive no data from the active tool hide themselves automatically.
 
+### Segment rendering details
+
+#### `vim-mode`
+Renders `[mode]` in bright white. Source: `vim.mode`. Hidden when empty.
+
+#### `sandbox`
+Renders `[SANDBOX]` in bright red. Source: `sandbox.enabled`. Hidden when false.
+
+#### `session-name`
+Renders the session identifier in bright cyan. Uses `session_name` (Claude Code) or `conversation_id` (agy). If the value is a 36-character UUID with 4 dashes, truncated to the first 8 chars. Hidden when empty.
+
+#### `agent-state`
+Renders `[state]` in green when `"working"`, dim otherwise. Source: `agent_state`. Hidden when empty.
+
+#### `agent-name`
+Renders the agent name in bright magenta. Source: `agent.name`. Hidden when empty.
+
+#### `directory`
+Renders the current directory in cyan. Uses `workspace.current_dir` → `cwd` → `~`. If inside a project subdirectory, formats as `project→subdir`. `file://` prefixes are stripped from `project_dir`.
+
+#### `git-branch`
+Renders the git branch in green. Uses `worktree.branch`; falls back to reading `.git/HEAD` by walking up from `current_dir`. Handles git worktrees (`.git` as file with `gitdir:`). If a worktree name differs from the branch, shows `branch (worktree)`. Hidden outside a git repo.
+
+#### `artifact-count`
+Renders `artifacts:N` in yellow. Source: `artifact_count`. Hidden when ≤ 0.
+
+#### `lines-changed`
+Renders `+added/-removed` in yellow. Source: `cost.total_lines_added`, `cost.total_lines_removed`. Hidden when both are zero.
+
+#### `cache-percent`
+Renders `cache:XX.XX%` in dim. Calculated from `context_window.current_usage`: `cache_read / (input + cache_creation + cache_read) * 100`. Hidden when cache total is zero.
+
+#### `plan-tier`
+Renders the plan tier in purple. Source: `plan_tier`. Hidden when empty.
+
+#### `cost`
+Renders `$X.XX` in yellow. Source: `cost.total_cost_usd`. Always formatted to 2 decimal places. Hidden when zero.
+
+#### `model`
+Renders `[Model Name badge]` in magenta. Model name from `model.display_name` → `model.id` → `"Claude"`. Effort badge from `effort.level` or `~/.claude/settings.json` (`effortLevel`). Badges: `low`→⬇, `medium`→→, `high`→⬆, `xhigh`→⬆⬆, `max`→⬆⬆⬆.
+
+#### `version`
+Renders `vX.Y.Z` in dim. Source: `version`. Hidden when empty.
+
+#### `duration`
+Renders `HH:MM:SS` in blue. Source: `cost.total_duration_ms`. Hidden when zero.
+
+#### `api-efficiency`
+Renders `(API:NN%)` in dim. Calculated as `total_api_duration * 100 / total_duration`. Hidden when total duration is ≤ 0.
+
+#### `tokens`
+Renders `↑input ↓output` in dim. Source: `context_window.total_input_tokens`, `total_output_tokens`. Compacted: `≥1M`→`X.YM`, `≥1k`→`X.Yk`, else raw integer.
+
+#### `context-window`
+Renders `ctx [bar] NN%` with color-coded percentage. Uses `used_percentage` if present, else calculates from `current_usage` / `context_window_size`. Bar: `#` = used, `-` = empty. Color: green (< 60%), yellow (60–80%), red (> 80%). Appends `>200k` in red if `exceeds_200k_tokens` is true.
+
+#### `rate-limit-5h` / `rate-limit-7d`
+Renders `label [bar] NN% (countdown)`. Uses `rate_limits.five_hour` / `seven_day`. Bar overlays a purple `|` at time-elapsed position. Countdown from `resets_at` Unix timestamp. Color thresholds same as context window. Hidden when `used_percentage` is absent (non-Pro/Max users, or before first API call).
+
 ### Plugin system
 
 Custom segments can be provided by any executable. Plugins are defined in the `plugins` array in config:

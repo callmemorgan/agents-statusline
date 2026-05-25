@@ -70,6 +70,8 @@ echo '{"product":"antigravity","model":{"display_name":"Gemini 3.5 Flash (High)"
 
 Expect: field presence table with `✓`/`✗` per field, parsed values printed below. No statusline output.
 
+---
+
 ## Config behavior
 
 ### Default (no config file)
@@ -123,6 +125,28 @@ echo '{"model":{"display_name":"Claude"},"context_window":{"used_percentage":50,
 ```
 
 Expect: 2 lines output (lines 2, 3, 4 are empty and collapsed).
+
+### Multi-line grouping
+
+```bash
+cat > ~/.config/claude-statusline/config.json <<'EOF'
+{
+  "segments": ["session-name", "directory", "model", "version", "context-window"],
+  "lines": {
+    "session-name": 1,
+    "directory": 1,
+    "model": 2,
+    "version": 2,
+    "context-window": 3
+  }
+}
+EOF
+echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"version":"1.0"}' | ./claude-statusline
+```
+
+Expect: line 1 has session-name and directory, line 2 has model and version, line 3 has context-window.
+
+---
 
 ## Edge cases
 
@@ -186,6 +210,169 @@ echo '{"session_name":"skyslope-convoy","model":{"display_name":"Claude"}}' | ./
 
 Expect: session name shows `skyslope-convoy` in full (not truncated — it's not a UUID).
 
+### Null rate limits
+
+```bash
+cat <<'JSON' | ./claude-statusline
+{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"rate_limits":{"five_hour":null,"seven_day":null}}
+JSON
+```
+
+Expect: rate-limit segments hidden (null `used_percentage` suppresses them).
+
+### Missing rate_limits object entirely
+
+```bash
+echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline
+```
+
+Expect: rate-limit segments hidden (object absent).
+
+### Context window without used_percentage
+
+```bash
+echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"context_window":{"current_usage":{"input_tokens":50000,"output_tokens":1000,"cache_creation_input_tokens":2000,"cache_read_input_tokens":3000},"context_window_size":200000}}' | ./claude-statusline
+```
+
+Expect: context-window segment calculates percentage manually: `(50000+2000+3000)/200000*100 = 27.5%`.
+
+### Context window with zero tokens
+
+```bash
+echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"context_window":{"used_percentage":0,"context_window_size":200000}}' | ./claude-statusline
+```
+
+Expect: context bar shows 0% in green (empty bar).
+
+### Context window at 100%
+
+```bash
+echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"context_window":{"used_percentage":100,"context_window_size":200000}}' | ./claude-statusline
+```
+
+Expect: context bar shows 100% in red (full bar).
+
+---
+
+## Plugin tests
+
+### Single-field plugin
+
+```bash
+mkdir -p ~/.config/claude-statusline/plugins
+cat > ~/.config/claude-statusline/plugins/hello.sh <<'EOF'
+#!/bin/bash
+echo "hello:$STATUSLINE_PRODUCT"
+EOF
+chmod +x ~/.config/claude-statusline/plugins/hello.sh
+
+cat > ~/.config/claude-statusline/config.json <<'EOF'
+{
+  "segments": ["model", "directory"],
+  "plugins": [
+    {
+      "id": "hello",
+      "command": "~/.config/claude-statusline/plugins/hello.sh",
+      "line": 1,
+      "desc": "Hello test"
+    }
+  ]
+}
+EOF
+
+echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline
+```
+
+Expect: `hello:` appears on line 1 (product is empty for Claude Code).
+
+### Multi-field plugin
+
+```bash
+cat > ~/.config/claude-statusline/plugins/multi.sh <<'EOF'
+#!/bin/bash
+echo "field-a:alpha"
+echo "field-b:beta"
+EOF
+chmod +x ~/.config/claude-statusline/plugins/multi.sh
+
+cat > ~/.config/claude-statusline/config.json <<'EOF'
+{
+  "segments": ["model"],
+  "plugins": [
+    {
+      "command": "~/.config/claude-statusline/plugins/multi.sh",
+      "timeout_ms": 200,
+      "fields": [
+        {"id": "field-a", "line": 1, "desc": "Field A"},
+        {"id": "field-b", "line": 2, "desc": "Field B"}
+      ]
+    }
+  ]
+}
+EOF
+
+echo '{"model":{"display_name":"Claude"}}' | ./claude-statusline
+```
+
+Expect: `alpha` on line 1, `beta` on line 2.
+
+### Plugin timeout
+
+```bash
+cat > ~/.config/claude-statusline/plugins/slow.sh <<'EOF'
+#!/bin/bash
+sleep 5
+echo "too late"
+EOF
+chmod +x ~/.config/claude-statusline/plugins/slow.sh
+
+cat > ~/.config/claude-statusline/config.json <<'EOF'
+{
+  "segments": ["model"],
+  "plugins": [
+    {
+      "id": "slow",
+      "command": "~/.config/claude-statusline/plugins/slow.sh",
+      "timeout_ms": 100
+    }
+  ]
+}
+EOF
+
+echo '{"model":{"display_name":"Claude"}}' | ./claude-statusline
+```
+
+Expect: no `slow` segment appears (timed out, hidden automatically).
+
+### Plugin non-zero exit
+
+```bash
+cat > ~/.config/claude-statusline/plugins/fail.sh <<'EOF'
+#!/bin/bash
+echo "error" >&2
+exit 1
+EOF
+chmod +x ~/.config/claude-statusline/plugins/fail.sh
+
+cat > ~/.config/claude-statusline/config.json <<'EOF'
+{
+  "segments": ["model"],
+  "plugins": [
+    {
+      "id": "fail",
+      "command": "~/.config/claude-statusline/plugins/fail.sh"
+    }
+  ]
+}
+EOF
+
+echo '{"model":{"display_name":"Claude"}}' | ./claude-statusline
+```
+
+Expect: no `fail` segment appears (non-zero exit, hidden automatically).
+
+---
+
 ## --configure TUI
 
 ```bash
@@ -210,6 +397,12 @@ Expect: session name shows `skyslope-convoy` in full (not truncated — it's not
 2. Press `←`/`→` to swap their order.
 3. Verify the preview updates immediately.
 
+### Swap lines (Shift+↑/↓)
+
+1. Navigate to any segment on line 1.
+2. Press `Shift+↓` to swap all line-1 segments with line-2 segments.
+3. Verify the preview updates and segments move between lines.
+
 ### Arbitrary line
 
 1. Navigate to any segment. Press `7`.
@@ -219,3 +412,19 @@ Expect: session name shows `skyslope-convoy` in full (not truncated — it's not
 ### Reset
 
 Press `r` at any time. Verify all toggles and line assignments return to defaults in the preview.
+
+### Help page
+
+Press `h`. Verify README content appears in scrollable view. Press `q` to close.
+
+---
+
+## Performance sanity check
+
+```bash
+time for i in {1..100}; do
+  echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline > /dev/null
+done
+```
+
+Expect: total time under 1 second for 100 iterations on modern hardware.

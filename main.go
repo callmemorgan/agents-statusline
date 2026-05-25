@@ -89,21 +89,25 @@ func loadConfig() config {
 	}
 	cfg.Lines = loaded.Lines
 	cfg.Plugins = loaded.Plugins
-	// Auto-append plugin IDs that aren't already in the segments list.
-	inSegments := make(map[string]bool, len(cfg.Segments))
-	for _, id := range cfg.Segments {
-		inSegments[id] = true
-	}
-	for _, p := range cfg.Plugins {
-		if len(p.Fields) > 0 {
-			for _, f := range p.Fields {
-				if f.ID != "" && !inSegments[f.ID] {
-					cfg.Segments = append(cfg.Segments, f.ID)
-					inSegments[f.ID] = true
+	// Auto-append plugin IDs only when the config file doesn't specify
+	// segments at all (nil). If the user explicitly set segments — even to
+	// an empty array — respect their choice and don't force plugins on.
+	if loaded.Segments == nil {
+		inSegments := make(map[string]bool, len(cfg.Segments))
+		for _, id := range cfg.Segments {
+			inSegments[id] = true
+		}
+		for _, p := range cfg.Plugins {
+			if len(p.Fields) > 0 {
+				for _, f := range p.Fields {
+					if f.ID != "" && !inSegments[f.ID] {
+						cfg.Segments = append(cfg.Segments, f.ID)
+						inSegments[f.ID] = true
+					}
 				}
+			} else if p.ID != "" && !inSegments[p.ID] {
+				cfg.Segments = append(cfg.Segments, p.ID)
 			}
-		} else if p.ID != "" && !inSegments[p.ID] {
-			cfg.Segments = append(cfg.Segments, p.ID)
 		}
 	}
 	return cfg
@@ -250,21 +254,60 @@ Modes:
                showing which fields were detected for Claude Code vs agy.
   --help, -h   Show this help message.
 
-Configuration:
+Configuration file:
   ~/.config/claude-statusline/config.json
+
+  Example:
+    {
+      "segments": ["session-name","directory","git-branch","cost","model","context-window"],
+      "lines": {"cost": 2},
+      "plugins": []
+    }
+
+  segments — which segments to show and in what order. Use [] to hide everything.
+  lines    — override which line (1–9) a segment renders on. Omit for default.
+  plugins  — custom executable segments. See README.md for plugin docs.
 
 Environment:
   NO_COLOR=1   Disable ANSI colours.
   TERM=dumb    Disable ANSI colours.
 
-Segments (built-in):
-  vim-mode, sandbox, session-name, agent-state, agent-name,
-  directory, git-branch, artifact-count, lines-changed,
-  cache-percent, plan-tier, cost, model, version, duration,
-  api-efficiency, tokens, context-window, rate-limit-5h, rate-limit-7d
+Line 1 segments — Session & workspace:
+  vim-mode      Vim mode indicator [normal] (Claude Code only)
+  sandbox       [SANDBOX] when enabled (agy only)
+  session-name  Session name, UUIDs truncated to 8 chars (both)
+  agent-state   Agent working status [working] (agy only)
+  agent-name    Agent name when using --agent (Claude Code only)
+  directory     Current / project directory (both)
+  git-branch    Git branch and worktree name (both)
+  artifact-count  Number of artifacts (agy only)
+  lines-changed   Session lines added/removed +N/-M (Claude Code only)
+  cache-percent   Cache read percentage (Claude Code only)
+  plan-tier     Subscription plan tier (agy only)
+  cost          Estimated session cost $X.XX (Claude Code only)
+
+Line 2 segments — Model & metrics:
+  model         Model name with effort badge (both)
+  version       Tool version (both)
+  duration      Elapsed session time HH:MM:SS (Claude Code only)
+  api-efficiency  API time / total time % (Claude Code only)
+  tokens        Input/output token counts ↑N ↓M (both)
+
+Line 3 segments — Usage bars:
+  context-window  20-char progress bar with color-coded % (both)
+  rate-limit-5h   5-hour quota bar with countdown (Claude Code Pro/Max only)
+  rate-limit-7d   7-day quota bar with countdown (Claude Code Pro/Max only)
+
+Segments hide automatically when their source data is missing or zero.
 
 Examples:
+  # Minimal smoke test
   echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | claude-statusline
+
+  # Debug schema detection
+  echo '{"product":"antigravity","model":{"display_name":"Gemini"}}' | claude-statusline --debug
+
+  # Interactive configuration
   claude-statusline --configure`)
 }
 
