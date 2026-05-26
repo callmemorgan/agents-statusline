@@ -111,6 +111,10 @@ cp config.json.example ~/.config/claude-statusline/config.json
     "cost": 2,
     "model": 1
   },
+  "colors": {
+    "model": "cyan",
+    "cost": "green"
+  },
   "plugins": []
 }
 ```
@@ -118,9 +122,10 @@ cp config.json.example ~/.config/claude-statusline/config.json
 **Behavior:**
 - `segments` controls visibility and order. An explicit empty array `[]` hides the statusline entirely.
 - `lines` maps segment IDs to line numbers (1–9). Segments not listed use their natural line.
+- `colors` maps segment IDs to color names (`red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, and `bright-*` variants). Segments not listed use their natural color.
 - Blank lines (lines with no active segments) collapse automatically.
 - Invalid line numbers or unknown segment IDs in `lines` are silently ignored.
-- Missing config file = all default segments in default order with no line overrides.
+- Missing config file = all default segments in default order with no line or color overrides.
 
 ### Built-in segments
 
@@ -259,15 +264,16 @@ Plugin behavior:
 
 `claude-statusline --configure` opens a TUI with:
 
-1. **Segment list** — all built-in and plugin segments with `•` toggle indicators and `[Ln]` line overrides.
+1. **Segment list** — all built-in and plugin segments with `•` toggle indicators, `[Ln]` line overrides, and `[color]` color overrides.
 2. **Description panel** — shows the description of the currently selected segment.
-3. **Preview pane** — live-rendered statusline (no colour) that updates as you change segments.
+3. **Preview pane** — live-rendered statusline with colors that updates as you change segments.
 4. **Help page** — full README rendered with markdown formatting (press `h`).
 
 Keys:
 - `↑/↓` — navigate segments
 - `Space` — toggle on/off
 - `1`–`9` — assign segment to that line (enables it if disabled)
+- `c` — cycle segment color (enables it if disabled)
 - `←/→` — reorder segment within its current line
 - `Shift+↑/↓` — swap all segments on the current line with the adjacent line
 - `r` — reset to defaults

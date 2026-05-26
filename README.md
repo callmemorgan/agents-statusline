@@ -142,6 +142,7 @@ Opens an interactive TUI: a scrollable segment list on the left, a live descript
 | `↑` / `↓` | Navigate segments |
 | `Space` | Toggle segment on/off |
 | `1`–`9` | Move segment to that line (enables it if disabled) |
+| `c` | Cycle segment color (enables it if disabled) |
 | `←` / `→` | Reorder segment within its current line |
 | `Shift+↑` / `Shift+↓` | Swap all segments on the current line with the adjacent line |
 | `r` | Reset to defaults |
@@ -172,12 +173,17 @@ cp config.json.example ~/.config/claude-statusline/config.json
   ],
   "lines": {
     "cost": 2
+  },
+  "colors": {
+    "model": "cyan",
+    "cost": "green"
   }
 }
 ```
 
 - `segments` — which segments to show and in what order. Omit to use defaults.
 - `lines` — override which line a segment renders on (1–9). Omit a segment to use its natural line.
+- `colors` — override the display color of a segment. Supported names: `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, and `bright-*` variants. Set to `"default"` or omit to use the segment's natural color.
 - Empty array `[]` — hides the statusline entirely.
 - Blank lines (no active segments) are collapsed automatically.
 

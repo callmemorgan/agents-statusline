@@ -47,9 +47,10 @@ type pluginDef struct {
 }
 
 type config struct {
-	Segments []string       `json:"segments"`
-	Lines    map[string]int `json:"lines"`
-	Plugins  []pluginDef    `json:"plugins"`
+	Segments []string            `json:"segments"`
+	Lines    map[string]int      `json:"lines"`
+	Colors   map[string]string   `json:"colors"`
+	Plugins  []pluginDef         `json:"plugins"`
 }
 
 func defaultConfig() config {
@@ -88,6 +89,7 @@ func loadConfig() config {
 		cfg.Segments = loaded.Segments
 	}
 	cfg.Lines = loaded.Lines
+	cfg.Colors = loaded.Colors
 	cfg.Plugins = loaded.Plugins
 	// Auto-append plugin IDs only when the config file doesn't specify
 	// segments at all (nil). If the user explicitly set segments — even to
@@ -457,9 +459,10 @@ func initSegments(plugins []pluginDef) {
 					desc = field.ID
 				}
 				registeredSegments = append(registeredSegments, segmentInfo{
-					id:   field.ID,
-					line: line,
-					desc: desc + " [plugin]",
+					id:           field.ID,
+					line:         line,
+					desc:         desc + " [plugin]",
+					primaryColor: "Dim",
 					render: func(pay payload, c palette) (string, bool) {
 						out := runPluginField(def, pay, field.ID)
 						return out, out != ""
@@ -477,9 +480,10 @@ func initSegments(plugins []pluginDef) {
 				desc = def.ID
 			}
 			registeredSegments = append(registeredSegments, segmentInfo{
-				id:   def.ID,
-				line: line,
-				desc: desc + " [plugin]",
+				id:           def.ID,
+				line:         line,
+				desc:         desc + " [plugin]",
+				primaryColor: "Dim",
 				render: func(pay payload, c palette) (string, bool) {
 					out := runPluginRaw(def, pay)
 					return out, out != ""
@@ -645,6 +649,7 @@ func runConfigure() {
 	// Live preview of the statusline (plain text — no ANSI / tview colour tags).
 	// Fixed at 12 rows (10 content + 2 border) — max 9 statusline lines plus padding.
 	preview := tview.NewTextView().
+		SetDynamicColors(true).
 		SetWrap(false)
 
 	previewBox := tview.NewFlex().
@@ -655,7 +660,7 @@ func runConfigure() {
 	// Fixed-height help bar.
 	help := tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).
-		SetText(" space toggle • 1-9 line • ←/→ reorder • ↑/↓ nav • ⇧↑/↓ move row • h help • r reset • s save • q quit")
+		SetText(" space toggle • 1-9 line • c color • ←/→ reorder • ↑/↓ nav • ⇧↑/↓ move row • h help • r reset • s save • q quit")
 
 	// Help page — full README rendered with markdown formatting.
 	helpView := tview.NewTextView().
@@ -692,7 +697,12 @@ func runConfigure() {
 				lineStr = fmt.Sprintf(" [L%d]", line)
 			}
 
-			mainText := fmt.Sprintf("%s%s%s", mark, s.id, lineStr)
+			colorStr := ""
+			if colorName := cfg.Colors[s.id]; colorName != "" && colorName != "default" {
+				colorStr = fmt.Sprintf("[%s]", colorName)
+			}
+
+			mainText := fmt.Sprintf("%s%s%s%s", mark, s.id, lineStr, colorStr)
 			list.AddItem(mainText, "", 0, nil)
 		}
 
@@ -701,15 +711,17 @@ func runConfigure() {
 		}
 		list.SetTitle(fmt.Sprintf(" Segments (%d/%d) ", len(cfg.Segments), len(segments)))
 
-		// Refresh preview (no colours — tview TextView without DynamicColors).
+		// Refresh preview with colours converted to tview tags.
 		p := samplePayload()
-		lines := buildStatusline(p, palette{}, cfg)
+		lines := buildStatusline(p, currentPalette(), cfg)
 		for i, l := range lines {
 			lines[i] = strings.TrimLeft(l, " ")
 		}
 		previewText := strings.TrimSpace(strings.Join(lines, "\n"))
 		if previewText == "" {
 			previewText = "(statusline hidden — no segments enabled)"
+		} else {
+			previewText = ansiToTview(previewText)
 		}
 		preview.SetText(previewText)
 	}
@@ -773,6 +785,44 @@ func runConfigure() {
 				if found >= 0 {
 					cfg.Segments = append(cfg.Segments[:found], cfg.Segments[found+1:]...)
 				} else {
+					cfg.Segments = append(cfg.Segments, id)
+				}
+				updateUI()
+				return nil
+			case 'c', 'C':
+				idx := list.GetCurrentItem()
+				if idx < 0 || idx >= len(segments) {
+					return nil
+				}
+				id := segments[idx].id
+				if cfg.Colors == nil {
+					cfg.Colors = make(map[string]string)
+				}
+				currentColor := cfg.Colors[id]
+				if currentColor == "" {
+					currentColor = "default"
+				}
+				nextColor := "default"
+				for i, name := range colorCycle {
+					if name == currentColor {
+						nextColor = colorCycle[(i+1)%len(colorCycle)]
+						break
+					}
+				}
+				if nextColor == "default" {
+					delete(cfg.Colors, id)
+				} else {
+					cfg.Colors[id] = nextColor
+				}
+				// Ensure the segment is enabled when assigning a color.
+				enabled := false
+				for _, segID := range cfg.Segments {
+					if segID == id {
+						enabled = true
+						break
+					}
+				}
+				if !enabled {
 					cfg.Segments = append(cfg.Segments, id)
 				}
 				updateUI()
@@ -1025,6 +1075,116 @@ func currentPalette() palette {
 	}
 }
 
+// colorCycle is the ordered list of color names cycled by the TUI.
+var colorCycle = []string{"default", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}
+
+// colorCodes maps color names to ANSI escape codes.
+var colorCodes = map[string]string{
+	"default":       "",
+	"red":           "\x1b[31m",
+	"green":         "\x1b[32m",
+	"yellow":        "\x1b[33m",
+	"blue":          "\x1b[34m",
+	"magenta":       "\x1b[35m",
+	"cyan":          "\x1b[36m",
+	"white":         "\x1b[37m",
+	"bright-red":    "\x1b[91m",
+	"bright-green":  "\x1b[92m",
+	"bright-yellow": "\x1b[93m",
+	"bright-blue":   "\x1b[94m",
+	"bright-magenta": "\x1b[95m",
+	"bright-cyan":   "\x1b[96m",
+	"bright-white":  "\x1b[97m",
+}
+
+// paletteWithOverride returns a copy of c with the named primary color field
+// replaced by the ANSI code for colorName.
+func paletteWithOverride(c palette, primaryColor, colorName string) palette {
+	code := colorCodes[colorName]
+	if code == "" {
+		return c
+	}
+	p := c
+	switch primaryColor {
+	case "Model":
+		p.Model = code
+	case "Dir":
+		p.Dir = code
+	case "Git":
+		p.Git = code
+	case "Chg":
+		p.Chg = code
+	case "Dur":
+		p.Dur = code
+	case "Cost":
+		p.Cost = code
+	case "Dim":
+		p.Dim = code
+	case "ROK":
+		p.ROK = code
+	case "RWarn":
+		p.RWarn = code
+	case "RCrit":
+		p.RCrit = code
+	case "Agent":
+		p.Agent = code
+	case "Vim":
+		p.Vim = code
+	case "Purple":
+		p.Purple = code
+	case "Session":
+		p.Session = code
+	}
+	return p
+}
+
+// ansiToTview converts ANSI color codes in s to tview color tags.
+// It escapes literal '[' characters so they are not interpreted as tags.
+func ansiToTview(s string) string {
+	// Step 1: replace ANSI codes with Unicode private-use placeholders.
+	s = strings.ReplaceAll(s, "\x1b[0m", "\uE000")
+	s = strings.ReplaceAll(s, "\x1b[30m", "\uE010")
+	s = strings.ReplaceAll(s, "\x1b[31m", "\uE011")
+	s = strings.ReplaceAll(s, "\x1b[32m", "\uE012")
+	s = strings.ReplaceAll(s, "\x1b[33m", "\uE013")
+	s = strings.ReplaceAll(s, "\x1b[34m", "\uE014")
+	s = strings.ReplaceAll(s, "\x1b[35m", "\uE015")
+	s = strings.ReplaceAll(s, "\x1b[36m", "\uE016")
+	s = strings.ReplaceAll(s, "\x1b[37m", "\uE017")
+	s = strings.ReplaceAll(s, "\x1b[90m", "\uE020")
+	s = strings.ReplaceAll(s, "\x1b[91m", "\uE021")
+	s = strings.ReplaceAll(s, "\x1b[92m", "\uE022")
+	s = strings.ReplaceAll(s, "\x1b[93m", "\uE023")
+	s = strings.ReplaceAll(s, "\x1b[94m", "\uE024")
+	s = strings.ReplaceAll(s, "\x1b[95m", "\uE025")
+	s = strings.ReplaceAll(s, "\x1b[96m", "\uE026")
+	s = strings.ReplaceAll(s, "\x1b[97m", "\uE027")
+
+	// Step 2: escape literal '[' for tview.
+	s = tview.Escape(s)
+
+	// Step 3: replace placeholders with tview color tags.
+	s = strings.ReplaceAll(s, "\uE000", "[-]")
+	s = strings.ReplaceAll(s, "\uE010", "[black]")
+	s = strings.ReplaceAll(s, "\uE011", "[red]")
+	s = strings.ReplaceAll(s, "\uE012", "[green]")
+	s = strings.ReplaceAll(s, "\uE013", "[yellow]")
+	s = strings.ReplaceAll(s, "\uE014", "[blue]")
+	s = strings.ReplaceAll(s, "\uE015", "[magenta]")
+	s = strings.ReplaceAll(s, "\uE016", "[cyan]")
+	s = strings.ReplaceAll(s, "\uE017", "[white]")
+	s = strings.ReplaceAll(s, "\uE020", "[gray]")
+	s = strings.ReplaceAll(s, "\uE021", "[red::b]")
+	s = strings.ReplaceAll(s, "\uE022", "[green::b]")
+	s = strings.ReplaceAll(s, "\uE023", "[yellow::b]")
+	s = strings.ReplaceAll(s, "\uE024", "[blue::b]")
+	s = strings.ReplaceAll(s, "\uE025", "[magenta::b]")
+	s = strings.ReplaceAll(s, "\uE026", "[cyan::b]")
+	s = strings.ReplaceAll(s, "\uE027", "[white::b]")
+
+	return s
+}
+
 // ─── Segment Renderers ───────────────────────────────────────────────
 
 func renderVimMode(p payload, c palette) (string, bool) {
@@ -1208,34 +1368,35 @@ func renderPlanTier(p payload, c palette) (string, bool) {
 // ─── Segment Registry ────────────────────────────────────────────────
 
 type segmentInfo struct {
-	id     string
-	line   int
-	desc   string
-	render func(p payload, c palette) (string, bool)
+	id           string
+	line         int
+	desc         string
+	primaryColor string
+	render       func(p payload, c palette) (string, bool)
 }
 
 func allSegmentInfos() []segmentInfo {
 	return []segmentInfo{
-		{id: "vim-mode", line: 1, desc: "Vim mode indicator (e.g. [normal])", render: renderVimMode},
-		{id: "sandbox", line: 1, desc: "Sandbox status indicator", render: renderSandbox},
-		{id: "session-name", line: 1, desc: "Session name label", render: renderSessionName},
-		{id: "agent-state", line: 1, desc: "Agent working status", render: renderAgentState},
-		{id: "agent-name", line: 1, desc: "Agent name", render: renderAgentName},
-		{id: "directory", line: 1, desc: "Current / project directory", render: renderDirectory},
-		{id: "git-branch", line: 1, desc: "Git branch and worktree name", render: renderGitBranch},
-		{id: "artifact-count", line: 1, desc: "Artifact count", render: renderArtifactCount},
-		{id: "lines-changed", line: 1, desc: "Lines added / removed", render: renderLinesChanged},
-		{id: "cache-percent", line: 1, desc: "Cache read percentage", render: renderCachePercent},
-		{id: "plan-tier", line: 1, desc: "Subscription plan tier", render: renderPlanTier},
-		{id: "cost", line: 1, desc: "Total session cost", render: renderCost},
-		{id: "model", line: 2, desc: "Model name and effort badge", render: renderModel},
-		{id: "version", line: 2, desc: "Claude Code version", render: renderVersion},
-		{id: "duration", line: 2, desc: "Elapsed session duration", render: renderDuration},
-		{id: "api-efficiency", line: 2, desc: "API efficiency percentage", render: renderAPIEfficiency},
-		{id: "tokens", line: 2, desc: "Input / output token counts", render: renderTokens},
-		{id: "context-window", line: 3, desc: "Context window usage bar", render: renderContextWindow},
-		{id: "rate-limit-5h", line: 3, desc: "5-hour quota bar", render: renderRateLimit5h},
-		{id: "rate-limit-7d", line: 3, desc: "7-day quota bar", render: renderRateLimit7d},
+		{id: "vim-mode", line: 1, desc: "Vim mode indicator (e.g. [normal])", primaryColor: "Vim", render: renderVimMode},
+		{id: "sandbox", line: 1, desc: "Sandbox status indicator", primaryColor: "RCrit", render: renderSandbox},
+		{id: "session-name", line: 1, desc: "Session name label", primaryColor: "Session", render: renderSessionName},
+		{id: "agent-state", line: 1, desc: "Agent working status", primaryColor: "Git", render: renderAgentState},
+		{id: "agent-name", line: 1, desc: "Agent name", primaryColor: "Agent", render: renderAgentName},
+		{id: "directory", line: 1, desc: "Current / project directory", primaryColor: "Dir", render: renderDirectory},
+		{id: "git-branch", line: 1, desc: "Git branch and worktree name", primaryColor: "Git", render: renderGitBranch},
+		{id: "artifact-count", line: 1, desc: "Artifact count", primaryColor: "Chg", render: renderArtifactCount},
+		{id: "lines-changed", line: 1, desc: "Lines added / removed", primaryColor: "Chg", render: renderLinesChanged},
+		{id: "cache-percent", line: 1, desc: "Cache read percentage", primaryColor: "Dim", render: renderCachePercent},
+		{id: "plan-tier", line: 1, desc: "Subscription plan tier", primaryColor: "Purple", render: renderPlanTier},
+		{id: "cost", line: 1, desc: "Total session cost", primaryColor: "Cost", render: renderCost},
+		{id: "model", line: 2, desc: "Model name and effort badge", primaryColor: "Model", render: renderModel},
+		{id: "version", line: 2, desc: "Claude Code version", primaryColor: "Dim", render: renderVersion},
+		{id: "duration", line: 2, desc: "Elapsed session duration", primaryColor: "Dur", render: renderDuration},
+		{id: "api-efficiency", line: 2, desc: "API efficiency percentage", primaryColor: "Dim", render: renderAPIEfficiency},
+		{id: "tokens", line: 2, desc: "Input / output token counts", primaryColor: "Dim", render: renderTokens},
+		{id: "context-window", line: 3, desc: "Context window usage bar", primaryColor: "Dim", render: renderContextWindow},
+		{id: "rate-limit-5h", line: 3, desc: "5-hour quota bar", primaryColor: "Dim", render: renderRateLimit5h},
+		{id: "rate-limit-7d", line: 3, desc: "7-day quota bar", primaryColor: "Dim", render: renderRateLimit7d},
 	}
 }
 
@@ -1255,7 +1416,13 @@ func buildStatusline(p payload, c palette, cfg config) []string {
 	parts := map[int][]string{}
 	for _, id := range cfg.Segments {
 		if s, ok := segmentByID(id); ok {
-			if rendered, show := s.render(p, c); show {
+			segPalette := c
+			if c.Rst != "" {
+				if colorName := cfg.Colors[id]; colorName != "" && colorName != "default" {
+					segPalette = paletteWithOverride(c, s.primaryColor, colorName)
+				}
+			}
+			if rendered, show := s.render(p, segPalette); show {
 				line := s.line
 				if override, ok := cfg.Lines[id]; ok && override >= 1 {
 					line = override

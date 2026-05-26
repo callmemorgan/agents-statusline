@@ -26,6 +26,10 @@
     "model": 2,
     "context-window": 3
   },
+  "colors": {
+    "model": "cyan",
+    "cost": "green"
+  },
   "plugins": [
     {
       "_comment": "Single-field plugin — whole stdout becomes the segment value.",
