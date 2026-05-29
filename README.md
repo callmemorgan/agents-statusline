@@ -16,7 +16,9 @@ The core renderer has no dependencies. The interactive `--configure` TUI uses [t
 go install github.com/callmemorgan/claude-statusline@latest
 ```
 
-Make sure `$(go env GOPATH)/bin` is on your `$PATH`.
+Requires Go 1.22+. Make sure `$(go env GOPATH)/bin` is on your `$PATH`.
+
+---
 
 **Homebrew:**
 
@@ -25,11 +27,30 @@ brew tap callmemorgan/tap
 brew install claude-statusline
 ```
 
-**Binary download:**
+Upgrade later with `brew upgrade claude-statusline`.
 
-Grab a signed prebuilt binary from the [releases page](https://github.com/callmemorgan/claude-statusline/releases). Each release includes checksums and cosign certificates for verification.
+---
 
-**Or build from source:**
+**Prebuilt binaries:**
+
+Download a signed binary from the [releases page](https://github.com/callmemorgan/claude-statusline/releases). Each asset includes a cosign certificate and signature for verification.
+
+Verify with [cosign](https://sigstore.dev):
+
+```bash
+cosign verify-blob \
+  --certificate claude-statusline_Darwin_arm64.tar.gz.cert \
+  --signature claude-statusline_Darwin_arm64.tar.gz.sig \
+  --certificate-identity-regexp="^https://github.com/callmemorgan/claude-statusline/.github/workflows/release.yml@" \
+  --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+  claude-statusline_Darwin_arm64.tar.gz
+```
+
+> **macOS note:** Downloaded binaries are not notarized. If Gatekeeper blocks the binary on first run, run `xattr -d com.apple.quarantine /path/to/claude-statusline`, or use Homebrew/`go install` instead.
+
+---
+
+**Build from source:**
 
 ```bash
 git clone https://github.com/callmemorgan/claude-statusline.git
