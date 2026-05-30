@@ -203,15 +203,20 @@ cp config.json.example ~/.config/claude-statusline/config.json
   "colors": {
     "model": "cyan",
     "cost": "green"
-  }
+  },
+  "reflow": "group"
 }
 ```
 
 - `segments` — which segments to show and in what order. Omit to use defaults.
 - `lines` — override which line a segment renders on (1–9). Omit a segment to use its natural line.
 - `colors` — override the display color of a segment. Supported names: `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, and `bright-*` variants. Set to `"default"` or omit to use the segment's natural color.
+- `reflow` — how segments wrap when the terminal is too narrow:
+  - `"cascade"` (default) — segments spill greedily across line boundaries.
+  - `"group"` — each logical line wraps independently, preserving the boundaries set in `lines`.
 - Empty array `[]` — hides the statusline entirely.
 - Blank lines (no active segments) are collapsed automatically.
+- When the terminal is too narrow for a line to fit, segments automatically spill to the next line.
 
 ### Common configurations
 
