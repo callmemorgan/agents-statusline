@@ -1318,7 +1318,7 @@ func renderAPIEfficiency(p payload, c palette) (string, bool) {
 	if p.Cost.TotalDurationMS <= 0 {
 		return "", false
 	}
-	return fmt.Sprintf("%s(API:%d%%)", c.Dim, p.Cost.TotalAPIDuration*100/p.Cost.TotalDurationMS), true
+	return fmt.Sprintf("%s(API:%d%%)%s", c.Dim, p.Cost.TotalAPIDuration*100/p.Cost.TotalDurationMS, c.Rst), true
 }
 
 func renderTokens(p payload, c palette) (string, bool) {
@@ -1466,6 +1466,15 @@ func buildStatusline(p payload, c palette, cfg config, columns int) []string {
 		}
 	}
 
+	// Capture which lines had segments before reflow.
+	originalLines := map[int]bool{}
+	for k := range parts {
+		originalLines[k] = true
+	}
+
+	// Track which lines received overflow from a previous line.
+	receivedOverflow := map[int]bool{}
+
 	// Auto-reflow: spill trailing segments to the next line when a line
 	// exceeds the available terminal width.
 	if columns > 0 {
@@ -1498,6 +1507,7 @@ func buildStatusline(p payload, c palette, cfg config, columns int) []string {
 				moved := segs[len(segs)-1]
 				parts[lineNum] = segs[:len(segs)-1]
 				parts[lineNum+1] = append([]string{moved}, parts[lineNum+1]...)
+				receivedOverflow[lineNum+1] = true
 				if lineNum+1 > maxLine {
 					maxLine = lineNum + 1
 				}
@@ -1506,9 +1516,13 @@ func buildStatusline(p payload, c palette, cfg config, columns int) []string {
 		}
 	}
 
-	out := make([]string, maxLine)
+	out := []string{}
 	for i := 1; i <= maxLine; i++ {
-		out[i-1] = joinParts(parts[i])
+		line := joinParts(parts[i])
+		if receivedOverflow[i] && originalLines[i] && i > 1 && (len(out) == 0 || out[len(out)-1] != "") {
+			out = append(out, "")
+		}
+		out = append(out, line)
 	}
 	return out
 }
