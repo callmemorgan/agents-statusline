@@ -899,6 +899,9 @@ func runConfigure() {
 				app.Stop()
 				return nil
 			}
+		case tcell.KeyEscape:
+			app.Stop()
+			return nil
 		case tcell.KeyUp, tcell.KeyDown:
 			// Unmodified Up/Down: pass through for list navigation.
 			if event.Modifiers()&tcell.ModShift == 0 {
