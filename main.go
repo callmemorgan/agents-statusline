@@ -1478,11 +1478,12 @@ func buildStatusline(p payload, c palette, cfg config, columns int) []string {
 	// exceeds the available terminal width.
 	if columns > 0 {
 		const timingSuffixReserve = 15
+		const safetyMargin = 5
 		lineNum := 1
 		for lineNum <= maxLine {
-			budget := columns
+			budget := columns - safetyMargin
 			if lineNum == 1 {
-				budget = columns - timingSuffixReserve
+				budget = columns - timingSuffixReserve - safetyMargin
 				if budget < 10 {
 					budget = 10
 				}
