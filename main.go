@@ -70,12 +70,26 @@ type pluginDef struct {
 	Fields    []pluginField `json:"fields"`
 }
 
+type segmentSettings struct {
+	ShowBar       *bool   `json:"show_bar,omitempty"`
+	ShowCountdown *bool   `json:"show_countdown,omitempty"`
+	ShowWarning   *bool   `json:"show_warning,omitempty"`
+	BarWidth      *int    `json:"bar_width,omitempty"`
+	Iconset       *string `json:"iconset,omitempty"`
+	WarnAt        *int    `json:"warn_at,omitempty"`
+	CritAt        *int    `json:"crit_at,omitempty"`
+	OkColor       *string `json:"ok_color,omitempty"`
+	WarnColor     *string `json:"warn_color,omitempty"`
+	CritColor     *string `json:"crit_color,omitempty"`
+}
+
 type config struct {
-	Segments []string            `json:"segments"`
-	Lines    map[string]int      `json:"lines"`
-	Colors   map[string]string   `json:"colors"`
-	Plugins  []pluginDef         `json:"plugins"`
-	Reflow   string              `json:"reflow"`
+	Segments []string                     `json:"segments"`
+	Lines    map[string]int               `json:"lines"`
+	Colors   map[string]string            `json:"colors"`
+	Plugins  []pluginDef                  `json:"plugins"`
+	Reflow   string                       `json:"reflow"`
+	Settings map[string]segmentSettings   `json:"settings"`
 }
 
 func defaultConfig() config {
@@ -117,6 +131,7 @@ func loadConfig() config {
 	cfg.Colors = loaded.Colors
 	cfg.Plugins = loaded.Plugins
 	cfg.Reflow = loaded.Reflow
+	cfg.Settings = loaded.Settings
 	// Auto-append plugin IDs only when the config file doesn't specify
 	// segments at all (nil). If the user explicitly set segments — even to
 	// an empty array — respect their choice and don't force plugins on.
@@ -688,7 +703,7 @@ func runConfigure() {
 	// Fixed-height help bar.
 	help := tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).
-		SetText(" space toggle • 1-9 line • c color • ←/→ reorder • ↑/↓ nav • ⇧↑/↓ move row • h help • r reset • s save • q quit")
+		SetText(" space toggle • 1-9 line • c color • ←/→ reorder • ↑/↓ nav • ⇧↑/↓ move row • f flyout • h help • r reset • s save • q quit")
 
 	// Help page — full README rendered with markdown formatting.
 	helpView := tview.NewTextView().
@@ -697,6 +712,120 @@ func runConfigure() {
 		SetWrap(true).
 		SetText(markdownToTview(readmeContent))
 	helpView.SetBorder(true).SetTitle(" Help — README (↑/↓ scroll • q/Esc close) ")
+
+	// ─── Flyout Panel ────────────────────────────────────────────────────
+	// Sub-feature toggle panel for segments that expose granular settings.
+	// Populated dynamically when the user presses 'f' on a segment.
+
+	flyoutTitle := tview.NewTextView().
+		SetTextAlign(tview.AlignCenter).
+		SetDynamicColors(true)
+
+	flyoutList := tview.NewList().
+		SetHighlightFullLine(true).
+		SetSelectedBackgroundColor(tcell.ColorDarkSlateGrey).
+		ShowSecondaryText(false)
+	flyoutList.SetBorder(true)
+
+	flyoutDescView := tview.NewTextView().SetWrap(true)
+	flyoutDescView.SetBorder(true).SetTitle(" Description ")
+
+	flyoutPreview := tview.NewTextView().
+		SetDynamicColors(true).
+		SetWrap(false)
+	flyoutPreview.SetBorder(true).SetTitle(" Preview ")
+
+	flyoutHelp := tview.NewTextView().
+		SetTextAlign(tview.AlignCenter).
+		SetText(" space toggle/cycle • ←/→ adjust number • ↑/↓ nav • q/Esc close ")
+
+	var currentFlyoutSegment string
+
+	updateFlyout := func() {
+		if currentFlyoutSegment == "" {
+			return
+		}
+		features := flyoutFeatures[currentFlyoutSegment]
+		currentIdx := flyoutList.GetCurrentItem()
+		flyoutList.Clear()
+		for _, f := range features {
+			val := flyoutValueStr(currentFlyoutSegment, f, cfg)
+			mark := "  "
+			display := f.name
+			if f.kind == kindToggle {
+				if val == "on" {
+					mark = "• "
+				}
+			} else {
+				display = fmt.Sprintf("%s: %s", f.name, val)
+			}
+			flyoutList.AddItem(mark+display, "", 0, nil)
+		}
+		if currentIdx >= 0 && currentIdx < len(features) {
+			flyoutList.SetCurrentItem(currentIdx)
+		}
+		flyoutList.SetTitle(fmt.Sprintf(" %s settings ", currentFlyoutSegment))
+
+		// Update preview
+		buildCfg = cfg
+		p := flyoutPreviewPayload(currentFlyoutSegment, samplePayload())
+		segPalette := currentPalette()
+		if s, ok := segmentByID(currentFlyoutSegment); ok && segPalette.Rst != "" {
+			if colorName := cfg.Colors[currentFlyoutSegment]; colorName != "" && colorName != "default" {
+				segPalette = paletteWithOverride(segPalette, s.primaryColor, colorName)
+			}
+		}
+		if s, ok := segmentByID(currentFlyoutSegment); ok {
+			if rendered, show := s.render(p, segPalette); show {
+				flyoutPreview.SetText(ansiToTview(strings.TrimLeft(rendered, " ")))
+			} else {
+				flyoutPreview.SetText("(segment hidden)")
+			}
+		}
+	}
+
+	flyoutList.SetChangedFunc(func(idx int, _, _ string, _ rune) {
+		if currentFlyoutSegment == "" {
+			return
+		}
+		features := flyoutFeatures[currentFlyoutSegment]
+		if idx >= 0 && idx < len(features) {
+			flyoutDescView.SetText(features[idx].desc)
+		} else {
+			flyoutDescView.SetText("")
+		}
+	})
+
+	pages := tview.NewPages()
+
+	openFlyout := func(segID string) {
+		if len(flyoutFeatures[segID]) == 0 {
+			return
+		}
+		currentFlyoutSegment = segID
+		flyoutTitle.SetText(fmt.Sprintf("[yellow::b]  %s — sub-features[-::-]", segID))
+		if flyoutState[segID] == nil {
+			flyoutState[segID] = map[string]bool{}
+		}
+		updateFlyout()
+		if len(flyoutFeatures[segID]) > 0 {
+			flyoutDescView.SetText(flyoutFeatures[segID][0].desc)
+		}
+		pages.SwitchToPage("flyout")
+		app.SetFocus(flyoutList)
+	}
+
+	flyoutTopRow := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(flyoutList, 0, 1, true).
+		AddItem(flyoutDescView, 0, 3, false)
+
+	flyoutFlex := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(flyoutTitle, 1, 0, false).
+		AddItem(flyoutTopRow, 0, 1, true).
+		AddItem(flyoutPreview, 5, 0, false).
+		AddItem(flyoutHelp, 1, 0, false)
 
 	// Update list items and preview from current cfg.
 	updateUI := func() {
@@ -768,13 +897,11 @@ func runConfigure() {
 		descView.SetText(segments[0].desc)
 	}
 
-	// pages holds both the configure view and the help view.
-	pages := tview.NewPages()
-
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// When the help page is visible, only intercept close keys; let
-		// everything else pass through so the TextView handles scrolling.
-		if name, _ := pages.GetFrontPage(); name == "help" {
+		// When the help or flyout page is visible, only intercept close/nav keys;
+		// let everything else pass through so the inner widget handles scrolling.
+		pageName, _ := pages.GetFrontPage()
+		if pageName == "help" {
 			switch event.Key() {
 			case tcell.KeyEscape:
 				pages.SwitchToPage("configure")
@@ -789,10 +916,70 @@ func runConfigure() {
 			}
 			return event
 		}
+		if pageName == "flyout" {
+			switch event.Key() {
+			case tcell.KeyEscape:
+				stopStressTest(currentFlyoutSegment)
+				pages.SwitchToPage("configure")
+				app.SetFocus(list)
+				updateUI()
+				return nil
+			case tcell.KeyRune:
+				r := event.Rune()
+				if r == 'q' || r == 'Q' {
+					stopStressTest(currentFlyoutSegment)
+					pages.SwitchToPage("configure")
+					app.SetFocus(list)
+					updateUI()
+					return nil
+				}
+				if r == ' ' {
+					idx := flyoutList.GetCurrentItem()
+					features := flyoutFeatures[currentFlyoutSegment]
+					if idx >= 0 && idx < len(features) {
+						f := features[idx]
+						switch f.kind {
+						case kindToggle:
+							applyFlyoutToggle(currentFlyoutSegment, f, &cfg)
+							if f.id == "stress_test" && stressTestActive[currentFlyoutSegment] {
+								scheduleStressTick(app, currentFlyoutSegment, updateFlyout)
+							}
+						case kindCycle:
+							applyFlyoutCycle(currentFlyoutSegment, f, &cfg, 1)
+						}
+						updateFlyout()
+					}
+					return nil
+				}
+			case tcell.KeyLeft:
+				idx := flyoutList.GetCurrentItem()
+				features := flyoutFeatures[currentFlyoutSegment]
+				if idx >= 0 && idx < len(features) && features[idx].kind == kindNumber {
+					applyFlyoutNumber(currentFlyoutSegment, features[idx], &cfg, -1)
+					updateFlyout()
+					return nil
+				}
+			case tcell.KeyRight:
+				idx := flyoutList.GetCurrentItem()
+				features := flyoutFeatures[currentFlyoutSegment]
+				if idx >= 0 && idx < len(features) && features[idx].kind == kindNumber {
+					applyFlyoutNumber(currentFlyoutSegment, features[idx], &cfg, 1)
+					updateFlyout()
+					return nil
+				}
+			}
+			return event
+		}
 
 		switch event.Key() {
 		case tcell.KeyRune:
 			switch event.Rune() {
+			case 'f', 'F':
+				idx := list.GetCurrentItem()
+				if idx >= 0 && idx < len(segments) {
+					openFlyout(segments[idx].id)
+				}
+				return nil
 			case 'h', 'H':
 				pages.SwitchToPage("help")
 				app.SetFocus(helpView)
@@ -1006,6 +1193,7 @@ func runConfigure() {
 
 	pages.AddPage("configure", flex, true, true)
 	pages.AddPage("help", helpView, true, false)
+	pages.AddPage("flyout", flyoutFlex, true, false)
 
 	if err := app.SetRoot(pages, true).EnableMouse(true).Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
@@ -1348,20 +1536,25 @@ func renderContextWindow(p payload, c palette) (string, bool) {
 			ctxPct = int(usageTokens * 100 / p.ContextWindow.ContextWindowSize)
 		}
 	}
-	ctxColor := pctColor(ctxPct, c)
-	result := c.Dim + "ctx " + progressBar(ctxPct, ctxColor, c.Dim, c) + " " + ctxColor + strconv.Itoa(ctxPct) + "%" + c.Rst
-	if p.Exceeds200K != nil && *p.Exceeds200K {
+	s := settingsFor(buildCfg, "context-window")
+	ctxColor := pctColorWithSettings(ctxPct, c, s)
+	result := c.Dim + "ctx "
+	if *s.ShowBar {
+		result += progressBarWithIconset(ctxPct, ctxColor, c.Dim, c, *s.BarWidth, *s.Iconset) + " "
+	}
+	result += ctxColor + strconv.Itoa(ctxPct) + "%" + c.Rst
+	if *s.ShowWarning && p.Exceeds200K != nil && *p.Exceeds200K {
 		result += " " + c.RCrit + ">200k" + c.Rst
 	}
 	return result, true
 }
 
 func renderRateLimit5h(p payload, c palette) (string, bool) {
-	return rateLimitSegment("5h", p.RateLimits.FiveHour, 5*3600, c)
+	return rateLimitSegment("5h", p.RateLimits.FiveHour, 5*3600, c, settingsFor(buildCfg, "rate-limit-5h"))
 }
 
 func renderRateLimit7d(p payload, c palette) (string, bool) {
-	return rateLimitSegment("7d", p.RateLimits.SevenDay, 7*24*3600, c)
+	return rateLimitSegment("7d", p.RateLimits.SevenDay, 7*24*3600, c, settingsFor(buildCfg, "rate-limit-7d"))
 }
 
 func renderAgentState(p payload, c palette) (string, bool) {
@@ -1396,6 +1589,376 @@ func renderPlanTier(p payload, c palette) (string, bool) {
 	return c.Purple + p.PlanTier + c.Rst, true
 }
 
+// ─── Flyout Test Segment ─────────────────────────────────────────────
+
+// flyoutState holds per-segment sub-feature toggle states for legacy/demo
+// segments that don't use segmentSettings.
+var flyoutState = map[string]map[string]bool{}
+
+type featureKind string
+
+const (
+	kindToggle featureKind = "toggle"
+	kindCycle  featureKind = "cycle"
+	kindNumber featureKind = "number"
+)
+
+type subFeature struct {
+	id      string
+	name    string
+	desc    string
+	kind    featureKind
+	options []string // for cycle: ordered list of valid values
+	min     int      // for number
+	max     int      // for number
+}
+
+// flyoutFeatures defines which segments have configurable sub-features.
+var flyoutFeatures = map[string][]subFeature{
+	"flyout-test": {
+		{id: "brackets", name: "Brackets", desc: "Wrap value in square brackets []", kind: kindToggle},
+		{id: "prefix", name: "Prefix", desc: "Prepend 'TEST:' label", kind: kindToggle},
+		{id: "uppercase", name: "Uppercase", desc: "Render in ALL CAPS", kind: kindToggle},
+		{id: "emoji", name: "Emoji", desc: "Add a test-tube emoji", kind: kindToggle},
+	},
+	"context-window": {
+		{id: "show_bar", name: "Show bar", desc: "Render the progress bar", kind: kindToggle},
+		{id: "show_warning", name: "Show >200k warning", desc: "Append red >200k when context exceeds 200k tokens", kind: kindToggle},
+		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50},
+		{id: "iconset", name: "Iconset", desc: "Visual style of the progress bar", kind: kindCycle, options: []string{"default", "blocks", "dots", "ascii", "minimal"}},
+		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100},
+		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100},
+		{id: "ok_color", name: "OK color", desc: "Color below warning threshold", kind: kindCycle, options: []string{"default", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}},
+		{id: "warn_color", name: "Warn color", desc: "Color between warn and critical thresholds", kind: kindCycle, options: []string{"default", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}},
+		{id: "crit_color", name: "Critical color", desc: "Color above critical threshold", kind: kindCycle, options: []string{"default", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}},
+		{id: "stress_test", name: "Stress test preview", desc: "Animate preview from 0% to 100% to see all colors", kind: kindToggle},
+	},
+	"rate-limit-5h": {
+		{id: "show_bar", name: "Show bar", desc: "Render the progress bar", kind: kindToggle},
+		{id: "show_countdown", name: "Show countdown", desc: "Append (2h30m) countdown timer", kind: kindToggle},
+		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50},
+		{id: "iconset", name: "Iconset", desc: "Visual style of the progress bar", kind: kindCycle, options: []string{"default", "blocks", "dots", "ascii", "minimal"}},
+		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100},
+		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100},
+		{id: "ok_color", name: "OK color", desc: "Color below warning threshold", kind: kindCycle, options: []string{"default", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}},
+		{id: "warn_color", name: "Warn color", desc: "Color between warn and critical thresholds", kind: kindCycle, options: []string{"default", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}},
+		{id: "crit_color", name: "Critical color", desc: "Color above critical threshold", kind: kindCycle, options: []string{"default", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}},
+		{id: "stress_test", name: "Stress test preview", desc: "Animate preview from 0% to 100% to see all colors", kind: kindToggle},
+		{id: "sync_to_all", name: "Sync to all bars", desc: "Copy these settings to context-window and rate-limit-7d", kind: kindToggle},
+	},
+	"rate-limit-7d": {
+		{id: "show_bar", name: "Show bar", desc: "Render the progress bar", kind: kindToggle},
+		{id: "show_countdown", name: "Show countdown", desc: "Append (3d4h) countdown timer", kind: kindToggle},
+		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50},
+		{id: "iconset", name: "Iconset", desc: "Visual style of the progress bar", kind: kindCycle, options: []string{"default", "blocks", "dots", "ascii", "minimal"}},
+		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100},
+		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100},
+		{id: "ok_color", name: "OK color", desc: "Color below warning threshold", kind: kindCycle, options: []string{"default", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}},
+		{id: "warn_color", name: "Warn color", desc: "Color between warn and critical thresholds", kind: kindCycle, options: []string{"default", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}},
+		{id: "crit_color", name: "Critical color", desc: "Color above critical threshold", kind: kindCycle, options: []string{"default", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}},
+		{id: "stress_test", name: "Stress test preview", desc: "Animate preview from 0% to 100% to see all colors", kind: kindToggle},
+		{id: "sync_to_all", name: "Sync to all bars", desc: "Copy these settings to context-window and rate-limit-5h", kind: kindToggle},
+	},
+}
+
+func renderFlyoutTest(p payload, c palette) (string, bool) {
+	state, ok := flyoutState["flyout-test"]
+	if !ok {
+		state = map[string]bool{}
+	}
+	val := "flyout-test"
+	if state["uppercase"] {
+		val = strings.ToUpper(val)
+	}
+	if state["prefix"] {
+		val = "TEST:" + val
+	}
+	if state["emoji"] {
+		val = "🧪 " + val
+	}
+	if state["brackets"] {
+		val = "[" + val + "]"
+	}
+	return c.Model + val + c.Rst, true
+}
+
+// ─── Flyout Helpers ──────────────────────────────────────────────────
+
+func ptrBool(v bool) *bool       { return &v }
+func ptrInt(v int) *int          { return &v }
+func ptrStr(v string) *string    { return &v }
+
+// stressTestActive tracks which flyout segments have stress-test preview enabled.
+var stressTestActive = map[string]bool{}
+var stressTestTimers = map[string]*time.Timer{}
+
+func scheduleStressTick(app *tview.Application, segID string, updateFn func()) {
+	stressTestTimers[segID] = time.AfterFunc(50*time.Millisecond, func() {
+		app.QueueUpdateDraw(func() {
+			if stressTestActive[segID] {
+				updateFn()
+				scheduleStressTick(app, segID, updateFn)
+			}
+		})
+	})
+}
+
+func stopStressTest(segID string) {
+	stressTestActive[segID] = false
+	if t, ok := stressTestTimers[segID]; ok {
+		t.Stop()
+		delete(stressTestTimers, segID)
+	}
+}
+
+func ensureSettings(cfg *config, segID string) segmentSettings {
+	if cfg.Settings == nil {
+		cfg.Settings = map[string]segmentSettings{}
+	}
+	if _, ok := cfg.Settings[segID]; !ok {
+		cfg.Settings[segID] = segmentSettings{}
+	}
+	return cfg.Settings[segID]
+}
+
+func flyoutValueStr(segID string, f subFeature, cfg config) string {
+	if segID == "flyout-test" && f.kind == kindToggle {
+		if flyoutState[segID][f.id] {
+			return "on"
+		}
+		return "off"
+	}
+	s := settingsFor(cfg, segID)
+	switch f.kind {
+	case kindToggle:
+		switch f.id {
+		case "show_bar":
+			if *s.ShowBar {
+				return "on"
+			}
+		case "show_countdown":
+			if *s.ShowCountdown {
+				return "on"
+			}
+		case "show_warning":
+			if *s.ShowWarning {
+				return "on"
+			}
+		case "stress_test":
+			if stressTestActive[segID] {
+				return "on"
+			}
+		}
+		return "off"
+	case kindCycle:
+		switch f.id {
+		case "iconset":
+			return *s.Iconset
+		case "ok_color":
+			return *s.OkColor
+		case "warn_color":
+			return *s.WarnColor
+		case "crit_color":
+			return *s.CritColor
+		}
+	case kindNumber:
+		switch f.id {
+		case "bar_width":
+			return strconv.Itoa(*s.BarWidth)
+		case "warn_at":
+			return strconv.Itoa(*s.WarnAt)
+		case "crit_at":
+			return strconv.Itoa(*s.CritAt)
+		}
+	}
+	return ""
+}
+
+func cycleOption(options []string, current string, delta int) string {
+	idx := 0
+	for i, o := range options {
+		if o == current {
+			idx = i
+			break
+		}
+	}
+	idx = (idx + delta + len(options)) % len(options)
+	return options[idx]
+}
+
+func applyFlyoutToggle(segID string, f subFeature, cfg *config) {
+	if segID == "flyout-test" {
+		if flyoutState[segID] == nil {
+			flyoutState[segID] = map[string]bool{}
+		}
+		flyoutState[segID][f.id] = !flyoutState[segID][f.id]
+		return
+	}
+	s := settingsFor(*cfg, segID)
+	switch f.id {
+	case "show_bar":
+		s.ShowBar = ptrBool(!*s.ShowBar)
+	case "show_countdown":
+		s.ShowCountdown = ptrBool(!*s.ShowCountdown)
+	case "show_warning":
+		s.ShowWarning = ptrBool(!*s.ShowWarning)
+	case "stress_test":
+		stressTestActive[segID] = !stressTestActive[segID]
+		return // don't save stress_test to cfg.Settings
+	case "sync_to_all":
+		if cfg.Settings == nil {
+			cfg.Settings = map[string]segmentSettings{}
+		}
+		for _, target := range []string{"context-window", "rate-limit-5h", "rate-limit-7d"} {
+			if target == segID {
+				continue
+			}
+			cfg.Settings[target] = cloneSettings(s)
+		}
+		return // don't save sync_to_all to cfg.Settings
+	}
+	if cfg.Settings == nil {
+		cfg.Settings = map[string]segmentSettings{}
+	}
+	cfg.Settings[segID] = s
+}
+
+func applyFlyoutCycle(segID string, f subFeature, cfg *config, delta int) {
+	if segID == "flyout-test" {
+		return
+	}
+	s := settingsFor(*cfg, segID)
+	cur := ""
+	switch f.id {
+	case "iconset":
+		cur = *s.Iconset
+	case "ok_color":
+		cur = *s.OkColor
+	case "warn_color":
+		cur = *s.WarnColor
+	case "crit_color":
+		cur = *s.CritColor
+	}
+	next := cycleOption(f.options, cur, delta)
+	switch f.id {
+	case "iconset":
+		s.Iconset = &next
+	case "ok_color":
+		s.OkColor = &next
+	case "warn_color":
+		s.WarnColor = &next
+	case "crit_color":
+		s.CritColor = &next
+	}
+	if cfg.Settings == nil {
+		cfg.Settings = map[string]segmentSettings{}
+	}
+	cfg.Settings[segID] = s
+}
+
+func applyFlyoutNumber(segID string, f subFeature, cfg *config, delta int) {
+	if segID == "flyout-test" {
+		return
+	}
+	s := settingsFor(*cfg, segID)
+	var v int
+	switch f.id {
+	case "bar_width":
+		v = *s.BarWidth
+	case "warn_at":
+		v = *s.WarnAt
+	case "crit_at":
+		v = *s.CritAt
+	}
+	v += delta
+	if v < f.min {
+		v = f.min
+	}
+	if v > f.max {
+		v = f.max
+	}
+	switch f.id {
+	case "bar_width":
+		s.BarWidth = &v
+	case "warn_at":
+		s.WarnAt = &v
+	case "crit_at":
+		s.CritAt = &v
+	}
+	if cfg.Settings == nil {
+		cfg.Settings = map[string]segmentSettings{}
+	}
+	cfg.Settings[segID] = s
+}
+
+// flyoutPreviewPayload returns a payload modified for the flyout preview.
+// If stress test is active, it overrides the percentage fields so the preview
+// animates through all threshold states.
+func flyoutPreviewPayload(segID string, base payload) payload {
+	if !stressTestActive[segID] {
+		return base
+	}
+	p := base
+	pct := int((time.Now().UnixMilli() % 2000) * 100 / 2000)
+	switch segID {
+	case "context-window":
+		p.Exceeds200K = ptrBool(pct > 80)
+		p.ContextWindow.UsedPercentage = ptrFloat64(float64(pct))
+	case "rate-limit-5h":
+		p.RateLimits.FiveHour.UsedPercentage = ptrFloat64(float64(pct))
+	case "rate-limit-7d":
+		p.RateLimits.SevenDay.UsedPercentage = ptrFloat64(float64(pct))
+	}
+	return p
+}
+
+func ptrFloat64(v float64) *float64 { return &v }
+
+func cloneSettings(s segmentSettings) segmentSettings {
+	c := segmentSettings{}
+	if s.ShowBar != nil {
+		v := *s.ShowBar
+		c.ShowBar = &v
+	}
+	if s.ShowCountdown != nil {
+		v := *s.ShowCountdown
+		c.ShowCountdown = &v
+	}
+	if s.ShowWarning != nil {
+		v := *s.ShowWarning
+		c.ShowWarning = &v
+	}
+	if s.BarWidth != nil {
+		v := *s.BarWidth
+		c.BarWidth = &v
+	}
+	if s.Iconset != nil {
+		v := *s.Iconset
+		c.Iconset = &v
+	}
+	if s.WarnAt != nil {
+		v := *s.WarnAt
+		c.WarnAt = &v
+	}
+	if s.CritAt != nil {
+		v := *s.CritAt
+		c.CritAt = &v
+	}
+	if s.OkColor != nil {
+		v := *s.OkColor
+		c.OkColor = &v
+	}
+	if s.WarnColor != nil {
+		v := *s.WarnColor
+		c.WarnColor = &v
+	}
+	if s.CritColor != nil {
+		v := *s.CritColor
+		c.CritColor = &v
+	}
+	return c
+}
+
 // ─── Segment Registry ────────────────────────────────────────────────
 
 type segmentInfo struct {
@@ -1419,6 +1982,7 @@ func allSegmentInfos() []segmentInfo {
 		{id: "lines-changed", line: 1, desc: "All lines added / removed by the agent in the session", primaryColor: "Chg", render: renderLinesChanged},
 		{id: "cache-percent", line: 1, desc: "Cache read percentage", primaryColor: "Dim", render: renderCachePercent},
 		{id: "plan-tier", line: 1, desc: "Subscription plan tier", primaryColor: "Purple", render: renderPlanTier},
+		{id: "flyout-test", line: 1, desc: "Flyout UI/UX test segment — press f in --configure", primaryColor: "Model", render: renderFlyoutTest},
 		{id: "cost", line: 1, desc: "Total session cost", primaryColor: "Cost", render: renderCost},
 		{id: "model", line: 2, desc: "Model name and effort badge", primaryColor: "Model", render: renderModel},
 		{id: "version", line: 2, desc: "Claude Code version", primaryColor: "Dim", render: renderVersion},
@@ -1442,7 +2006,12 @@ func segmentByID(id string) (segmentInfo, bool) {
 
 // ─── Statusline Builder ──────────────────────────────────────────────
 
+// buildCfg holds the config for the current build so that segment renderers
+// can access per-segment settings without threading cfg through every signature.
+var buildCfg config
+
 func buildStatusline(p payload, c palette, cfg config, columns int) []string {
+	buildCfg = cfg
 	clearPluginCache()
 	parts := map[int][]string{}
 	for _, id := range cfg.Segments {
@@ -1682,47 +2251,124 @@ func formatTokens(n int64) string {
 	}
 }
 
+// iconsetChars maps iconset names to (filled, empty) runes.
+var iconsetChars = map[string][2]string{
+	"default": {"#", "-"},
+	"blocks":  {"█", "░"},
+	"dots":    {"●", "○"},
+	"ascii":   {"=", " "},
+	"minimal": {"|", " "},
+}
+
+func iconsetPair(name string) (string, string) {
+	if p, ok := iconsetChars[name]; ok {
+		return p[0], p[1]
+	}
+	return "#", "-"
+}
+
+// settingsFor returns the segmentSettings for a segment ID, with all defaults
+// applied so callers never have to check nil.
+func settingsFor(cfg config, id string) segmentSettings {
+	s := segmentSettings{}
+	if loaded, ok := cfg.Settings[id]; ok {
+		s = loaded
+	}
+	// Apply defaults for any nil fields.
+	if s.ShowBar == nil {
+		t := true
+		s.ShowBar = &t
+	}
+	if s.ShowCountdown == nil {
+		t := true
+		s.ShowCountdown = &t
+	}
+	if s.ShowWarning == nil {
+		t := true
+		s.ShowWarning = &t
+	}
+	if s.BarWidth == nil {
+		w := barWidth
+		s.BarWidth = &w
+	}
+	if s.Iconset == nil {
+		i := "default"
+		s.Iconset = &i
+	}
+	if s.WarnAt == nil {
+		w := 60
+		s.WarnAt = &w
+	}
+	if s.CritAt == nil {
+		c := 80
+		s.CritAt = &c
+	}
+	if s.OkColor == nil {
+		c := "green"
+		s.OkColor = &c
+	}
+	if s.WarnColor == nil {
+		c := "yellow"
+		s.WarnColor = &c
+	}
+	if s.CritColor == nil {
+		c := "bright-red"
+		s.CritColor = &c
+	}
+	return s
+}
+
 func progressBar(pct int, fillColor, emptyColor string, c palette) string {
+	return progressBarWithIconset(pct, fillColor, emptyColor, c, barWidth, "default")
+}
+
+func progressBarWithIconset(pct int, fillColor, emptyColor string, c palette, width int, iconset string) string {
 	if pct < 0 {
 		pct = 0
 	}
 	if pct > 100 {
 		pct = 100
 	}
-	filled := pct * barWidth / 100
-	empty := barWidth - filled
-	return fillColor + strings.Repeat("#", filled) + emptyColor + strings.Repeat("-", empty) + c.Rst
+	filledChar, emptyChar := iconsetPair(iconset)
+	filled := pct * width / 100
+	empty := width - filled
+	return fillColor + strings.Repeat(filledChar, filled) + emptyColor + strings.Repeat(emptyChar, empty) + c.Rst
 }
 
 // progressBarWithTime renders a bar like progressBar but overlays a purple "|"
 // at the timePct position so you can compare quota usage vs. time elapsed.
 // timePct < 0 means unknown — falls back to a plain bar.
 func progressBarWithTime(pct, timePct int, fillColor, emptyColor string, c palette) string {
+	return progressBarWithTimeAndIconset(pct, timePct, fillColor, emptyColor, c, barWidth, "default")
+}
+
+func progressBarWithTimeAndIconset(pct, timePct int, fillColor, emptyColor string, c palette, width int, iconset string) string {
 	if pct < 0 {
 		pct = 0
 	}
 	if pct > 100 {
 		pct = 100
 	}
-	filled := pct * barWidth / 100
+	filled := pct * width / 100
+	filledChar, emptyChar := iconsetPair(iconset)
 
 	timeSlot := -1
 	if timePct >= 0 && timePct <= 100 {
-		timeSlot = timePct * barWidth / 100
-		if timeSlot >= barWidth {
-			timeSlot = barWidth - 1
+		timeSlot = timePct * width / 100
+		if timeSlot >= width {
+			timeSlot = width - 1
 		}
 	}
 
 	var b strings.Builder
-	for i := 0; i < barWidth; i++ {
+	for i := 0; i < width; i++ {
 		switch {
 		case i == timeSlot:
 			b.WriteString(c.Purple + "|")
 		case i < filled:
-			b.WriteString(fillColor + "#")
+			b.WriteString(fillColor + filledChar)
 		default:
-			b.WriteString(emptyColor + "-")
+			b.WriteString(emptyColor + emptyChar)
 		}
 	}
 	b.WriteString(c.Rst)
@@ -1730,22 +2376,49 @@ func progressBarWithTime(pct, timePct int, fillColor, emptyColor string, c palet
 }
 
 func pctColor(pct int, c palette) string {
-	switch {
-	case pct > 80:
-		return c.RCrit
-	case pct >= 60:
-		return c.RWarn
-	default:
-		return c.ROK
-	}
+	return pctColorWithSettings(pct, c, segmentSettings{})
 }
 
-func rateLimitSegment(label string, window limitWindow, windowSecs int64, c palette) (string, bool) {
+func pctColorWithSettings(pct int, c palette, s segmentSettings) string {
+	warnAt := 60
+	critAt := 80
+	if s.WarnAt != nil {
+		warnAt = *s.WarnAt
+	}
+	if s.CritAt != nil {
+		critAt = *s.CritAt
+	}
+	var colorName string
+	switch {
+	case pct > critAt:
+		colorName = "bright-red"
+		if s.CritColor != nil {
+			colorName = *s.CritColor
+		}
+	case pct >= warnAt:
+		colorName = "yellow"
+		if s.WarnColor != nil {
+			colorName = *s.WarnColor
+		}
+	default:
+		colorName = "green"
+		if s.OkColor != nil {
+			colorName = *s.OkColor
+		}
+	}
+	code := colorCodes[colorName]
+	if code == "" {
+		return c.ROK
+	}
+	return code
+}
+
+func rateLimitSegment(label string, window limitWindow, windowSecs int64, c palette, s segmentSettings) (string, bool) {
 	if window.UsedPercentage == nil {
 		return "", false
 	}
 	pct := int(*window.UsedPercentage)
-	color := pctColor(pct, c)
+	color := pctColorWithSettings(pct, c, s)
 	countdown := "?"
 	timePct := -1
 	if window.ResetsAt != nil {
@@ -1757,7 +2430,16 @@ func rateLimitSegment(label string, window limitWindow, windowSecs int64, c pale
 			}
 		}
 	}
-	return fmt.Sprintf("%s%s %s %s%d%%%s (%s)%s", c.Dim, label, progressBarWithTime(pct, timePct, color, c.Dim, c), color, pct, c.Dim, countdown, c.Rst), true
+	result := c.Dim + label + " "
+	if *s.ShowBar {
+		result += progressBarWithTimeAndIconset(pct, timePct, color, c.Dim, c, *s.BarWidth, *s.Iconset) + " "
+	}
+	result += color + strconv.Itoa(pct) + "%" + c.Dim
+	if *s.ShowCountdown {
+		result += " (" + countdown + ")"
+	}
+	result += c.Rst
+	return result, true
 }
 
 func resetCountdown(resetUnix int64) string {
