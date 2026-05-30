@@ -392,3 +392,10 @@ Users can place the resulting binary anywhere on their `$PATH` and configure Cla
 - New built-in segments should follow the pattern: `render<Name>` function, entry in `allSegmentInfos()`, natural line assignment, auto-hide on missing/zero data.
 - If a segment is tool-specific (Claude Code vs agy), implement auto-hide based on payload field presence rather than explicit tool checks.
 - Plugin IDs should be auto-appended to the segments list if not already present.
+
+## Operational Notes (Agent Learnings)
+
+- **Versioning scheme is MAJOR.MINOR.REVISION** — not strict SemVer. Bump REVISION for bugfixes *and* features (e.g., `v0.2.0` → `v0.2.1`). Only bump MINOR for larger milestones.
+- **Config path is hardcoded** to `~/.config/claude-statusline/config.json`. The code does *not* auto-detect `config.json.agy` or other variants. Users who run both Claude Code and agy may keep separate configs by swapping files manually.
+- **Line groupings are a first-class concern** for the maintainer. The `reflow: "group"` setting exists because the user actively uses `lines` overrides to create dense, visually-organised multi-line statuslines and expects those boundaries to survive narrow terminals.
+- **Homebrew binary may lag behind the local repo.** `/opt/homebrew/bin/claude-statusline` is the brew install; `./claude-statusline` in the repo root is the local build. When testing changes, build locally and either copy over the brew binary or invoke the local one directly.
