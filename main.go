@@ -703,7 +703,7 @@ func runConfigure() {
 	// Fixed-height help bar.
 	help := tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).
-		SetText(" space toggle • 1-9 line • c color • ←/→ reorder • ↑/↓ nav • ⇧↑/↓ move row • f flyout • h help • r reset • s save • q quit")
+		SetText(" space toggle • 1-9 line • c color • ←/→ reorder • ↑/↓ nav • ⇧↑/↓ move row • o options • h help • r reset • s save • q quit")
 
 	// Help page — full README rendered with markdown formatting.
 	helpView := tview.NewTextView().
@@ -715,7 +715,7 @@ func runConfigure() {
 
 	// ─── Flyout Panel ────────────────────────────────────────────────────
 	// Sub-feature toggle panel for segments that expose granular settings.
-	// Populated dynamically when the user presses 'f' on a segment.
+	// Populated dynamically when the user presses 'o' on a segment.
 
 	flyoutTitle := tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).
@@ -754,7 +754,7 @@ func runConfigure() {
 			display := f.name
 			if f.kind == kindToggle {
 				if val == "on" {
-					mark = "• "
+					mark = "✓ "
 				}
 			} else {
 				display = fmt.Sprintf("%s: %s", f.name, val)
@@ -842,7 +842,7 @@ func runConfigure() {
 			}
 			mark := "  "
 			if enabled {
-				mark = "• "
+				mark = "✓ "
 			}
 
 			line := s.line
@@ -859,7 +859,19 @@ func runConfigure() {
 				colorStr = fmt.Sprintf("[%s]", colorName)
 			}
 
+			arrow := ""
+			if len(flyoutFeatures[s.id]) > 0 {
+				arrow = " →"
+			}
 			mainText := fmt.Sprintf("%s%s%s%s", mark, s.id, lineStr, colorStr)
+			if arrow != "" {
+				_, _, innerWidth, _ := list.GetInnerRect()
+				pad := innerWidth - tview.TaggedStringWidth(mainText) - tview.TaggedStringWidth(arrow)
+				if pad < 0 {
+					pad = 0
+				}
+				mainText += strings.Repeat(" ", pad) + arrow
+			}
 			list.AddItem(mainText, "", 0, nil)
 		}
 
@@ -1982,7 +1994,7 @@ func allSegmentInfos() []segmentInfo {
 		{id: "lines-changed", line: 1, desc: "All lines added / removed by the agent in the session", primaryColor: "Chg", render: renderLinesChanged},
 		{id: "cache-percent", line: 1, desc: "Cache read percentage", primaryColor: "Dim", render: renderCachePercent},
 		{id: "plan-tier", line: 1, desc: "Subscription plan tier", primaryColor: "Purple", render: renderPlanTier},
-		{id: "flyout-test", line: 1, desc: "Flyout UI/UX test segment — press f in --configure", primaryColor: "Model", render: renderFlyoutTest},
+		{id: "flyout-test", line: 1, desc: "Flyout UI/UX test segment — press o in --configure", primaryColor: "Model", render: renderFlyoutTest},
 		{id: "cost", line: 1, desc: "Total session cost", primaryColor: "Cost", render: renderCost},
 		{id: "model", line: 2, desc: "Model name and effort badge", primaryColor: "Model", render: renderModel},
 		{id: "version", line: 2, desc: "Claude Code version", primaryColor: "Dim", render: renderVersion},
