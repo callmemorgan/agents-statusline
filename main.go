@@ -1939,7 +1939,7 @@ func applyFlyoutToggle(segID string, f subFeature, cfg *config) {
 	if cfg.Settings == nil {
 		cfg.Settings = map[string]segmentSettings{}
 	}
-	cfg.Settings[segID] = s
+	cfg.Settings[segID] = pruneSettings(segID, s)
 }
 
 func applyFlyoutCycle(segID string, f subFeature, cfg *config, delta int) {
@@ -1969,7 +1969,7 @@ func applyFlyoutCycle(segID string, f subFeature, cfg *config, delta int) {
 	if cfg.Settings == nil {
 		cfg.Settings = map[string]segmentSettings{}
 	}
-	cfg.Settings[segID] = s
+	cfg.Settings[segID] = pruneSettings(segID, s)
 }
 
 func applyFlyoutNumber(segID string, f subFeature, cfg *config, delta int) {
@@ -2001,7 +2001,7 @@ func applyFlyoutNumber(segID string, f subFeature, cfg *config, delta int) {
 	if cfg.Settings == nil {
 		cfg.Settings = map[string]segmentSettings{}
 	}
-	cfg.Settings[segID] = s
+	cfg.Settings[segID] = pruneSettings(segID, s)
 }
 
 // flyoutPreviewPayload returns a payload modified for the flyout preview.
@@ -2070,6 +2070,23 @@ func cloneSettings(s segmentSettings) segmentSettings {
 		c.CritColor = &v
 	}
 	return c
+}
+
+// pruneSettings drops fields from s that the renderer for segID never reads,
+// so the saved config doesn't accumulate dead keys. The settingsFor default
+// (which is the source of these fields) populates every field for every
+// segment; without pruning, opening the flyout on a segment and changing one
+// setting would write the whole defaulted struct back.
+func pruneSettings(segID string, s segmentSettings) segmentSettings {
+	switch segID {
+	case "context-window":
+		// context-window ignores ShowCountdown (only rate-limit-* use it).
+		s.ShowCountdown = nil
+	case "rate-limit-5h", "rate-limit-7d":
+		// rate-limit-* ignore ShowWarning (only context-window uses it).
+		s.ShowWarning = nil
+	}
+	return s
 }
 
 // ─── Segment Registry ────────────────────────────────────────────────
