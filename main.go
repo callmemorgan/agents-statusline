@@ -1330,7 +1330,7 @@ func runConfigure() {
 				if cfg.Settings == nil {
 					cfg.Settings = map[string]segmentSettings{}
 				}
-				for _, target := range progressBarSegmentIDs {
+				for _, target := range progressBarSegmentIDs() {
 					if target == currentFlyoutSegment {
 						continue
 					}
@@ -1771,9 +1771,23 @@ func renderPlanTier(p payload, c palette) (string, bool) {
 
 // ─── Flyout Test Segment ─────────────────────────────────────────────
 
-// progressBarSegmentIDs is the canonical set of segments that share bar
-// settings via "Sync to all bars".
-var progressBarSegmentIDs = []string{"context-window", "rate-limit-5h", "rate-limit-7d"}
+// progressBarSegmentIDs returns the set of segments that share bar settings
+// via "Sync to all bars". Derived from flyoutFeatures: any segment whose
+// flyout contains a "bar_width" feature is considered a bar segment and
+// participates in sync. This way adding a new bar segment only requires
+// updating flyoutFeatures — the sync group follows automatically.
+func progressBarSegmentIDs() []string {
+	ids := make([]string, 0, len(flyoutFeatures))
+	for id, features := range flyoutFeatures {
+		for _, f := range features {
+			if f.id == "bar_width" {
+				ids = append(ids, id)
+				break
+			}
+		}
+	}
+	return ids
+}
 
 type featureKind string
 
