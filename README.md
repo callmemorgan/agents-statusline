@@ -232,6 +232,8 @@ cp config.json.example ~/.config/claude-statusline/config.json
   - `iconset` (`"default"`, `"blocks"`, `"dots"`, `"ascii"`, `"minimal"`) — visual style of the bar
   - `warn_at` / `crit_at` (int, 0–100) — percentage thresholds for warn/critical colors
   - `ok_color` / `warn_color` / `crit_color` (color name or `"default"`) — bar color at each threshold
+
+  In the TUI, numeric fields use `←` / `→` to step by 1 and `Shift+←` / `Shift+→` to step by the field's step size (5 for `warn_at` and `crit_at`, 1 for `bar_width`).
 - `reflow` — how segments wrap when the terminal is too narrow:
   - `"cascade"` (default) — segments spill greedily across line boundaries.
   - `"group"` — each logical line wraps independently, preserving the boundaries set in `lines`.

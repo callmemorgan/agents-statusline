@@ -739,7 +739,7 @@ func runConfigure() {
 
 	flyoutHelp := tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).
-		SetText(" space toggle/cycle • ←/→ adjust number • ↑/↓ nav • q/Esc close ")
+		SetText(" space toggle/cycle • ←/→ adjust • ⇧+←/→ coarse step • ↑/↓ nav • q/Esc close ")
 
 	var currentFlyoutSegment string
 
@@ -1066,7 +1066,11 @@ func runConfigure() {
 				idx := flyoutList.GetCurrentItem()
 				features := flyoutFeatures[currentFlyoutSegment]
 				if idx >= 0 && idx < len(features) && features[idx].kind == kindNumber {
-					applyFlyoutNumber(currentFlyoutSegment, features[idx], &cfg, -1)
+					delta := -1
+					if event.Modifiers()&tcell.ModShift != 0 && features[idx].step > 1 {
+						delta *= features[idx].step
+					}
+					applyFlyoutNumber(currentFlyoutSegment, features[idx], &cfg, delta)
 					updateFlyout()
 					return nil
 				}
@@ -1074,7 +1078,11 @@ func runConfigure() {
 				idx := flyoutList.GetCurrentItem()
 				features := flyoutFeatures[currentFlyoutSegment]
 				if idx >= 0 && idx < len(features) && features[idx].kind == kindNumber {
-					applyFlyoutNumber(currentFlyoutSegment, features[idx], &cfg, 1)
+					delta := 1
+					if event.Modifiers()&tcell.ModShift != 0 && features[idx].step > 1 {
+						delta *= features[idx].step
+					}
+					applyFlyoutNumber(currentFlyoutSegment, features[idx], &cfg, delta)
 					updateFlyout()
 					return nil
 				}
@@ -1805,6 +1813,7 @@ type subFeature struct {
 	options []string // for cycle: ordered list of valid values
 	min     int      // for number
 	max     int      // for number
+	step    int      // for number: per-press increment (1 for fine, 5+ for coarse)
 }
 
 // flyoutFeatures defines which segments have configurable sub-features.
@@ -1812,10 +1821,10 @@ var flyoutFeatures = map[string][]subFeature{
 	"context-window": {
 		{id: "show_bar", name: "Show bar", desc: "Render the progress bar", kind: kindToggle},
 		{id: "show_warning", name: "Show >200k warning", desc: "Append red >200k when context exceeds 200k tokens", kind: kindToggle},
-		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50},
+		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50, step: 1},
 		{id: "iconset", name: "Iconset", desc: "Visual style of the progress bar", kind: kindCycle, options: []string{"default", "blocks", "dots", "ascii", "minimal"}},
-		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100},
-		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100},
+		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100, step: 5},
+		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100, step: 5},
 		{id: "ok_color", name: "OK color", desc: "Color below warning threshold", kind: kindCycle, options: colorCycle},
 		{id: "warn_color", name: "Warn color", desc: "Color between warn and critical thresholds", kind: kindCycle, options: colorCycle},
 		{id: "crit_color", name: "Critical color", desc: "Color above critical threshold", kind: kindCycle, options: colorCycle},
@@ -1824,10 +1833,10 @@ var flyoutFeatures = map[string][]subFeature{
 	"rate-limit-5h": {
 		{id: "show_bar", name: "Show bar", desc: "Render the progress bar", kind: kindToggle},
 		{id: "show_countdown", name: "Show countdown", desc: "Append (2h30m) countdown timer", kind: kindToggle},
-		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50},
+		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50, step: 1},
 		{id: "iconset", name: "Iconset", desc: "Visual style of the progress bar", kind: kindCycle, options: []string{"default", "blocks", "dots", "ascii", "minimal"}},
-		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100},
-		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100},
+		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100, step: 5},
+		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100, step: 5},
 		{id: "ok_color", name: "OK color", desc: "Color below warning threshold", kind: kindCycle, options: colorCycle},
 		{id: "warn_color", name: "Warn color", desc: "Color between warn and critical thresholds", kind: kindCycle, options: colorCycle},
 		{id: "crit_color", name: "Critical color", desc: "Color above critical threshold", kind: kindCycle, options: colorCycle},
@@ -1837,10 +1846,10 @@ var flyoutFeatures = map[string][]subFeature{
 	"rate-limit-7d": {
 		{id: "show_bar", name: "Show bar", desc: "Render the progress bar", kind: kindToggle},
 		{id: "show_countdown", name: "Show countdown", desc: "Append (3d4h) countdown timer", kind: kindToggle},
-		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50},
+		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50, step: 1},
 		{id: "iconset", name: "Iconset", desc: "Visual style of the progress bar", kind: kindCycle, options: []string{"default", "blocks", "dots", "ascii", "minimal"}},
-		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100},
-		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100},
+		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100, step: 5},
+		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100, step: 5},
 		{id: "ok_color", name: "OK color", desc: "Color below warning threshold", kind: kindCycle, options: colorCycle},
 		{id: "warn_color", name: "Warn color", desc: "Color between warn and critical thresholds", kind: kindCycle, options: colorCycle},
 		{id: "crit_color", name: "Critical color", desc: "Color above critical threshold", kind: kindCycle, options: colorCycle},
