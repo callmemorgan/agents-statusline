@@ -54,7 +54,9 @@ var builtinThemes = []theme{
 			"vim":      ansiRole("\x1b[97m"),
 			"accent":   ansiRole("\x1b[35m"),
 			"session":  ansiRole("\x1b[96m"),
-			"sep":      ansiRole("\x1b[90m"),
+			// Classic separators are uncolored — the pre-1.0 renderer joined
+			// segments with a plain " │ ", and classic stays byte-identical.
+			"sep": ansiRole(""),
 		},
 	},
 	{

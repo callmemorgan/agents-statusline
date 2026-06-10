@@ -53,6 +53,43 @@ type buildInput struct {
 	Now   time.Time
 }
 
+// separators maps style names to glyphs (all single-cell wide).
+var separators = map[string]string{
+	"bar":       " │ ",
+	"dot":       " · ",
+	"slash":     " / ",
+	"chevron":   " ❯ ",
+	"powerline": "  ",
+	"space":     "  ",
+}
+
+// lineStyle is the resolved [style] config: the separator (optionally colored
+// with the theme's sep role) and per-line left padding.
+type lineStyle struct {
+	sep      string // rendered separator, color included
+	sepWidth int    // visible width of the separator
+	padding  int
+}
+
+func styleFor(cfg config, c palette) lineStyle {
+	glyph, ok := separators[cfg.Style.Separator]
+	if !ok {
+		if cfg.Style.Separator == "custom" && cfg.Style.SeparatorCustom != "" {
+			glyph = cfg.Style.SeparatorCustom
+		} else {
+			glyph = separators["bar"]
+		}
+	}
+	st := lineStyle{sep: glyph, sepWidth: visibleWidth(glyph), padding: 1}
+	if cfg.Style.Padding != nil {
+		st.padding = *cfg.Style.Padding
+	}
+	if c.Sep != "" {
+		st.sep = c.Sep + glyph + c.Rst
+	}
+	return st
+}
+
 func buildStatusline(in buildInput) []string {
 	clearPluginCache()
 	parts := map[int][]string{}
@@ -87,16 +124,17 @@ func buildStatusline(in buildInput) []string {
 		return []string{}
 	}
 
+	st := styleFor(in.Cfg, in.C)
 	if in.Width > 0 && in.Cfg.Reflow == "group" {
-		return buildStatuslineGroup(parts, in.Width)
+		return buildStatuslineGroup(parts, in.Width, st)
 	}
 
-	return buildStatuslineCascade(parts, in.Width)
+	return buildStatuslineCascade(parts, in.Width, st)
 }
 
 // buildStatuslineCascade is the original reflow behaviour: segments spill
 // greedily from line 1 → 2 → 3 regardless of which logical line they belong to.
-func buildStatuslineCascade(parts map[int][]string, columns int) []string {
+func buildStatuslineCascade(parts map[int][]string, columns int, st lineStyle) []string {
 	maxLine := 0
 	originalLines := map[int]bool{}
 	for k := range parts {
@@ -126,10 +164,10 @@ func buildStatuslineCascade(parts map[int][]string, columns int) []string {
 				if len(segs) <= 1 {
 					break
 				}
-				width := 1 // leading space in joinParts
+				width := st.padding
 				for i, seg := range segs {
 					if i > 0 {
-						width += 3 // " │ "
+						width += st.sepWidth
 					}
 					width += visibleWidth(seg)
 				}
@@ -151,7 +189,7 @@ func buildStatuslineCascade(parts map[int][]string, columns int) []string {
 
 	out := []string{}
 	for i := 1; i <= maxLine; i++ {
-		line := joinParts(parts[i])
+		line := joinParts(parts[i], st)
 		if receivedOverflow[i] && originalLines[i] && i > 1 && (len(out) == 0 || out[len(out)-1] != "") {
 			out = append(out, "")
 		}
@@ -163,7 +201,7 @@ func buildStatuslineCascade(parts map[int][]string, columns int) []string {
 // buildStatuslineGroup wraps each logical line independently. Segments from
 // different logical lines never share a physical line, preserving the line
 // boundaries defined in the configuration.
-func buildStatuslineGroup(parts map[int][]string, columns int) []string {
+func buildStatuslineGroup(parts map[int][]string, columns int, st lineStyle) []string {
 	var lineNums []int
 	for k := range parts {
 		lineNums = append(lineNums, k)
@@ -184,9 +222,9 @@ func buildStatuslineGroup(parts map[int][]string, columns int) []string {
 
 		for _, seg := range segs {
 			segWidth := visibleWidth(seg)
-			sep := 1 // leading space
+			sep := st.padding // leading padding
 			if len(current) > 0 {
-				sep = 3 // " │ "
+				sep = st.sepWidth
 			}
 
 			budget := columns - safetyMargin
@@ -201,15 +239,15 @@ func buildStatuslineGroup(parts map[int][]string, columns int) []string {
 				current = append(current, seg)
 				currentWidth += sep + segWidth
 			} else {
-				out = append(out, joinParts(current))
+				out = append(out, joinParts(current, st))
 				current = []string{seg}
-				currentWidth = 1 + segWidth
+				currentWidth = st.padding + segWidth
 				firstPhysicalLine = false
 			}
 		}
 
 		if len(current) > 0 {
-			out = append(out, joinParts(current))
+			out = append(out, joinParts(current, st))
 			firstPhysicalLine = false
 		}
 	}
@@ -217,11 +255,11 @@ func buildStatuslineGroup(parts map[int][]string, columns int) []string {
 	return out
 }
 
-func joinParts(parts []string) string {
+func joinParts(parts []string, st lineStyle) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return " " + strings.Join(parts, " │ ")
+	return strings.Repeat(" ", st.padding) + strings.Join(parts, st.sep)
 }
 
 // iconsetChars maps iconset names to (filled, empty) runes.

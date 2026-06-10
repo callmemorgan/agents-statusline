@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+func classicStyle() lineStyle {
+	return styleFor(config{}, palette{})
+}
+
 func seg(s string, width int) string {
 	return s + strings.Repeat("x", width-len(s))
 }
@@ -18,7 +22,7 @@ func TestReflowCascadeSpillsTrailingSegments(t *testing.T) {
 	// Line 1 budget = columns - timingSuffixReserve(15) - safetyMargin(5).
 	// Width of 3 segs = 1 + 20 + 3 + 20 + 3 + 20 = 67. Columns 80 → budget 60,
 	// so "c" spills to line 2; remaining 44 fits.
-	out := buildStatuslineCascade(parts, 80)
+	out := buildStatuslineCascade(parts, 80, classicStyle())
 	if len(out) != 2 {
 		t.Fatalf("expected 2 physical lines, got %d: %q", len(out), out)
 	}
@@ -40,7 +44,7 @@ func TestReflowCascadeBlankSeparator(t *testing.T) {
 	}
 	// Columns 60 → line-1 budget 40 → "b" spills onto logical line 2, which
 	// already existed → blank line inserted between.
-	out := buildStatuslineCascade(parts, 60)
+	out := buildStatuslineCascade(parts, 60, classicStyle())
 	if len(out) != 3 {
 		t.Fatalf("expected 3 physical lines (incl. blank), got %d: %q", len(out), out)
 	}
@@ -54,7 +58,7 @@ func TestReflowCascadeNoColumns(t *testing.T) {
 	parts := map[int][]string{
 		1: {seg("a", 100), seg("b", 100)},
 	}
-	out := buildStatuslineCascade(parts, 0)
+	out := buildStatuslineCascade(parts, 0, classicStyle())
 	if len(out) != 1 {
 		t.Fatalf("expected 1 line with no reflow, got %d", len(out))
 	}
@@ -69,7 +73,7 @@ func TestReflowGroupKeepsLogicalLineBoundaries(t *testing.T) {
 	}
 	// Wide terminal: each logical line fits on its own physical line, and
 	// line 2's segments must not join line 1.
-	out := buildStatuslineGroup(parts, 200)
+	out := buildStatuslineGroup(parts, 200, classicStyle())
 	if len(out) != 2 {
 		t.Fatalf("expected 2 physical lines, got %d: %q", len(out), out)
 	}
@@ -79,7 +83,7 @@ func TestReflowGroupKeepsLogicalLineBoundaries(t *testing.T) {
 
 	// Narrow terminal: logical line 1 wraps into two physical lines; line 2
 	// still starts on its own physical line.
-	out = buildStatuslineGroup(parts, 32)
+	out = buildStatuslineGroup(parts, 32, classicStyle())
 	if len(out) != 3 {
 		t.Fatalf("expected 3 physical lines, got %d: %q", len(out), out)
 	}

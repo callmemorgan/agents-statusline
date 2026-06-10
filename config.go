@@ -44,8 +44,16 @@ type config struct {
 	Lines         map[string]int            `toml:"lines,omitempty"`
 	Colors        map[string]string         `toml:"colors,omitempty"`
 	Settings      map[string]map[string]any `toml:"settings,omitempty"`
+	Style         styleConfig               `toml:"style,omitempty"`
 	State         stateConfig               `toml:"state,omitempty"`
 	Plugins       []pluginDef               `toml:"plugins,omitempty"`
+}
+
+// styleConfig is the [style] table: separator glyph and line padding.
+type styleConfig struct {
+	Separator       string `toml:"separator,omitempty"`        // bar|dot|slash|chevron|powerline|space|custom
+	SeparatorCustom string `toml:"separator_custom,omitempty"` // used when separator = "custom"
+	Padding         *int   `toml:"padding,omitempty"`          // leading spaces per line (default 1)
 }
 
 func defaultConfig() config {
@@ -156,6 +164,7 @@ func mergeWithDefaults(loaded config) config {
 	cfg.Plugins = loaded.Plugins
 	cfg.Reflow = loaded.Reflow
 	cfg.Settings = loaded.Settings
+	cfg.Style = loaded.Style
 	cfg.State = loaded.State
 	if loaded.Segments == nil {
 		inSegments := make(map[string]bool, len(cfg.Segments))
@@ -238,6 +247,21 @@ func validateConfig(cfg *config) []configWarning {
 			warns = append(warns, configWarning{Path: "colors." + id, Msg: fmt.Sprintf("%q is not a known color, theme role, hex value, or 256 index (ignored)", name)})
 			delete(cfg.Colors, id)
 		}
+	}
+	switch cfg.Style.Separator {
+	case "", "bar", "dot", "slash", "chevron", "powerline", "space":
+	case "custom":
+		if cfg.Style.SeparatorCustom == "" {
+			warns = append(warns, configWarning{Path: "style.separator", Msg: "custom separator selected but separator_custom is empty (using bar)"})
+			cfg.Style.Separator = ""
+		}
+	default:
+		warns = append(warns, configWarning{Path: "style.separator", Msg: fmt.Sprintf("%q is not bar/dot/slash/chevron/powerline/space/custom (using bar)", cfg.Style.Separator)})
+		cfg.Style.Separator = ""
+	}
+	if p := cfg.Style.Padding; p != nil && (*p < 0 || *p > 8) {
+		warns = append(warns, configWarning{Path: "style.padding", Msg: fmt.Sprintf("%d out of range 0-8 (using 1)", *p)})
+		cfg.Style.Padding = nil
 	}
 	for i, p := range cfg.Plugins {
 		if p.Command == "" {

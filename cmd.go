@@ -68,7 +68,8 @@ func runRender(debug bool) {
 
 	elapsedMS := float64(time.Since(start).Microseconds()) / 1000.0
 	if len(lines) > 0 {
-		fmt.Printf("%s │ %s%.1fms%s\n", lines[0], colors.Dim, elapsedMS, colors.Rst)
+		sep := styleFor(cfg, colors).sep
+		fmt.Printf("%s%s%s%.1fms%s\n", lines[0], sep, colors.Dim, elapsedMS, colors.Rst)
 		for _, l := range lines[1:] {
 			fmt.Println(l)
 		}

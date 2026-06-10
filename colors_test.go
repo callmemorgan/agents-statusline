@@ -110,7 +110,8 @@ func TestClassicThemeMatchesLegacyPalette(t *testing.T) {
 			"Dim": "\x1b[90m", "Rst": "\x1b[0m", "ROK": "\x1b[32m",
 			"RWarn": "\x1b[33m", "RCrit": "\x1b[91m", "Agent": "\x1b[95m",
 			"Vim": "\x1b[97m", "Purple": "\x1b[35m", "Session": "\x1b[96m",
-			"Sep": "\x1b[90m",
+			// Classic separators are uncolored, matching the pre-1.0 joiner.
+			"Sep": "",
 		}
 		got := map[string]string{
 			"Model": p.Model, "Dir": p.Dir, "Git": p.Git, "Chg": p.Chg,
