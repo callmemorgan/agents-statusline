@@ -8,7 +8,17 @@ func printHelp() {
 	fmt.Println(`claude-statusline — statusline renderer for Claude Code and Antigravity CLI
 
 Usage:
-  claude-statusline [--help|-h] [--version|-v] [--configure] [--debug]
+  claude-statusline [command] [flags]
+
+Commands:
+  install      Wire this binary into ~/.claude/settings.json (backs up the
+               original, verifies with a sample render). Flags:
+               --target claude|agy, --settings-path PATH, --force, --dry-run, --yes
+  uninstall    Remove the statusline wiring (--restore swaps the backup back).
+  configure    Interactive TUI. (alias: --configure)
+  version      Show this binary's version. (alias: --version, -v)
+  debug        Schema-comparison table for a payload on stdin. (alias: --debug)
+  help         This message. (alias: --help, -h)
 
 Modes:
   (none)       Read JSON payload from stdin and print the statusline.

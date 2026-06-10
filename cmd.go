@@ -24,6 +24,12 @@ func dispatch() {
 		case "configure":
 			runConfigure()
 			return
+		case "install":
+			runInstall(os.Args[2:])
+			return
+		case "uninstall":
+			runUninstall(os.Args[2:])
+			return
 		case "debug":
 			runRender(true)
 			return
