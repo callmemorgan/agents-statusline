@@ -17,7 +17,7 @@ func useTempConfigDir(t *testing.T) string {
 
 func writeConfigFile(t *testing.T, dir, content string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -31,18 +31,21 @@ func TestLoadConfigDefaultsWhenMissing(t *testing.T) {
 	}
 }
 
-func TestLoadConfigDefaultsOnMalformedJSON(t *testing.T) {
+func TestLoadConfigDefaultsOnMalformedTOML(t *testing.T) {
 	dir := useTempConfigDir(t)
-	writeConfigFile(t, dir, "{not json")
-	cfg := loadConfig()
+	writeConfigFile(t, dir, "segments = [broken")
+	cfg, warns := loadConfigWarn()
 	if len(cfg.Segments) != len(defaultConfig().Segments) {
 		t.Errorf("malformed config should fall back to defaults")
+	}
+	if len(warns) == 0 {
+		t.Error("expected a warning for unreadable config")
 	}
 }
 
 func TestLoadConfigExplicitEmptySegments(t *testing.T) {
 	dir := useTempConfigDir(t)
-	writeConfigFile(t, dir, `{"segments": [], "plugins": [{"id":"mem","command":"x"}]}`)
+	writeConfigFile(t, dir, "segments = []\n\n[[plugins]]\nid = \"mem\"\ncommand = \"x\"\n")
 	cfg := loadConfig()
 	if len(cfg.Segments) != 0 {
 		t.Errorf("explicit [] must hide everything (no plugin auto-append), got %v", cfg.Segments)
@@ -51,7 +54,20 @@ func TestLoadConfigExplicitEmptySegments(t *testing.T) {
 
 func TestLoadConfigAutoAppendsPlugins(t *testing.T) {
 	dir := useTempConfigDir(t)
-	writeConfigFile(t, dir, `{"plugins": [{"id":"mem","command":"x"},{"command":"y","fields":[{"id":"cpu"},{"id":"swap"}]}]}`)
+	writeConfigFile(t, dir, `
+[[plugins]]
+id = "mem"
+command = "x"
+
+[[plugins]]
+command = "y"
+
+  [[plugins.fields]]
+  id = "cpu"
+
+  [[plugins.fields]]
+  id = "swap"
+`)
 	cfg := loadConfig()
 	got := map[string]bool{}
 	for _, id := range cfg.Segments {

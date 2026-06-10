@@ -45,11 +45,20 @@ func runRender(debug bool) {
 
 	if debug {
 		printDebugSchema(input, p)
+		cfg, warns := loadConfigWarn()
+		initSegments(cfg.Plugins)
+		warns = append(warns, validateSegmentRefs(cfg)...)
+		printConfigWarnings(warns)
 		return
 	}
 
 	colors := currentPalette()
-	cfg := loadConfig()
+	cfg, warns := loadConfigWarn()
+	if os.Getenv("STATUSLINE_VERBOSE") != "" {
+		for _, w := range warns {
+			fmt.Fprintf(os.Stderr, "claude-statusline: config: %s\n", w)
+		}
+	}
 	initSegments(cfg.Plugins)
 	lines := buildStatusline(buildInput{P: p, C: colors, Cfg: cfg, Width: terminalWidth(p), Now: start})
 

@@ -83,3 +83,15 @@ func printDebugSchema(raw []byte, p payload) {
 	fmt.Printf("  vim_mode       = %q\n", p.Vim.Mode)
 	fmt.Printf("  effort         = %q\n", p.Effort.Level)
 }
+
+// printConfigWarnings lists config validation warnings in --debug output.
+func printConfigWarnings(warns []configWarning) {
+	if len(warns) == 0 {
+		return
+	}
+	fmt.Println()
+	fmt.Printf("config warnings (%s):\n", configPath())
+	for _, w := range warns {
+		fmt.Printf("  ! %s\n", w)
+	}
+}
