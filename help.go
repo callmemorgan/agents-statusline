@@ -8,7 +8,7 @@ func printHelp() {
 	fmt.Println(`claude-statusline — statusline renderer for Claude Code and Antigravity CLI
 
 Usage:
-  claude-statusline [--help|-h] [--configure] [--debug]
+  claude-statusline [--help|-h] [--version|-v] [--configure] [--debug]
 
 Modes:
   (none)       Read JSON payload from stdin and print the statusline.
@@ -16,6 +16,8 @@ Modes:
                segments to lines. Saves to ~/.config/claude-statusline/config.json
   --debug      Read JSON from stdin and print a schema-comparison table
                showing which fields were detected for Claude Code vs agy.
+  --version    Show this binary's version. (The statusline's "version"
+               segment shows the calling tool's version, not this binary's.)
   --help, -h   Show this help message.
 
 Configuration file:

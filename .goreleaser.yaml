@@ -18,7 +18,7 @@ builds:
       - goos: windows
         goarch: arm64
     ldflags:
-      - -s -w
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
 
 archives:
   - format: tar.gz
@@ -59,6 +59,11 @@ brews:
       system "#{bin}/claude-statusline", "--help"
     install: |
       bin.install "claude-statusline"
+    caveats: |
+      To wire claude-statusline into Claude Code, run:
+        claude-statusline install
+      Customize anytime with:
+        claude-statusline configure
     post_install: |
       gopath = ENV["GOPATH"] || "#{ENV["HOME"]}/go"
       go_bin = "#{gopath}/bin/claude-statusline"

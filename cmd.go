@@ -18,6 +18,9 @@ func dispatch() {
 		case "help", "h":
 			printHelp()
 			return
+		case "version", "v", "V":
+			runVersion()
+			return
 		case "configure":
 			runConfigure()
 			return
