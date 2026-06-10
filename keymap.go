@@ -24,9 +24,8 @@ var keymap = []keyBinding{
 	{Keys: "←/→", Action: "reorder", Desc: "Reorder the segment within its line", Context: "main", Footer: true},
 	{Keys: "⇧↑/↓", Action: "move row", Desc: "Swap every segment on this line with the adjacent line", Context: "main", Footer: true},
 	{Keys: "o", Action: "options", Desc: "Open the segment's settings flyout", Context: "main", Footer: true},
-	// Footer flags for t/p///w flip on as each feature lands.
-	{Keys: "t", Action: "theme", Desc: "Pick a color theme with live preview", Context: "main"},
-	{Keys: "p", Action: "presets", Desc: "Apply a named layout preset", Context: "main"},
+	{Keys: "t", Action: "theme", Desc: "Pick a color theme with live preview", Context: "main", Footer: true},
+	{Keys: "p", Action: "presets", Desc: "Apply a named layout preset with live preview", Context: "main", Footer: true},
 	{Keys: "/", Action: "find", Desc: "Filter the segment list (enter keeps it, esc clears it)", Context: "main", Footer: true},
 	{Keys: "w", Action: "width", Desc: "Cycle the preview width (auto/80/60/40) to test reflow", Context: "main", Footer: true},
 	{Keys: "r", Action: "reset", Desc: "Reset the configuration to defaults (asks first)", Context: "main", Footer: true},

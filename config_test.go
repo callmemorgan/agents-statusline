@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -103,5 +104,108 @@ func TestSaveConfigRoundTrip(t *testing.T) {
 	seg, _ := segmentByID("context-window")
 	if s := settingsFor(out, seg); s.Int("bar_width") != 30 {
 		t.Errorf("settings not round-tripped through JSON: %v", out.Settings)
+	}
+}
+
+func TestPresetConfigKey(t *testing.T) {
+	dir := useTempConfigDir(t)
+	writeConfigFile(t, dir, `preset = "quota-watch"`)
+	cfg := loadConfig()
+	if len(cfg.Segments) != 4 || cfg.Segments[0] != "model" {
+		t.Errorf("preset segments not applied: %v", cfg.Segments)
+	}
+	if cfg.Theme != "tokyo-night" {
+		t.Errorf("preset theme suggestion not applied: %q", cfg.Theme)
+	}
+	if cfg.Lines["rate-limit-5h"] != 2 {
+		t.Errorf("preset lines not applied: %v", cfg.Lines)
+	}
+
+	// Explicit segments beat the preset; explicit theme beats the suggestion.
+	writeConfigFile(t, dir, "preset = \"quota-watch\"\ntheme = \"nord\"\nsegments = [\"model\"]\n")
+	cfg = loadConfig()
+	if len(cfg.Segments) != 1 {
+		t.Errorf("explicit segments should beat preset: %v", cfg.Segments)
+	}
+	if cfg.Theme != "nord" {
+		t.Errorf("explicit theme should beat suggestion: %q", cfg.Theme)
+	}
+
+	// Unknown preset warns and is ignored.
+	writeConfigFile(t, dir, `preset = "nope"`)
+	cfg2, warns := loadConfigWarn()
+	if len(cfg2.Segments) != len(defaultConfig().Segments) {
+		t.Errorf("unknown preset should fall back to defaults")
+	}
+	found := false
+	for _, w := range warns {
+		if strings.Contains(w.String(), "preset") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected preset warning, got %v", warns)
+	}
+}
+
+func TestApplyPresetKeepsPluginsAndColors(t *testing.T) {
+	cfg := config{
+		Colors:  map[string]string{"model": "cyan"},
+		Theme:   "dracula",
+		Plugins: []pluginDef{{ID: "mem", Command: "x"}},
+	}
+	p, _ := presetByID("minimal")
+	applyPreset(&cfg, p)
+	if cfg.Colors["model"] != "cyan" {
+		t.Error("preset must keep per-segment colors")
+	}
+	if cfg.Theme != "dracula" {
+		t.Error("preset theme suggestion must not override a chosen theme")
+	}
+	if cfg.Segments[len(cfg.Segments)-1] != "mem" {
+		t.Errorf("plugin segment dropped by preset: %v", cfg.Segments)
+	}
+}
+
+func TestPresetSegmentIDsExist(t *testing.T) {
+	initSegments(nil)
+	for _, p := range layoutPresets {
+		for _, id := range p.Segments {
+			if _, ok := segmentByID(id); !ok {
+				t.Errorf("preset %q references unknown segment %q", p.ID, id)
+			}
+		}
+		for id := range p.Settings {
+			seg, ok := segmentByID(id)
+			if !ok {
+				t.Errorf("preset %q settings reference unknown segment %q", p.ID, id)
+				continue
+			}
+			for key := range p.Settings[id] {
+				found := false
+				for _, sp := range seg.settings {
+					if sp.Key == key {
+						found = true
+					}
+				}
+				if !found {
+					t.Errorf("preset %q has unknown setting %s.%s", p.ID, id, key)
+				}
+			}
+		}
+		if p.Theme != "" {
+			if _, ok := presetByID(p.ID); !ok {
+				t.Errorf("presetByID broken for %q", p.ID)
+			}
+			ok := false
+			for _, id := range themeIDs() {
+				if id == p.Theme {
+					ok = true
+				}
+			}
+			if !ok {
+				t.Errorf("preset %q suggests unknown theme %q", p.ID, p.Theme)
+			}
+		}
 	}
 }

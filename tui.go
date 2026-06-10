@@ -115,16 +115,24 @@ func runConfigure() {
 		})
 	}
 
+	// activePreset names the last preset applied; manual edits flip it back
+	// to "" ("custom"). Session-only — never persisted by the TUI.
+	activePreset := ""
+
 	updateStrip := func() {
 		theme := cfg.Theme
 		if theme == "" {
 			theme = "classic"
 		}
+		preset := activePreset
+		if preset == "" {
+			preset = "(custom)"
+		}
 		marker := ""
 		if dirty {
 			marker = " [yellow]●[-]"
 		}
-		stripLeft.SetText(fmt.Sprintf(" theme: [::b]%s[-:-:-]%s", theme, marker))
+		stripLeft.SetText(fmt.Sprintf(" theme: [::b]%s[-:-:-] · preset: %s%s", theme, preset, marker))
 	}
 
 	// Footer generated from the keymap table.
@@ -246,11 +254,12 @@ func runConfigure() {
 
 	var updateUI func()
 
-	// mutate funnels every config change: marks the session dirty and
-	// refreshes the UI afterwards.
+	// mutate funnels every config change: marks the session dirty, drops the
+	// active-preset label (the layout is custom now), and refreshes the UI.
 	mutate := func(fn func()) {
 		fn()
 		dirty = true
+		activePreset = ""
 		updateUI()
 	}
 
@@ -612,8 +621,8 @@ func runConfigure() {
 		// When an overlay page is visible, only intercept close/nav keys;
 		// let everything else pass through to the inner widget.
 		pageName, _ := pages.GetFrontPage()
-		if pageName == "colorpicker" {
-			return event // the picker table handles its own keys
+		if isPickerPage(pageName) {
+			return event // pickers handle their own keys
 		}
 		if pageName == "help" {
 			switch event.Key() {
@@ -805,6 +814,64 @@ func runConfigure() {
 					})
 					return nil
 				}
+			case 't', 'T':
+				origTheme := cfg.Theme
+				openThemePicker(app, pages, cfg.Theme,
+					func(id string) { // hover
+						if id == "classic" {
+							id = ""
+						}
+						cfg.Theme = id
+						refreshPreview()
+						updateStrip()
+					},
+					func(id string, picked bool) {
+						if picked {
+							if id == "classic" {
+								id = ""
+							}
+							cfg.Theme = id
+							dirty = true
+							flash("green", "theme: "+func() string {
+								if id == "" {
+									return "classic"
+								}
+								return id
+							}())
+						} else {
+							cfg.Theme = origTheme
+						}
+						refreshPreview()
+						updateStrip()
+						app.SetFocus(list)
+					})
+				return nil
+			case 'p', 'P':
+				snapshot := cloneConfig(cfg)
+				openPresetPicker(app, pages,
+					func(id string) { // hover
+						if p, ok := presetByID(id); ok {
+							cfg = cloneConfig(snapshot)
+							applyPreset(&cfg, p)
+							updateUI()
+						}
+					},
+					func(id string, picked bool) {
+						if picked {
+							if p, ok := presetByID(id); ok {
+								cfg = cloneConfig(snapshot)
+								applyPreset(&cfg, p)
+								dirty = true
+								activePreset = id
+								flash("green", "preset: "+id+" (not yet saved)")
+							}
+						} else {
+							cfg = snapshot
+						}
+						updateUI()
+						app.SetFocus(list)
+					})
+				return nil
 			case 'w', 'W':
 				switch previewWidth {
 				case 0:

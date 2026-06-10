@@ -39,6 +39,7 @@ type config struct {
 	Theme         string                    `toml:"theme,omitempty"`
 	ColorDepth    string                    `toml:"color_depth,omitempty"`
 	Reflow        string                    `toml:"reflow,omitempty"`
+	Preset        string                    `toml:"preset,omitempty"`
 	Segments      []string                  `toml:"segments"`
 	ThemeColors   map[string]string         `toml:"theme_colors,omitempty"`
 	Lines         map[string]int            `toml:"lines,omitempty"`
@@ -153,6 +154,24 @@ func loadConfigWarn() (config, []configWarning) {
 func mergeWithDefaults(loaded config) config {
 	cfg := defaultConfig()
 	cfg.SchemaVersion = loaded.SchemaVersion
+	// A preset supplies the layout baseline — only when segments is absent
+	// (an explicit segments list always wins over the preset). Plugin
+	// auto-append below still runs, since loaded.Segments stays nil.
+	if loaded.Preset != "" && loaded.Segments == nil {
+		if p, ok := presetByID(loaded.Preset); ok {
+			cfg.Segments = append([]string(nil), p.Segments...)
+			if loaded.Lines == nil {
+				loaded.Lines = p.Lines
+			}
+			if loaded.Settings == nil {
+				loaded.Settings = p.Settings
+			}
+			if loaded.Theme == "" {
+				loaded.Theme = p.Theme
+			}
+		}
+	}
+	cfg.Preset = loaded.Preset
 	if loaded.Segments != nil {
 		cfg.Segments = loaded.Segments
 	}
@@ -198,6 +217,16 @@ func validateConfig(cfg *config) []configWarning {
 	default:
 		warns = append(warns, configWarning{Path: "reflow", Msg: fmt.Sprintf("%q is not cascade or group (ignored)", cfg.Reflow)})
 		cfg.Reflow = ""
+	}
+	if cfg.Preset != "" {
+		if _, ok := presetByID(cfg.Preset); !ok {
+			names := make([]string, len(layoutPresets))
+			for i, p := range layoutPresets {
+				names[i] = p.ID
+			}
+			warns = append(warns, configWarning{Path: "preset", Msg: fmt.Sprintf("%q is not a preset (ignored); known: %s", cfg.Preset, strings.Join(names, ", "))})
+			cfg.Preset = ""
+		}
 	}
 	if cfg.Theme != "" {
 		found := false
