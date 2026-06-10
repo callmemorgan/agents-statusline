@@ -20,6 +20,7 @@ var keymap = []keyBinding{
 	{Keys: "space", Action: "toggle", Desc: "Enable or disable the selected segment", Context: "main", Footer: true},
 	{Keys: "1-9", Action: "line", Desc: "Move the segment to line N (toggles back to its natural line)", Context: "main", Footer: true},
 	{Keys: "c", Action: "color", Desc: "Cycle the segment's color", Context: "main", Footer: true},
+	{Keys: "C", Action: "palette", Desc: "Open the color picker (theme roles, ANSI, hex, recent)", Context: "main", Footer: true},
 	{Keys: "←/→", Action: "reorder", Desc: "Reorder the segment within its line", Context: "main", Footer: true},
 	{Keys: "⇧↑/↓", Action: "move row", Desc: "Swap every segment on this line with the adjacent line", Context: "main", Footer: true},
 	{Keys: "o", Action: "options", Desc: "Open the segment's settings flyout", Context: "main", Footer: true},

@@ -306,15 +306,48 @@ func runConfigure() {
 		return action, event
 	})
 
+	// openFlyoutColorPicker opens the swatch picker for a color setting row,
+	// live-previewing hovered colors through the flyout preview.
+	openFlyoutColorPicker := func(sp settingSpec) {
+		segID := currentFlyoutSegment
+		seg, ok := segmentByID(segID)
+		if !ok {
+			return
+		}
+		orig := settingsFor(cfg, seg).Str(sp.Key)
+		openColorPicker(app, pages, currentPalette(cfg), sp.Name+" — "+segID,
+			func(spec string) { // hover
+				setFlyoutValue(segID, sp, &cfg, spec)
+				updateFlyout()
+			},
+			func(spec string, picked bool) { // done
+				if picked {
+					setFlyoutValue(segID, sp, &cfg, spec)
+					pushRecentColor(spec)
+					dirty = true
+				} else {
+					setFlyoutValue(segID, sp, &cfg, orig)
+				}
+				updateFlyout()
+				updateStrip()
+				app.SetFocus(flyoutList)
+			})
+	}
+
 	// activateFlyoutRow handles "primary action" on a flyout row (space, enter,
-	// double-click): bools toggle, enums cycle forward, ints step up.
+	// double-click): bools toggle, enums cycle forward, ints step up. Enter on
+	// a color row opens the swatch picker instead of cycling.
 	// sync_to_all opens the confirm modal instead of mutating directly.
-	activateFlyoutRow := func(idx int) {
+	activateFlyoutRow := func(idx int, viaEnter bool) {
 		specs := segmentSpecs(currentFlyoutSegment)
 		if idx < 0 || idx >= len(specs) {
 			return
 		}
 		sp := specs[idx]
+		if viaEnter && sp.Kind == kindColor {
+			openFlyoutColorPicker(sp)
+			return
+		}
 		if sp.Key == "sync_to_all" {
 			targets := []string{}
 			for _, id := range progressBarSegmentIDs() {
@@ -342,14 +375,14 @@ func runConfigure() {
 
 	flyoutList.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
 		if action == tview.MouseLeftDoubleClick && flyoutList.InRect(event.Position()) {
-			activateFlyoutRow(flyoutList.GetCurrentItem())
+			activateFlyoutRow(flyoutList.GetCurrentItem(), true)
 			return tview.MouseConsumed, nil
 		}
 		return action, event
 	})
 
 	flyoutList.SetSelectedFunc(func(idx int, _, _ string, _ rune) {
-		activateFlyoutRow(idx)
+		activateFlyoutRow(idx, true)
 	})
 
 	flyoutTopRow := tview.NewFlex().
@@ -579,6 +612,9 @@ func runConfigure() {
 		// When an overlay page is visible, only intercept close/nav keys;
 		// let everything else pass through to the inner widget.
 		pageName, _ := pages.GetFrontPage()
+		if pageName == "colorpicker" {
+			return event // the picker table handles its own keys
+		}
 		if pageName == "help" {
 			switch event.Key() {
 			case tcell.KeyEscape:
@@ -612,7 +648,7 @@ func runConfigure() {
 					return nil
 				}
 				if r == ' ' {
-					activateFlyoutRow(flyoutList.GetCurrentItem())
+					activateFlyoutRow(flyoutList.GetCurrentItem(), false)
 					return nil
 				}
 			case tcell.KeyLeft, tcell.KeyRight:
@@ -683,7 +719,7 @@ func runConfigure() {
 					toggleSegment(seg.id)
 				}
 				return nil
-			case 'c', 'C':
+			case 'c':
 				seg, ok := selectedSegment()
 				if !ok {
 					return nil
@@ -710,6 +746,43 @@ func runConfigure() {
 					}
 					ensureEnabled(seg.id)
 				})
+				return nil
+			case 'C':
+				seg, ok := selectedSegment()
+				if !ok {
+					return nil
+				}
+				orig, hadOrig := cfg.Colors[seg.id]
+				applyColor := func(spec string) {
+					if cfg.Colors == nil {
+						cfg.Colors = make(map[string]string)
+					}
+					if spec == "" || spec == "default" {
+						delete(cfg.Colors, seg.id)
+					} else {
+						cfg.Colors[seg.id] = spec
+					}
+					refreshPreview()
+				}
+				openColorPicker(app, pages, currentPalette(cfg), "color — "+seg.id,
+					applyColor,
+					func(spec string, picked bool) {
+						if picked {
+							mutate(func() {
+								applyColor(spec)
+								ensureEnabled(seg.id)
+							})
+							pushRecentColor(spec)
+						} else {
+							if hadOrig {
+								cfg.Colors[seg.id] = orig
+							} else {
+								delete(cfg.Colors, seg.id)
+							}
+							updateUI()
+						}
+						app.SetFocus(list)
+					})
 				return nil
 			default:
 				r := event.Rune()

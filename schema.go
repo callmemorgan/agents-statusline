@@ -14,6 +14,7 @@ const (
 	kindBool settingKind = iota
 	kindInt
 	kindEnum
+	kindColor // like kindEnum for cycling, but accepts any color spec (hex, 256 index, theme role)
 )
 
 type settingSpec struct {
@@ -64,6 +65,10 @@ func (sp settingSpec) coerce(raw any) any {
 				}
 			}
 		}
+	case kindColor:
+		if v, ok := raw.(string); ok && validColorSpec(v) {
+			return v
+		}
 	}
 	return sp.Default
 }
@@ -94,7 +99,7 @@ func (s settings) ValueString(sp settingSpec) string {
 			return "on"
 		}
 		return "off"
-	case kindEnum:
+	case kindEnum, kindColor:
 		return s.Str(sp.Key)
 	case kindInt:
 		return strconv.Itoa(s.Int(sp.Key))
@@ -180,9 +185,9 @@ func barSettingSpecs(countdown, warning, syncToAll bool, extra ...settingSpec) [
 		settingSpec{Key: "iconset", Name: "Iconset", Desc: "Visual style of the progress bar", Kind: kindEnum, Default: "default", Options: iconsetNames()},
 		settingSpec{Key: "warn_at", Name: "Warn at", Desc: "Percentage threshold for the warning color", Kind: kindInt, Default: 60, Min: 0, Max: 100, Step: 5},
 		settingSpec{Key: "crit_at", Name: "Critical at", Desc: "Percentage threshold for the critical color", Kind: kindInt, Default: 80, Min: 0, Max: 100, Step: 5},
-		settingSpec{Key: "ok_color", Name: "OK color", Desc: "Color below the warning threshold", Kind: kindEnum, Default: "green", Options: colorCycle},
-		settingSpec{Key: "warn_color", Name: "Warn color", Desc: "Color between the warn and critical thresholds", Kind: kindEnum, Default: "yellow", Options: colorCycle},
-		settingSpec{Key: "crit_color", Name: "Critical color", Desc: "Color above the critical threshold", Kind: kindEnum, Default: "bright-red", Options: colorCycle},
+		settingSpec{Key: "ok_color", Name: "OK color", Desc: "Color below the warning threshold (space cycles, enter opens the picker)", Kind: kindColor, Default: "green", Options: colorCycle},
+		settingSpec{Key: "warn_color", Name: "Warn color", Desc: "Color between the warn and critical thresholds (space cycles, enter opens the picker)", Kind: kindColor, Default: "yellow", Options: colorCycle},
+		settingSpec{Key: "crit_color", Name: "Critical color", Desc: "Color above the critical threshold (space cycles, enter opens the picker)", Kind: kindColor, Default: "bright-red", Options: colorCycle},
 	)
 	specs = append(specs, extra...)
 	specs = append(specs, settingSpec{Key: "stress_test", Name: "Stress test preview", Desc: "Animate the preview from 0% to 100% to see all colors", Kind: kindBool, Default: false, Ephemeral: true})

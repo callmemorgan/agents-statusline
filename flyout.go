@@ -111,7 +111,7 @@ func applyFlyoutChange(segID string, sp settingSpec, cfg *config, delta int) {
 	switch sp.Kind {
 	case kindBool:
 		s[sp.Key] = !s.Bool(sp.Key)
-	case kindEnum:
+	case kindEnum, kindColor:
 		s[sp.Key] = cycleOption(sp.Options, s.Str(sp.Key), delta)
 	case kindInt:
 		v := s.Int(sp.Key) + delta
@@ -123,6 +123,17 @@ func applyFlyoutChange(segID string, sp settingSpec, cfg *config, delta int) {
 		}
 		s[sp.Key] = v
 	}
+	setSegmentSettings(cfg, segID, pruneSettings(seg, s))
+}
+
+// setFlyoutValue writes one setting directly (used by the color picker).
+func setFlyoutValue(segID string, sp settingSpec, cfg *config, value string) {
+	seg, ok := segmentByID(segID)
+	if !ok {
+		return
+	}
+	s := settingsFor(*cfg, seg)
+	s[sp.Key] = sp.coerce(value)
 	setSegmentSettings(cfg, segID, pruneSettings(seg, s))
 }
 
