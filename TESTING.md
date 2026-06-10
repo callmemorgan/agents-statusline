@@ -140,6 +140,8 @@ Run `HOME=/tmp/csl-test-home ./claude-statusline configure` in a real terminal:
 - [ ] **Filter**: `/` then type — list filters; Enter keeps it; Esc clears; actions work on filtered rows
 - [ ] **Width preview**: `w` cycles auto/80/60/40 — ruler appears, reflow visible; resizing the terminal in auto mode re-wraps the preview
 - [ ] **Demo mode**: `d` — the whole preview animates (bars sweep 0–100%, countdowns wind down, cost and lines-changed grow); `d` again stops and restores the static sample
+- [ ] **Terminal view**: `v` — TUI hides, the statusline renders with real escapes against your terminal background, enter returns; colors match what Claude Code will show
+- [ ] **Footer fits**: at narrow widths the key hints wrap onto extra rows instead of trailing off the right edge (max 3 rows)
 - [ ] **Everything previews**: with defaults, the preview shows `✎ Explanatory`, `+1 dir`, `$0.42/h`, `↗ ~NNm` on the context bar, and a `→NN%` projection on the 5h bar; in the `git-branch` flyout, toggling `git_status` adds `* ↑1↓2`
 - [ ] **Flyout**: `o` on `context-window` — value rows render from the schema; `⇧←/→` coarse-steps numbers; clamped values stay in range; `sync_to_all` modal names source and targets
 - [ ] **Stress test**: in a rate-limit flyout, toggle `stress_test` — bar AND countdown animate together

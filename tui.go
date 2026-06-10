@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -37,6 +38,23 @@ func filterSegments(all []segmentInfo, query string) []segmentInfo {
 		}
 	}
 	return out
+}
+
+// footerRows returns how many rows a footer needs at the given width, using
+// tview's own word-wrap so the count matches what gets drawn. Clamped to 3 so
+// a pathologically narrow terminal can't squeeze the segment list away.
+func footerRows(text string, width int) int {
+	if width <= 0 {
+		return 1
+	}
+	rows := len(tview.WordWrap(text, width))
+	if rows < 1 {
+		return 1
+	}
+	if rows > 3 {
+		return 3
+	}
+	return rows
 }
 
 // previewState returns an hour of synthetic, steadily-rising session history
@@ -172,9 +190,12 @@ func runConfigure() {
 		stripLeft.SetText(fmt.Sprintf(" theme: [::b]%s[-:-:-] · preset: %s%s", theme, preset, marker))
 	}
 
-	// Footer generated from the keymap table.
+	// Footer generated from the keymap table. Word-wrapped: the before-draw
+	// hook grows its row to fit, so keys never trail off narrow terminals.
 	help := tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).
+		SetWrap(true).
+		SetWordWrap(true).
 		SetText(footerText("main"))
 
 	// Help overlay — generated from the keymap table.
@@ -217,6 +238,8 @@ func runConfigure() {
 
 	flyoutHelp := tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).
+		SetWrap(true).
+		SetWordWrap(true).
 		SetText(footerText("flyout"))
 
 	var currentFlyoutSegment string
@@ -584,19 +607,6 @@ func runConfigure() {
 		refreshPreview()
 		updateStrip()
 	}
-
-	// Re-render the preview when the terminal (and so the panel) resizes;
-	// only the text is recomputed, never the list, to avoid re-entrancy.
-	lastAutoWidth := -1
-	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
-		if previewWidth == 0 {
-			if _, _, w, _ := preview.GetInnerRect(); w != lastAutoWidth {
-				lastAutoWidth = w
-				refreshPreview()
-			}
-		}
-		return false
-	})
 
 	updateUI()
 
@@ -979,6 +989,29 @@ func runConfigure() {
 					refreshPreview()
 				}
 				return nil
+			case 'v', 'V':
+				// Render straight to the terminal with the TUI hidden: the
+				// in-TUI preview approximates colors with tview tags, but
+				// only the real terminal shows the theme against its actual
+				// background, font, and color handling.
+				app.Suspend(func() {
+					w, _, err := term.GetSize(int(os.Stdout.Fd()))
+					if err != nil || w <= 0 {
+						w = 80
+					}
+					lines := buildStatusline(buildInput{P: samplePayload(), C: currentPalette(cfg), Cfg: cfg, State: pvState, Width: w, Now: time.Now()})
+					themeName := cfg.Theme
+					if themeName == "" {
+						themeName = "classic"
+					}
+					fmt.Printf("\n  theme: %s · %d cols — as rendered by your terminal\n\n", themeName, w)
+					for _, l := range lines {
+						fmt.Println(l)
+					}
+					fmt.Print("\n  press enter to return to the configurator… ")
+					_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
+				})
+				return nil
 			case 'r', 'R':
 				pages.SwitchToPage("reset")
 				app.SetFocus(resetModal)
@@ -1107,6 +1140,27 @@ func runConfigure() {
 	pages.AddPage("help", helpView, true, false)
 	pages.AddPage("readme", readmeView, true, false)
 	pages.AddPage("flyout", flyoutFlex, true, false)
+
+	// Re-render the preview when the terminal (and so the panel) resizes —
+	// only the text is recomputed, never the list, to avoid re-entrancy —
+	// and grow the footers to however many rows their keys need at this
+	// width, so commands never trail off the end.
+	lastAutoWidth := -1
+	lastScreenWidth := -1
+	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		if previewWidth == 0 {
+			if _, _, w, _ := preview.GetInnerRect(); w != lastAutoWidth {
+				lastAutoWidth = w
+				refreshPreview()
+			}
+		}
+		if sw, _ := screen.Size(); sw != lastScreenWidth {
+			lastScreenWidth = sw
+			flex.ResizeItem(help, footerRows(footerText("main"), sw), 0)
+			flyoutFlex.ResizeItem(flyoutHelp, footerRows(footerText("flyout"), sw), 0)
+		}
+		return false
+	})
 
 	confirmModal = tview.NewModal().
 		SetText("Copy these settings to all progress bar segments?").

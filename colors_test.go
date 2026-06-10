@@ -128,6 +128,24 @@ func TestClassicThemeMatchesLegacyPalette(t *testing.T) {
 	}
 }
 
+// "original" is an accepted alias for classic, for people who know the
+// pre-1.0 palette by that name.
+func TestOriginalThemeAlias(t *testing.T) {
+	if got := themeByID("original").ID; got != "classic" {
+		t.Errorf(`themeByID("original").ID = %q, want "classic"`, got)
+	}
+	cfg := config{Theme: "original"}
+	warns := validateConfig(&cfg)
+	for _, w := range warns {
+		if w.Path == "theme" {
+			t.Errorf("theme=original warned: %s", w.Msg)
+		}
+	}
+	if cfg.Theme != "original" {
+		t.Errorf("validateConfig cleared theme=original to %q", cfg.Theme)
+	}
+}
+
 func TestThemedPaletteDepths(t *testing.T) {
 	nord := themeByID("nord")
 	pTrue := resolvePalette(nord, depthTrue)

@@ -229,7 +229,7 @@ func validateConfig(cfg *config) []configWarning {
 		}
 	}
 	if cfg.Theme != "" {
-		found := false
+		found := cfg.Theme == "original" // alias for classic
 		for _, id := range themeIDs() {
 			if id == cfg.Theme {
 				found = true

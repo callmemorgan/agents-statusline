@@ -161,7 +161,7 @@ Segments that receive no data from the active tool hide themselves automatically
 theme = "tokyo-night"   # classic | catppuccin-mocha | nord | dracula | gruvbox-dark | tokyo-night
 ```
 
-Themes map fifteen semantic roles (model, dir, git, ok/warn/crit, accent, sep, …) to colors. On truecolor terminals you get the real hex palette; 256-color and 16-color terminals get automatic nearest-match fallbacks. `classic` (the default) reproduces the original ANSI look exactly.
+Themes map fifteen semantic roles (model, dir, git, ok/warn/crit, accent, sep, …) to colors. On truecolor terminals you get the real hex palette; 256-color and 16-color terminals get automatic nearest-match fallbacks. `classic` (the default — `original` is an accepted alias) reproduces the pre-1.0 ANSI look exactly, so existing installs keep their colors unless they opt into a theme. The in-TUI preview approximates colors; press `v` in the configurator to render against your real terminal.
 
 - **Color depth** is auto-detected from `COLORTERM`/`TERM`/terminal program; override with `color_depth = "truecolor" | "256" | "16" | "none"`. `NO_COLOR=1` always wins.
 - **Per-role overrides** layer on top of any theme:
@@ -200,6 +200,7 @@ An interactive TUI: segment list (left), description panel (right), a **live pre
 | `/` | Filter the segment list |
 | `w` | Cycle preview width (auto → 80 → 60 → 40) to test reflow |
 | `d` | Demo mode — animate the whole preview: bars sweep, countdowns tick, cost grows |
+| `v` | Hide the TUI and render directly in your terminal — check the theme against your real colors and background |
 | `r` | Reset to defaults (asks first) |
 | `s` | Save and keep editing (`✓ Saved` flash) |
 | `q` / `Esc` | Quit — asks if there are unsaved changes |

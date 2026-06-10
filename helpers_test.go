@@ -225,6 +225,22 @@ func TestFilterSegments(t *testing.T) {
 	}
 }
 
+func TestFooterRows(t *testing.T) {
+	long := footerText("main")
+	if got := footerRows(long, 0); got != 1 {
+		t.Errorf("zero width = %d rows, want 1", got)
+	}
+	if got := footerRows(long, len(long)+10); got != 1 {
+		t.Errorf("wide terminal = %d rows, want 1", got)
+	}
+	if got := footerRows(long, 100); got < 2 {
+		t.Errorf("main footer at 100 cols = %d rows, want ≥2 (len %d)", got, len(long))
+	}
+	if got := footerRows(long, 10); got != 3 {
+		t.Errorf("pathological width = %d rows, want clamp at 3", got)
+	}
+}
+
 func TestAnsiToTview(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"\x1b[32mok\x1b[0m", "[#00cd00]ok[-:-:-]"},

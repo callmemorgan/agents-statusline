@@ -38,7 +38,7 @@ func ansiRole(code string) themeColor { return themeColor{Ansi16: code} }
 var builtinThemes = []theme{
 	{
 		ID:   "classic",
-		Desc: "The original 16-color ANSI look",
+		Desc: "The original pre-1.0 16-color look — the default (alias: original)",
 		Roles: map[string]themeColor{
 			"model":    ansiRole("\x1b[35m"),
 			"dir":      ansiRole("\x1b[36m"),
@@ -174,8 +174,13 @@ func themeIDs() []string {
 	return ids
 }
 
-// themeByID returns the named theme, defaulting to classic.
+// themeByID returns the named theme, defaulting to classic. "original" is an
+// accepted alias for classic — it is the pre-1.0 default palette, extracted
+// unchanged into the theme system.
 func themeByID(id string) theme {
+	if id == "original" {
+		id = "classic"
+	}
 	for _, t := range builtinThemes {
 		if t.ID == id {
 			return t
