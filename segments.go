@@ -57,6 +57,25 @@ func renderGitBranch(ctx renderCtx) (string, bool) {
 		worktreeName = ctx.P.Workspace.GitWorktree
 	}
 	display := branch
+	if ctx.S.Bool("git_status") {
+		ttl := time.Duration(ctx.S.Int("git_status_ttl_sec")) * time.Second
+		timeout := time.Duration(ctx.S.Int("git_timeout_ms")) * time.Millisecond
+		if info, ok := gitStatusFor(currentDir, ttl, timeout, ctx.Now); ok {
+			if info.Dirty {
+				display += ctx.C.Chg + "*" + ctx.C.Git
+			}
+			if info.Ahead > 0 || info.Behind > 0 {
+				ab := ""
+				if info.Ahead > 0 {
+					ab += "↑" + strconv.Itoa(info.Ahead)
+				}
+				if info.Behind > 0 {
+					ab += "↓" + strconv.Itoa(info.Behind)
+				}
+				display += " " + ctx.C.Dim + ab + ctx.C.Git
+			}
+		}
+	}
 	if worktreeName != "" && worktreeName != branch {
 		display = branch + " " + ctx.C.Dim + "(" + worktreeName + ")" + ctx.C.Rst
 	}
@@ -250,7 +269,7 @@ func allSegmentInfos() []segmentInfo {
 		{id: "agent-name", line: 1, desc: "Agent name", primaryColor: "Agent", render: renderAgentName},
 		{id: "directory", line: 1, desc: "Current / project directory", primaryColor: "Dir", render: renderDirectory},
 		{id: "added-dirs", line: 1, desc: "Number of extra directories added with /add-dir", primaryColor: "Dim", render: renderAddedDirs},
-		{id: "git-branch", line: 1, desc: "Git branch and worktree name", primaryColor: "Git", render: renderGitBranch},
+		{id: "git-branch", line: 1, desc: "Git branch and worktree name, with optional dirty marker and ahead/behind counts", primaryColor: "Git", settings: gitBranchSettingSpecs(), render: renderGitBranch},
 		{id: "artifact-count", line: 1, desc: "Artifact count", primaryColor: "Chg", render: renderArtifactCount},
 		{id: "lines-changed", line: 1, desc: "All lines added / removed by the agent in the session", primaryColor: "Chg", render: renderLinesChanged},
 		{id: "cache-percent", line: 1, desc: "Cache read percentage", primaryColor: "Dim", render: renderCachePercent},

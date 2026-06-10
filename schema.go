@@ -153,6 +153,15 @@ func setSegmentSettings(cfg *config, segID string, vals map[string]any) {
 	cfg.Settings[segID] = vals
 }
 
+// gitBranchSettingSpecs declares the opt-in rich git status settings.
+func gitBranchSettingSpecs() []settingSpec {
+	return []settingSpec{
+		{Key: "git_status", Name: "Rich status", Desc: "Run git status (cached, bounded) to show a dirty marker and ahead/behind counts, e.g. main* ↑1↓2", Kind: kindBool, Default: false},
+		{Key: "git_status_ttl_sec", Name: "Cache TTL (s)", Desc: "Seconds a git status result is reused before running git again", Kind: kindInt, Default: 10, Min: 1, Max: 300, Step: 5},
+		{Key: "git_timeout_ms", Name: "Timeout (ms)", Desc: "Hard limit on a single git status run; on timeout the last cached value is shown", Kind: kindInt, Default: 150, Min: 50, Max: 2000, Step: 50},
+	}
+}
+
 // barSettingSpecs generates the shared schema for progress-bar segments.
 // countdown/warning toggle the segment-specific extras; syncToAll appends the
 // ephemeral "copy to all bars" action.
