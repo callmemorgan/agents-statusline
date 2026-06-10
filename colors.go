@@ -1,7 +1,9 @@
 package main
 
-import "os"
-
+// palette holds the resolved escape string for every semantic role. An empty
+// palette (Rst == "") means colors are disabled. The unexported theme/depth
+// fields let color-spec resolution (per-segment overrides, bar threshold
+// colors) honor the active theme and terminal capability.
 type palette struct {
 	Model   string
 	Dir     string
@@ -16,33 +18,25 @@ type palette struct {
 	RCrit   string
 	Agent   string
 	Vim     string
-	Purple  string
+	Purple  string // the "accent" role
 	Session string
+	Sep     string // separator color between segments
+
+	theme *theme
+	depth colorDepth
 }
 
 // ─── Palette ─────────────────────────────────────────────────────────
 
-func currentPalette() palette {
-	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
+// currentPalette resolves the configured theme at the detected (or
+// configured) color depth. NO_COLOR / TERM=dumb yield an empty palette.
+func currentPalette(cfg config) palette {
+	d := resolveDepth(cfg.ColorDepth)
+	if d == depthNone {
 		return palette{}
 	}
-	return palette{
-		Model:   "\x1b[35m",
-		Dir:     "\x1b[36m",
-		Git:     "\x1b[32m",
-		Chg:     "\x1b[33m",
-		Dur:     "\x1b[34m",
-		Cost:    "\x1b[33m",
-		Dim:     "\x1b[90m",
-		Rst:     "\x1b[0m",
-		ROK:     "\x1b[32m",
-		RWarn:   "\x1b[33m",
-		RCrit:   "\x1b[91m",
-		Agent:   "\x1b[95m",
-		Vim:     "\x1b[97m",
-		Purple:  "\x1b[35m",
-		Session: "\x1b[96m",
-	}
+	t := applyThemeOverrides(themeByID(cfg.Theme), cfg.ThemeColors)
+	return resolvePalette(t, d)
 }
 
 // colorCycle is the ordered list of color names cycled by the TUI and offered
@@ -75,10 +69,11 @@ var colorCodes = map[string]string{
 }
 
 // paletteWithOverride returns a copy of c with the named primary color field
-// replaced by the ANSI code for colorName.
+// replaced by the resolved color spec (hex, 256-index, theme role, or legacy
+// 16-color name).
 func paletteWithOverride(c palette, primaryColor, colorName string) palette {
-	code := colorCodes[colorName]
-	if code == "" {
+	code, ok := resolveColorSpec(colorName, c)
+	if !ok || code == "" {
 		return c
 	}
 	p := c
@@ -115,16 +110,16 @@ func paletteWithOverride(c palette, primaryColor, colorName string) palette {
 	return p
 }
 
-// resolveColor maps a color name to its ANSI escape code. Returns the palette's
-// ok color if the name is unknown or unset, so callers never have to handle the
-// "no code found" case inline. When colors are disabled (NO_COLOR / TERM=dumb,
-// signalled by an empty palette), it returns "" so settings-driven bar colors
-// respect the disable too.
+// resolveColor maps a color spec to its escape code. Returns the palette's
+// ok color if the spec is unknown or unset, so callers never have to handle
+// the "no code found" case inline. When colors are disabled (NO_COLOR /
+// TERM=dumb, signalled by an empty palette), it returns "" so settings-driven
+// bar colors respect the disable too.
 func resolveColor(name string, c palette) string {
 	if c.Rst == "" {
 		return ""
 	}
-	if code := colorCodes[name]; code != "" {
+	if code, ok := resolveColorSpec(name, c); ok && code != "" {
 		return code
 	}
 	return c.ROK

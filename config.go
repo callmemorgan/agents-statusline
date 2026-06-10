@@ -36,8 +36,11 @@ type pluginDef struct {
 // in the saved TOML: scalars and arrays first, tables after.
 type config struct {
 	SchemaVersion int                       `toml:"schema_version,omitempty"`
+	Theme         string                    `toml:"theme,omitempty"`
+	ColorDepth    string                    `toml:"color_depth,omitempty"`
 	Reflow        string                    `toml:"reflow,omitempty"`
 	Segments      []string                  `toml:"segments"`
+	ThemeColors   map[string]string         `toml:"theme_colors,omitempty"`
 	Lines         map[string]int            `toml:"lines,omitempty"`
 	Colors        map[string]string         `toml:"colors,omitempty"`
 	Settings      map[string]map[string]any `toml:"settings,omitempty"`
@@ -145,6 +148,9 @@ func mergeWithDefaults(loaded config) config {
 	if loaded.Segments != nil {
 		cfg.Segments = loaded.Segments
 	}
+	cfg.Theme = loaded.Theme
+	cfg.ColorDepth = loaded.ColorDepth
+	cfg.ThemeColors = loaded.ThemeColors
 	cfg.Lines = loaded.Lines
 	cfg.Colors = loaded.Colors
 	cfg.Plugins = loaded.Plugins
@@ -184,6 +190,43 @@ func validateConfig(cfg *config) []configWarning {
 		warns = append(warns, configWarning{Path: "reflow", Msg: fmt.Sprintf("%q is not cascade or group (ignored)", cfg.Reflow)})
 		cfg.Reflow = ""
 	}
+	if cfg.Theme != "" {
+		found := false
+		for _, id := range themeIDs() {
+			if id == cfg.Theme {
+				found = true
+				break
+			}
+		}
+		if !found {
+			warns = append(warns, configWarning{Path: "theme", Msg: fmt.Sprintf("%q is not a built-in theme (using classic); known: %s", cfg.Theme, strings.Join(themeIDs(), ", "))})
+			cfg.Theme = ""
+		}
+	}
+	switch strings.ToLower(cfg.ColorDepth) {
+	case "", "auto", "truecolor", "24bit", "256", "16", "none":
+	default:
+		warns = append(warns, configWarning{Path: "color_depth", Msg: fmt.Sprintf("%q is not auto/truecolor/256/16/none (using auto)", cfg.ColorDepth)})
+		cfg.ColorDepth = ""
+	}
+	for role, spec := range cfg.ThemeColors {
+		knownRole := false
+		for _, r := range themeRoles {
+			if r == role {
+				knownRole = true
+				break
+			}
+		}
+		if !knownRole {
+			warns = append(warns, configWarning{Path: "theme_colors." + role, Msg: "unknown theme role (ignored)"})
+			delete(cfg.ThemeColors, role)
+			continue
+		}
+		if !validColorSpec(spec) {
+			warns = append(warns, configWarning{Path: "theme_colors." + role, Msg: fmt.Sprintf("%q is not a hex value, 256 index, or color name (ignored)", spec)})
+			delete(cfg.ThemeColors, role)
+		}
+	}
 	for id, n := range cfg.Lines {
 		if n < 1 || n > 9 {
 			warns = append(warns, configWarning{Path: "lines." + id, Msg: fmt.Sprintf("line %d out of range 1-9 (ignored)", n)})
@@ -191,8 +234,8 @@ func validateConfig(cfg *config) []configWarning {
 		}
 	}
 	for id, name := range cfg.Colors {
-		if _, ok := colorCodes[name]; !ok {
-			warns = append(warns, configWarning{Path: "colors." + id, Msg: fmt.Sprintf("%q is not a known color (ignored)", name)})
+		if !validColorSpec(name) {
+			warns = append(warns, configWarning{Path: "colors." + id, Msg: fmt.Sprintf("%q is not a known color, theme role, hex value, or 256 index (ignored)", name)})
 			delete(cfg.Colors, id)
 		}
 	}

@@ -52,8 +52,8 @@ func runRender(debug bool) {
 		return
 	}
 
-	colors := currentPalette()
 	cfg, warns := loadConfigWarn()
+	colors := currentPalette(cfg)
 	if os.Getenv("STATUSLINE_VERBOSE") != "" {
 		for _, w := range warns {
 			fmt.Fprintf(os.Stderr, "claude-statusline: config: %s\n", w)

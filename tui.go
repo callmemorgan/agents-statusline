@@ -128,7 +128,7 @@ func runConfigure() {
 
 		// Update preview
 		p := flyoutPreviewPayload(currentFlyoutSegment, samplePayload())
-		segPalette := currentPalette()
+		segPalette := currentPalette(cfg)
 		if s, ok := segmentByID(currentFlyoutSegment); ok && segPalette.Rst != "" {
 			if colorName := cfg.Colors[currentFlyoutSegment]; colorName != "" && colorName != "default" {
 				segPalette = paletteWithOverride(segPalette, s.primaryColor, colorName)
@@ -317,7 +317,7 @@ func runConfigure() {
 
 		// Refresh preview with colours converted to tview tags.
 		p := samplePayload()
-		lines := buildStatusline(buildInput{P: p, C: currentPalette(), Cfg: cfg, Now: time.Now()})
+		lines := buildStatusline(buildInput{P: p, C: currentPalette(cfg), Cfg: cfg, Now: time.Now()})
 		for i, l := range lines {
 			lines[i] = strings.TrimLeft(l, " ")
 		}
