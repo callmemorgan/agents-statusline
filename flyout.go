@@ -185,3 +185,26 @@ func flyoutPreviewPayload(segID string, base payload) payload {
 	}
 	return p
 }
+
+// demoPreviewPayload is the whole-statusline counterpart of the per-segment
+// stress test, driving the TUI's demo mode (d): every percentage sweeps 0→100
+// together, countdowns wind down with the bars, and cost and lines-changed
+// grow, so threshold colors and width changes are visible across the line.
+func demoPreviewPayload(base payload, now time.Time) payload {
+	p := base
+	pct := int((now.UnixMilli() % 5000) * 100 / 5000)
+	resetIn := func(windowSecs int64) *int64 {
+		v := now.Unix() + windowSecs*int64(100-pct)/100
+		return &v
+	}
+	p.Exceeds200K = ptrBool(pct > 80)
+	p.ContextWindow.UsedPercentage = ptrFloat64(float64(pct))
+	p.RateLimits.FiveHour.UsedPercentage = ptrFloat64(float64(pct))
+	p.RateLimits.FiveHour.ResetsAt = resetIn(5 * 3600)
+	p.RateLimits.SevenDay.UsedPercentage = ptrFloat64(float64(pct))
+	p.RateLimits.SevenDay.ResetsAt = resetIn(7 * 24 * 3600)
+	p.Cost.TotalCostUSD = 2.5 * float64(pct) / 100
+	p.Cost.TotalLinesAdded = int64(3 * pct)
+	p.Cost.TotalLinesRemoved = int64(pct)
+	return p
+}

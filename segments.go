@@ -77,7 +77,7 @@ func renderGitBranch(ctx renderCtx) (string, bool) {
 		}
 	}
 	if worktreeName != "" && worktreeName != branch {
-		display = branch + " " + ctx.C.Dim + "(" + worktreeName + ")" + ctx.C.Rst
+		display += " " + ctx.C.Dim + "(" + worktreeName + ")" + ctx.C.Rst
 	}
 	return ctx.C.Git + display + ctx.C.Rst, true
 }

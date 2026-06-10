@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -112,6 +113,33 @@ func TestGitStatusNonRepo(t *testing.T) {
 	}
 	if *calls != 0 {
 		t.Error("git must not run outside a repo")
+	}
+}
+
+// A worktree display name must append to the rich-status decorations, not
+// replace them (regression: the worktree suffix used to rebuild the display
+// from the bare branch, silently dropping the dirty marker and ahead/behind).
+func TestGitBranchKeepsRichStatusWithWorktree(t *testing.T) {
+	gitStatusPreview = &gitStatusInfo{Dirty: true, Ahead: 1, Behind: 2}
+	t.Cleanup(func() { gitStatusPreview = nil })
+	initSegments(nil)
+
+	var p payload
+	p.Workspace.CurrentDir = "/nonexistent/proj"
+	p.Worktree = worktree{Name: "my-project", Branch: "feature/x"}
+	cfg := config{Settings: map[string]map[string]any{"git-branch": {"git_status": true}}}
+	seg, ok := segmentByID("git-branch")
+	if !ok {
+		t.Fatal("no git-branch segment")
+	}
+	out, show := seg.render(renderCtx{P: p, S: settingsFor(cfg, seg), Now: time.Now()})
+	if !show {
+		t.Fatal("git-branch hidden")
+	}
+	for _, want := range []string{"feature/x*", "↑1", "↓2", "(my-project)"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("git-branch = %q, want substring %q", out, want)
+		}
 	}
 }
 

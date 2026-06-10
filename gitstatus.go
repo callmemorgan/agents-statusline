@@ -126,10 +126,19 @@ func saveGitCache(cache map[string]gitStatusInfo, now time.Time) {
 	_ = writeFileAtomic(gitCachePath(), data)
 }
 
+// gitStatusPreview, when non-nil, short-circuits gitStatusFor. The configure
+// TUI sets it so the preview can demonstrate rich status (dirty marker,
+// ahead/behind) without the sample payload pointing at a real repo. Never set
+// on the render path.
+var gitStatusPreview *gitStatusInfo
+
 // gitStatusFor returns rich status for the repo containing dir. Fresh cache
 // entries are returned without exec; stale ones trigger a bounded git run,
 // falling back to the stale value on error or timeout.
 func gitStatusFor(dir string, ttl, timeout time.Duration, now time.Time) (gitStatusInfo, bool) {
+	if gitStatusPreview != nil {
+		return *gitStatusPreview, true
+	}
 	root := repoRoot(dir)
 	if root == "" {
 		return gitStatusInfo{}, false

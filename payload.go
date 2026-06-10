@@ -137,7 +137,9 @@ func samplePayload() payload {
 		Version:     "0.1.0",
 		Exceeds200K: &trueVal,
 		Model:       model{DisplayName: "Claude 3.7 Sonnet"},
-		Workspace:   workspace{CurrentDir: "/Users/me/code/my-project", ProjectDir: "/Users/me/code/my-project", GitWorktree: "my-project"},
+		Workspace:   workspace{CurrentDir: "/Users/me/code/my-project", ProjectDir: "/Users/me/code/my-project", GitWorktree: "my-project", AddedDirs: []string{"/Users/me/code/shared-lib"}},
+		OutputStyle: outputStyle{Name: "Explanatory"},
+		Email:       "you@example.com",
 		Cost: cost{
 			TotalCostUSD:      0.42,
 			TotalLinesAdded:   128,

@@ -199,6 +199,7 @@ An interactive TUI: segment list (left), description panel (right), a **live pre
 | `p` | Preset picker with live preview |
 | `/` | Filter the segment list |
 | `w` | Cycle preview width (auto → 80 → 60 → 40) to test reflow |
+| `d` | Demo mode — animate the whole preview: bars sweep, countdowns tick, cost grows |
 | `r` | Reset to defaults (asks first) |
 | `s` | Save and keep editing (`✓ Saved` flash) |
 | `q` / `Esc` | Quit — asks if there are unsaved changes |

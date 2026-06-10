@@ -39,6 +39,32 @@ func filterSegments(all []segmentInfo, query string) []segmentInfo {
 	return out
 }
 
+// previewState returns an hour of synthetic, steadily-rising session history
+// consistent with samplePayload's current numbers, so state-derived features
+// (cost-rate, rate-limit projections, the context trend) render in the TUI
+// preview and their settings visibly change the output. Rates: $0.42/h cost,
+// 24%/h context growth (↗ ~37m to the default 80% compact threshold), 16%/h
+// on the 5h quota, 0.4%/h on the 7d quota.
+func previewState(now time.Time) *sessionState {
+	st := &sessionState{SessionID: "tui-preview", retention: 48 * time.Hour}
+	const n = 13 // a sample every 5 minutes over the last hour
+	for i := 0; i < n; i++ {
+		frac := float64(i) / float64(n-1)
+		rl5h := 34 + 16*frac
+		rl7d := 29.6 + 0.4*frac
+		st.Samples = append(st.Samples, sample{
+			T:      now.Add(-time.Duration(float64(time.Hour) * (1 - frac))).Unix(),
+			Cost:   0.42 * frac,
+			CtxPct: 41 + 24*frac,
+			InTok:  int64(45678 * frac),
+			OutTok: int64(1234 * frac),
+			RL5h:   &rl5h,
+			RL7d:   &rl7d,
+		})
+	}
+	return st
+}
+
 func runConfigure() {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		fmt.Fprintln(os.Stderr, "claude-statusline configure requires an interactive terminal.")
@@ -48,6 +74,17 @@ func runConfigure() {
 
 	cfg, cfgWarns := loadConfigWarn()
 	initSegments(cfg.Plugins)
+
+	// Synthetic data so every feature previews: an hour of session history
+	// for the state-derived segments, and a fake rich-git result (the sample
+	// payload's workspace isn't a real repo). Both are preview-only.
+	pvState := previewState(time.Now())
+	gitStatusPreview = &gitStatusInfo{Dirty: true, Ahead: 1, Behind: 2}
+	defer func() { gitStatusPreview = nil }()
+
+	// demoActive animates the whole preview through all states (d). Session-
+	// only, like the per-segment stress test.
+	demoActive := false
 
 	// visible is the (possibly filtered) slice the list renders from; every
 	// handler resolves the selection through it, never registeredSegments.
@@ -219,10 +256,11 @@ func runConfigure() {
 		}
 		if s, ok := segmentByID(currentFlyoutSegment); ok {
 			ctx := renderCtx{
-				P:   p,
-				C:   segPalette,
-				S:   settingsFor(cfg, s),
-				Now: time.Now(),
+				P:     p,
+				C:     segPalette,
+				S:     settingsFor(cfg, s),
+				State: pvState,
+				Now:   time.Now(),
 			}
 			if rendered, show := s.render(ctx); show {
 				flyoutPreview.SetText(ansiToTview(strings.TrimLeft(rendered, " ")))
@@ -438,7 +476,10 @@ func runConfigure() {
 			width = panelW
 		}
 		p := samplePayload()
-		lines := buildStatusline(buildInput{P: p, C: currentPalette(cfg), Cfg: cfg, Width: width, Now: time.Now()})
+		if demoActive {
+			p = demoPreviewPayload(p, time.Now())
+		}
+		lines := buildStatusline(buildInput{P: p, C: currentPalette(cfg), Cfg: cfg, State: pvState, Width: width, Now: time.Now()})
 		var previewText string
 		if previewWidth > 0 {
 			for i, l := range lines {
@@ -466,6 +507,21 @@ func runConfigure() {
 		} else if panelW > 0 {
 			previewBox.SetTitle(fmt.Sprintf(" Preview (auto · %d cols) ", panelW))
 		}
+	}
+
+	// scheduleDemoTick drives demo mode the same way the flyout stress test
+	// is driven: a self-rescheduling 50ms timer that stops re-arming once
+	// demoActive flips off.
+	var scheduleDemoTick func()
+	scheduleDemoTick = func() {
+		time.AfterFunc(50*time.Millisecond, func() {
+			app.QueueUpdateDraw(func() {
+				if demoActive {
+					refreshPreview()
+					scheduleDemoTick()
+				}
+			})
+		})
 	}
 
 	// Update list items and preview from current cfg.
@@ -912,6 +968,16 @@ func runConfigure() {
 					previewWidth = 0
 				}
 				refreshPreview()
+				return nil
+			case 'd', 'D':
+				demoActive = !demoActive
+				if demoActive {
+					flash("green", "demo on — d to stop")
+					scheduleDemoTick()
+				} else {
+					flash("yellow", "demo off")
+					refreshPreview()
+				}
 				return nil
 			case 'r', 'R':
 				pages.SwitchToPage("reset")
