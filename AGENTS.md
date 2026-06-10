@@ -73,6 +73,11 @@ Plugins receive context via environment variables: `STATUSLINE_MODEL`, `STATUSLI
 - **Colors**: Always respect `NO_COLOR` and `TERM=dumb` (palette fields are empty strings when disabled). Use `palette` struct fields, not hardcoded ANSI codes.
 - **Section dividers** in `main.go` use the pattern: `// ─── Section Name ───────────────────────────────────────────────────────────`
 - **Config path** is hardcoded to `~/.config/claude-statusline/config.json`.
+- **`AGENTS.md` is an identical copy of this file.** When editing `CLAUDE.md`, copy it over `AGENTS.md` so they stay in sync.
+
+## Releases
+
+Releases are cut by pushing a `vX.Y.Z` git tag — `.github/workflows/release.yml` runs GoReleaser (`.goreleaser.yaml`) to build darwin/linux/windows binaries and sign them with cosign. There is no version constant in the code; the `version` segment displays the *calling tool's* version from the payload, not this binary's.
 
 ## Adding a new built-in segment
 
@@ -80,6 +85,7 @@ Plugins receive context via environment variables: `STATUSLINE_MODEL`, `STATUSLI
 2. Add an entry to `allSegmentInfos()` with the segment's natural line (1–9), description, primary color field name, and render function.
 3. Add the segment ID to `defaultConfig()` in the appropriate position.
 4. If the segment has configurable sub-features (like the progress bars), add entries to `flyoutFeatures` and implement the relevant `settingsFor` / `applyFlyout*` logic following the `context-window` pattern.
+5. Update the segment table in `README.md`, and `config.json.example` if the config schema changed. Add a test payload to `TESTING.md` if the segment reads new payload fields.
 
 ## Homebrew vs local binary
 
