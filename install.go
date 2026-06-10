@@ -190,7 +190,11 @@ func resolveTarget(name, explicitPath string) (installTarget, error) {
 	case "claude":
 		path := explicitPath
 		if path == "" {
-			path = filepath.Join(userHome(), ".claude", "settings.json")
+			dir := os.Getenv("CLAUDE_CONFIG_DIR")
+			if dir == "" {
+				dir = filepath.Join(userHome(), ".claude")
+			}
+			path = filepath.Join(dir, "settings.json")
 		}
 		return installTarget{
 			name:  "claude",

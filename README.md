@@ -66,7 +66,7 @@ go build -o claude-statusline .
 claude-statusline install
 ```
 
-This backs up `~/.claude/settings.json`, splices in the `statusLine` key **without reformatting the rest of the file**, and verifies the wiring by rendering a sample payload through the exact command Claude Code will run. Flags: `--dry-run` to preview, `--force` to overwrite an existing entry, `--target agy` for Antigravity, `--settings-path` for non-standard locations. `claude-statusline uninstall` removes the wiring (`--restore` swaps the backup back).
+This backs up `~/.claude/settings.json` (honoring `$CLAUDE_CONFIG_DIR` when set), splices in the `statusLine` key **without reformatting the rest of the file**, and verifies the wiring by rendering a sample payload through the exact command Claude Code will run. Flags: `--dry-run` to preview, `--force` to overwrite an existing entry, `--target agy` for Antigravity, `--settings-path` for non-standard locations. `claude-statusline uninstall` removes the wiring (`--restore` swaps the backup back).
 
 <details>
 <summary>Manual wiring (fallback)</summary>

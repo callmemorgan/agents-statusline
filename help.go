@@ -12,7 +12,8 @@ Usage:
   claude-statusline <command> [flags]
 
 Commands:
-  install      Wire this binary into ~/.claude/settings.json: backs up the
+  install      Wire this binary into ~/.claude/settings.json (or
+               $CLAUDE_CONFIG_DIR/settings.json when set): backs up the
                original, splices the statusLine key without reformatting,
                and verifies with a sample render.
                Flags: --target claude|agy · --settings-path PATH · --force

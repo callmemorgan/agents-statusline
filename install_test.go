@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -178,11 +179,21 @@ func TestResolveTargetAgyProbe(t *testing.T) {
 	if _, err := resolveTarget("bogus", ""); err == nil {
 		t.Error("unknown target should error")
 	}
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	tgt, err := resolveTarget("claude", "")
 	if err != nil || !strings.HasSuffix(tgt.path, "/.claude/settings.json") {
 		t.Errorf("claude target: %+v err=%v", tgt, err)
 	}
 	if !strings.Contains(tgt.value, `"type": "command"`) {
 		t.Errorf("claude value: %s", tgt.value)
+	}
+
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(dir, "profile"))
+	tgt, err = resolveTarget("claude", "")
+	if err != nil || tgt.path != filepath.Join(dir, "profile", "settings.json") {
+		t.Errorf("claude target with CLAUDE_CONFIG_DIR: %+v err=%v", tgt, err)
+	}
+	if tgt2, err := resolveTarget("claude", "/explicit/settings.json"); err != nil || tgt2.path != "/explicit/settings.json" {
+		t.Errorf("explicit path should win over CLAUDE_CONFIG_DIR: %+v err=%v", tgt2, err)
 	}
 }
