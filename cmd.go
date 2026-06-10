@@ -60,7 +60,11 @@ func runRender(debug bool) {
 		}
 	}
 	initSegments(cfg.Plugins)
-	lines := buildStatusline(buildInput{P: p, C: colors, Cfg: cfg, Width: terminalWidth(p), Now: start})
+
+	st := loadState(cfg.State, firstNonEmpty(p.SessionID, p.ConversationID), start)
+	st.Record(p, start)
+
+	lines := buildStatusline(buildInput{P: p, C: colors, Cfg: cfg, State: st, Width: terminalWidth(p), Now: start})
 
 	elapsedMS := float64(time.Since(start).Microseconds()) / 1000.0
 	if len(lines) > 0 {
@@ -71,4 +75,7 @@ func runRender(debug bool) {
 	} else {
 		fmt.Printf("%s%.1fms%s\n", colors.Dim, elapsedMS, colors.Rst)
 	}
+
+	// Persist state after printing so disk I/O never delays output.
+	_ = st.Save()
 }

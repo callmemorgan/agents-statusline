@@ -41,6 +41,7 @@ type config struct {
 	Lines         map[string]int            `toml:"lines,omitempty"`
 	Colors        map[string]string         `toml:"colors,omitempty"`
 	Settings      map[string]map[string]any `toml:"settings,omitempty"`
+	State         stateConfig               `toml:"state,omitempty"`
 	Plugins       []pluginDef               `toml:"plugins,omitempty"`
 }
 
@@ -149,6 +150,7 @@ func mergeWithDefaults(loaded config) config {
 	cfg.Plugins = loaded.Plugins
 	cfg.Reflow = loaded.Reflow
 	cfg.Settings = loaded.Settings
+	cfg.State = loaded.State
 	if loaded.Segments == nil {
 		inSegments := make(map[string]bool, len(cfg.Segments))
 		for _, id := range cfg.Segments {

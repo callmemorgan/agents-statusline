@@ -38,6 +38,7 @@ type renderCtx struct {
 	P     payload
 	C     palette
 	S     settings
+	State *sessionState // nil unless the segment declares needsState
 	Width int
 	Now   time.Time
 }
@@ -47,6 +48,7 @@ type buildInput struct {
 	P     payload
 	C     palette
 	Cfg   config
+	State *sessionState
 	Width int
 	Now   time.Time
 }
@@ -68,6 +70,9 @@ func buildStatusline(in buildInput) []string {
 				S:     settingsFor(in.Cfg, s),
 				Width: in.Width,
 				Now:   in.Now,
+			}
+			if s.needsState {
+				ctx.State = in.State
 			}
 			if rendered, show := s.render(ctx); show {
 				line := s.line

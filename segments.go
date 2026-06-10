@@ -206,6 +206,7 @@ type segmentInfo struct {
 	desc         string
 	primaryColor string
 	settings     []settingSpec // nil → no flyout, no settings entry
+	needsState   bool          // renderer reads the session state store
 	render       func(ctx renderCtx) (string, bool)
 }
 
