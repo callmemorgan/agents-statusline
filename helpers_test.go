@@ -170,3 +170,33 @@ func TestPruneSettings(t *testing.T) {
 		t.Errorf("expected only the changed key, got %v", got)
 	}
 }
+
+func TestProgressBarFractional(t *testing.T) {
+	// smooth at 25% of width 10: 20 of 80 units → 2 full cells + partial 4/8.
+	got := progressBarWithIconset(25, "", "", palette{}, 10, "smooth")
+	if got != "██▌       " {
+		t.Errorf("smooth 25%%/10 = %q", got)
+	}
+	if got := progressBarWithIconset(0, "", "", palette{}, 10, "smooth"); got != "          " {
+		t.Errorf("smooth 0%% = %q", got)
+	}
+	if got := progressBarWithIconset(100, "", "", palette{}, 10, "smooth"); got != "██████████" {
+		t.Errorf("smooth 100%% = %q", got)
+	}
+	// Whole-cell sets are unchanged by the iconset refactor.
+	if got := progressBarWithIconset(50, "", "", palette{}, 10, "blocks"); got != "█████░░░░░" {
+		t.Errorf("blocks 50%% = %q", got)
+	}
+	// Unknown name falls back to default glyphs.
+	if got := progressBarWithIconset(50, "", "", palette{}, 4, "nope"); got != "##--" {
+		t.Errorf("fallback = %q", got)
+	}
+	// Every named set renders at the declared width.
+	for _, name := range iconsetNames() {
+		for _, pct := range []int{0, 33, 50, 99, 100} {
+			if w := visibleWidth(progressBarWithIconset(pct, "", "", palette{}, 20, name)); w != 20 {
+				t.Errorf("iconset %q at %d%% has width %d, want 20", name, pct, w)
+			}
+		}
+	}
+}

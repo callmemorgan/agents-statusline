@@ -262,41 +262,85 @@ func joinParts(parts []string, st lineStyle) string {
 	return strings.Repeat(" ", st.padding) + strings.Join(parts, st.sep)
 }
 
-// iconsetChars maps iconset names to (filled, empty) runes.
-var iconsetChars = map[string][2]string{
-	"default": {"#", "-"},
-	"blocks":  {"█", "░"},
-	"dots":    {"●", "○"},
-	"ascii":   {"=", " "},
-	"minimal": {"|", " "},
+// iconset defines the glyphs of one progress-bar style. All glyphs are a
+// single terminal cell wide. Partials, when present, are fractional-fill
+// glyphs ordered low→high that multiply the bar's effective resolution.
+type iconset struct {
+	Filled, Empty string
+	Partials      []string
+}
+
+var iconsets = map[string]iconset{
+	"default":      {Filled: "#", Empty: "-"},
+	"blocks":       {Filled: "█", Empty: "░"},
+	"dots":         {Filled: "●", Empty: "○"},
+	"ascii":        {Filled: "=", Empty: " "},
+	"minimal":      {Filled: "|", Empty: " "},
+	"braille":      {Filled: "⣿", Empty: "⣀"},
+	"braille-fine": {Filled: "⣿", Empty: "⠀", Partials: []string{"⡀", "⣀", "⣄", "⣤", "⣦", "⣶", "⣷"}},
+	"shade":        {Filled: "▓", Empty: "░"},
+	"smooth":       {Filled: "█", Empty: " ", Partials: []string{"▏", "▎", "▍", "▌", "▋", "▊", "▉"}},
+	"line":         {Filled: "━", Empty: "─"},
+	"slim":         {Filled: "▰", Empty: "▱"},
+	"vertical":     {Filled: "▮", Empty: "▯"},
 }
 
 // iconsetOrder is the cycle order offered in the TUI (map iteration order is
 // random, so the list is explicit).
-var iconsetOrder = []string{"default", "blocks", "dots", "ascii", "minimal"}
+var iconsetOrder = []string{
+	"default", "blocks", "dots", "ascii", "minimal",
+	"smooth", "braille", "braille-fine", "shade", "line", "slim", "vertical",
+}
 
 func iconsetNames() []string {
 	return iconsetOrder
 }
 
-func iconsetPair(name string) (string, string) {
-	if p, ok := iconsetChars[name]; ok {
-		return p[0], p[1]
+func iconsetByName(name string) iconset {
+	if is, ok := iconsets[name]; ok {
+		return is
 	}
-	return "#", "-"
+	return iconsets["default"]
 }
 
-func progressBarWithIconset(pct int, fillColor, emptyColor string, c palette, width int, iconset string) string {
+func iconsetPair(name string) (string, string) {
+	is := iconsetByName(name)
+	return is.Filled, is.Empty
+}
+
+func progressBarWithIconset(pct int, fillColor, emptyColor string, c palette, width int, name string) string {
 	if pct < 0 {
 		pct = 0
 	}
 	if pct > 100 {
 		pct = 100
 	}
-	filledChar, emptyChar := iconsetPair(iconset)
-	filled := pct * width / 100
-	empty := width - filled
-	return fillColor + strings.Repeat(filledChar, filled) + emptyColor + strings.Repeat(emptyChar, empty) + c.Rst
+	is := iconsetByName(name)
+
+	if len(is.Partials) == 0 {
+		filled := pct * width / 100
+		return fillColor + strings.Repeat(is.Filled, filled) +
+			emptyColor + strings.Repeat(is.Empty, width-filled) + c.Rst
+	}
+
+	// Fractional fill: each cell subdivides into len(Partials)+1 units; the
+	// remainder renders as one partial glyph in the fill color.
+	n := len(is.Partials) + 1
+	units := pct * width * n / 100
+	full := units / n
+	rem := units % n
+	var b strings.Builder
+	b.WriteString(fillColor)
+	b.WriteString(strings.Repeat(is.Filled, full))
+	empty := width - full
+	if rem > 0 && full < width {
+		b.WriteString(is.Partials[rem-1])
+		empty--
+	}
+	b.WriteString(emptyColor)
+	b.WriteString(strings.Repeat(is.Empty, empty))
+	b.WriteString(c.Rst)
+	return b.String()
 }
 
 func progressBarWithTimeAndIconset(pct, timePct int, fillColor, emptyColor string, c palette, width int, iconset string) string {
