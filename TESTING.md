@@ -17,7 +17,8 @@ go test ./...
 | Install/uninstall JSON splicing | `install_test.go` |
 | Rich git status (incl. real-git integration) | `gitstatus_test.go` |
 | Plugins (exec, timeout, multi-field) | `plugins_test.go` |
-| Format helpers, iconsets, filter, ansiToTview | `helpers_test.go` |
+| Format helpers, iconsets, filter, ansiToTview, footer wrap | `helpers_test.go` |
+| TUI preview data (synthetic state, sample payload, demo sweep) | `tui_preview_test.go` |
 
 What follows is the **manual** checklist: smoke tests against the real binary and the interactive TUI, which the suite can't drive.
 

@@ -7,7 +7,7 @@ Both tools pipe a JSON payload to this binary on every turn. It renders a colore
 - **Six built-in themes** — classic, Catppuccin Mocha, Nord, Dracula, Gruvbox Dark, Tokyo Night — in truecolor with automatic 256/16-color fallback.
 - **Burn-rate intelligence** — rate-limit projections (`→58%` at reset), cost per hour (`$1.84/h`), and time-to-compact estimates (`↗ ~35m`), computed from your session's own history.
 - **One-command setup** — `claude-statusline install` wires everything up and verifies it.
-- **A real configuration TUI** — live width-aware preview, theme and preset pickers, a color swatch picker, per-segment settings, and search.
+- **A real configuration TUI** — live width-aware preview, theme and preset pickers, a color swatch picker, per-segment settings, search, an animated demo mode, and a render-in-your-terminal view for honest theme checking.
 - **24 built-in segments + plugins** — assigned to lines 1–9, empty lines collapse, segments hide automatically when their data is missing.
 
 The core renderer is a single static binary (one TOML dependency); the interactive TUI uses [tview](https://github.com/rivo/tview).
@@ -183,7 +183,7 @@ dim = "245"       # xterm-256 index
 claude-statusline configure
 ```
 
-An interactive TUI: segment list (left), description panel (right), a **live preview that reflows at your real terminal width**, and a status strip showing the active theme/preset and unsaved-changes marker.
+An interactive TUI: segment list (left), description panel (right), a **live preview that reflows at your real terminal width**, and a status strip showing the active theme/preset and unsaved-changes marker. The preview is fed synthetic session history and git status, so every feature — burn rates, projections, trends, rich git — is visible while you configure it. Nothing touches disk until you save.
 
 | Key | Action |
 |-----|--------|
@@ -464,10 +464,13 @@ Prints a field presence table comparing the received payload against the Claude 
 - `NO_COLOR=1` or `TERM=dumb` disables colors intentionally
 - Claude Code may strip `COLORTERM` from the statusline environment; force themes with `color_depth = "truecolor"` in config.toml
 - 256/16-color terminals get quantized theme colors — that's the fallback working as intended
+- The TUI preview approximates colors; press `v` in `claude-statusline configure` to render against your real terminal
+- Want the pre-1.0 colors? That's the default theme, `classic` (alias: `original`) — active whenever no `theme` is set
 
 **Config seems ignored**
 
 - The config moved to `~/.config/claude-statusline/config.toml` in 1.0 (your old `config.json` was migrated automatically and kept as `config.json.bak`)
+- Mixing binary versions? A pre-1.0 binary reads `config.json`, 1.0+ reads `config.toml` — running the 1.0 binary once migrates the JSON away, and an older still-installed binary (e.g. Homebrew) falls back to defaults. Copy `config.json.bak` back to `config.json` to keep the old binary working until you upgrade; the 1.0 binary ignores it once `config.toml` exists
 - Run `claude-statusline debug < payload.json` to see config warnings (unknown keys, bad values)
 
 **Context percentage looks wrong**

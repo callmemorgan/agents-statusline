@@ -32,10 +32,13 @@ func buildHelpText() string {
 	section("Settings flyout", "flyout")
 
 	b.WriteString("\n[cyan::b]Concepts[-::-]\n")
-	b.WriteString("  [::b]themes[-:-:-]       6 built-in palettes; truecolor with automatic 256/16 fallback\n")
+	b.WriteString("  [::b]themes[-:-:-]       6 built-in palettes; truecolor with automatic 256/16 fallback;\n")
+	b.WriteString("               classic (alias: original) is the pre-1.0 default look — v shows\n")
+	b.WriteString("               any theme against your real terminal\n")
 	b.WriteString("  [::b]presets[-:-:-]      named layouts — applying one replaces segments, lines, settings\n")
 	b.WriteString("  [::b]plugins[-:-:-]      executable segments defined in config.toml ([[plugins]])\n")
-	b.WriteString("  [::b]projections[-:-:-]  →58% burn-rate forecasts appear after ~5 minutes of session history\n")
+	b.WriteString("  [::b]projections[-:-:-]  →58% burn-rate forecasts appear after ~5 minutes of session\n")
+	b.WriteString("               history (the preview here fakes that history so you can see them)\n")
 
 	b.WriteString("\n[gray]r full README · q/esc close[-]\n")
 	return b.String()
