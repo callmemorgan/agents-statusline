@@ -51,7 +51,7 @@ func runRender(debug bool) {
 	colors := currentPalette()
 	cfg := loadConfig()
 	initSegments(cfg.Plugins)
-	lines := buildStatusline(p, colors, cfg, terminalWidth(p))
+	lines := buildStatusline(buildInput{P: p, C: colors, Cfg: cfg, Width: terminalWidth(p), Now: start})
 
 	elapsedMS := float64(time.Since(start).Microseconds()) / 1000.0
 	if len(lines) > 0 {

@@ -78,19 +78,19 @@ func TestFormatHHMMSS(t *testing.T) {
 }
 
 func TestResetCountdown(t *testing.T) {
-	now := time.Now().Unix()
+	now := time.Unix(1750000000, 0)
 	cases := []struct {
 		at   int64
 		want string
 	}{
-		{now - 10, "now"},
-		{now + 90, "1m"},
-		{now + 2*3600 + 30*60 + 30, "2h30m"},
-		{now + 3*86400 + 4*3600 + 60, "3d4h"},
+		{now.Unix() - 10, "now"},
+		{now.Unix() + 90, "1m"},
+		{now.Unix() + 2*3600 + 30*60 + 30, "2h30m"},
+		{now.Unix() + 3*86400 + 4*3600 + 60, "3d4h"},
 	}
 	for _, tc := range cases {
-		if got := resetCountdown(tc.at); got != tc.want {
-			t.Errorf("resetCountdown(now%+d) = %q, want %q", tc.at-now, got, tc.want)
+		if got := resetCountdown(tc.at, now); got != tc.want {
+			t.Errorf("resetCountdown(now%+d) = %q, want %q", tc.at-now.Unix(), got, tc.want)
 		}
 	}
 }

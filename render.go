@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -11,6 +12,11 @@ const (
 	barWidth  = 20
 	maxInput  = 1 << 20
 	minObject = `{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}`
+
+	// Layout budget: line 1 reserves room for the trailing " │ X.Xms" timing
+	// suffix, and every line keeps a small safety margin before wrapping.
+	timingSuffixReserve = 15
+	safetyMargin        = 5
 )
 
 var reANSI = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -25,25 +31,47 @@ func visibleWidth(s string) int {
 
 // ─── Statusline Builder ──────────────────────────────────────────────
 
-// buildCfg holds the config for the current build so that segment renderers
-// can access per-segment settings without threading cfg through every signature.
-var buildCfg config
+// renderCtx carries everything a segment renderer needs. The palette already
+// has the per-segment color override applied, and S holds the segment's own
+// resolved settings. Now is injected so countdowns and rates are testable.
+type renderCtx struct {
+	P     payload
+	C     palette
+	S     segmentSettings
+	Width int
+	Now   time.Time
+}
 
-func buildStatusline(p payload, c palette, cfg config, columns int) []string {
-	buildCfg = cfg
+// buildInput is the top-level input to buildStatusline.
+type buildInput struct {
+	P     payload
+	C     palette
+	Cfg   config
+	Width int
+	Now   time.Time
+}
+
+func buildStatusline(in buildInput) []string {
 	clearPluginCache()
 	parts := map[int][]string{}
-	for _, id := range cfg.Segments {
+	for _, id := range in.Cfg.Segments {
 		if s, ok := segmentByID(id); ok {
-			segPalette := c
-			if c.Rst != "" {
-				if colorName := cfg.Colors[id]; colorName != "" && colorName != "default" {
-					segPalette = paletteWithOverride(c, s.primaryColor, colorName)
+			segPalette := in.C
+			if in.C.Rst != "" {
+				if colorName := in.Cfg.Colors[id]; colorName != "" && colorName != "default" {
+					segPalette = paletteWithOverride(in.C, s.primaryColor, colorName)
 				}
 			}
-			if rendered, show := s.render(p, segPalette); show {
+			ctx := renderCtx{
+				P:     in.P,
+				C:     segPalette,
+				S:     settingsFor(in.Cfg, id),
+				Width: in.Width,
+				Now:   in.Now,
+			}
+			if rendered, show := s.render(ctx); show {
 				line := s.line
-				if override, ok := cfg.Lines[id]; ok && override >= 1 {
+				if override, ok := in.Cfg.Lines[id]; ok && override >= 1 {
 					line = override
 				}
 				parts[line] = append(parts[line], rendered)
@@ -54,11 +82,11 @@ func buildStatusline(p payload, c palette, cfg config, columns int) []string {
 		return []string{}
 	}
 
-	if columns > 0 && cfg.Reflow == "group" {
-		return buildStatuslineGroup(parts, columns)
+	if in.Width > 0 && in.Cfg.Reflow == "group" {
+		return buildStatuslineGroup(parts, in.Width)
 	}
 
-	return buildStatuslineCascade(parts, columns)
+	return buildStatuslineCascade(parts, in.Width)
 }
 
 // buildStatuslineCascade is the original reflow behaviour: segments spill
@@ -79,8 +107,6 @@ func buildStatuslineCascade(parts map[int][]string, columns int) []string {
 	// Auto-reflow: spill trailing segments to the next line when a line
 	// exceeds the available terminal width.
 	if columns > 0 {
-		const timingSuffixReserve = 15
-		const safetyMargin = 5
 		lineNum := 1
 		for lineNum <= maxLine {
 			budget := columns - safetyMargin
@@ -133,9 +159,6 @@ func buildStatuslineCascade(parts map[int][]string, columns int) []string {
 // different logical lines never share a physical line, preserving the line
 // boundaries defined in the configuration.
 func buildStatuslineGroup(parts map[int][]string, columns int) []string {
-	const timingSuffixReserve = 15
-	const safetyMargin = 5
-
 	var lineNums []int
 	for k := range parts {
 		lineNums = append(lineNums, k)

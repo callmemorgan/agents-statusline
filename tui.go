@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -126,7 +127,6 @@ func runConfigure() {
 		flyoutList.SetTitle(fmt.Sprintf(" %s settings ", currentFlyoutSegment))
 
 		// Update preview
-		buildCfg = cfg
 		p := flyoutPreviewPayload(currentFlyoutSegment, samplePayload())
 		segPalette := currentPalette()
 		if s, ok := segmentByID(currentFlyoutSegment); ok && segPalette.Rst != "" {
@@ -135,7 +135,13 @@ func runConfigure() {
 			}
 		}
 		if s, ok := segmentByID(currentFlyoutSegment); ok {
-			if rendered, show := s.render(p, segPalette); show {
+			ctx := renderCtx{
+				P:   p,
+				C:   segPalette,
+				S:   settingsFor(cfg, currentFlyoutSegment),
+				Now: time.Now(),
+			}
+			if rendered, show := s.render(ctx); show {
 				flyoutPreview.SetText(ansiToTview(strings.TrimLeft(rendered, " ")))
 			} else {
 				flyoutPreview.SetText("(segment hidden)")
@@ -333,7 +339,7 @@ func runConfigure() {
 
 		// Refresh preview with colours converted to tview tags.
 		p := samplePayload()
-		lines := buildStatusline(p, currentPalette(), cfg, 0)
+		lines := buildStatusline(buildInput{P: p, C: currentPalette(), Cfg: cfg, Now: time.Now()})
 		for i, l := range lines {
 			lines[i] = strings.TrimLeft(l, " ")
 		}

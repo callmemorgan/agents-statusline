@@ -6,9 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
+
+// testNow is the fixed clock used for golden rendering; payload fixtures use
+// resets_at values relative to this instant so countdowns are deterministic.
+var testNow = time.Unix(1750000000, 0)
 
 // loadPayload reads and parses a fixture from testdata/payloads.
 func loadPayload(t *testing.T, name string) payload {
@@ -86,7 +91,7 @@ func TestBuildStatuslineGolden(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := loadPayload(t, tc.payload)
 			initSegments(tc.cfg.Plugins)
-			lines := buildStatusline(p, palette{}, tc.cfg, tc.columns)
+			lines := buildStatusline(buildInput{P: p, Cfg: tc.cfg, Width: tc.columns, Now: testNow})
 			checkGolden(t, tc.name, strings.Join(lines, "\n")+"\n")
 		})
 	}
@@ -98,7 +103,7 @@ func TestBuildStatuslineEmptySegments(t *testing.T) {
 	p := loadPayload(t, "claude-full.json")
 	cfg := config{Segments: []string{}}
 	initSegments(nil)
-	if lines := buildStatusline(p, palette{}, cfg, 0); len(lines) != 0 {
+	if lines := buildStatusline(buildInput{P: p, Cfg: cfg, Now: testNow}); len(lines) != 0 {
 		t.Errorf("expected no lines, got %q", lines)
 	}
 }
@@ -111,8 +116,8 @@ func TestBuildStatuslineColorCodes(t *testing.T) {
 	cfg := config{Segments: []string{"directory"}}
 	initSegments(nil)
 
-	colored := buildStatusline(p, palette{Dir: "\x1b[36m", Rst: "\x1b[0m"}, cfg, 0)
-	plain := buildStatusline(p, palette{}, cfg, 0)
+	colored := buildStatusline(buildInput{P: p, C: palette{Dir: "\x1b[36m", Rst: "\x1b[0m"}, Cfg: cfg, Now: testNow})
+	plain := buildStatusline(buildInput{P: p, Cfg: cfg, Now: testNow})
 	if len(colored) != 1 || len(plain) != 1 {
 		t.Fatalf("expected 1 line, got %d / %d", len(colored), len(plain))
 	}

@@ -43,8 +43,8 @@ func initSegments(plugins []pluginDef) {
 					line:         line,
 					desc:         desc + " [plugin]",
 					primaryColor: "Dim",
-					render: func(pay payload, c palette) (string, bool) {
-						out := runPluginField(def, pay, field.ID)
+					render: func(ctx renderCtx) (string, bool) {
+						out := runPluginField(def, ctx.P, field.ID)
 						return out, out != ""
 					},
 				})
@@ -64,8 +64,8 @@ func initSegments(plugins []pluginDef) {
 				line:         line,
 				desc:         desc + " [plugin]",
 				primaryColor: "Dim",
-				render: func(pay payload, c palette) (string, bool) {
-					out := runPluginRaw(def, pay)
+				render: func(ctx renderCtx) (string, bool) {
+					out := runPluginRaw(def, ctx.P)
 					return out, out != ""
 				},
 			})

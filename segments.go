@@ -12,85 +12,85 @@ import (
 
 // ─── Segment Renderers ───────────────────────────────────────────────
 
-func renderVimMode(p payload, c palette) (string, bool) {
-	if p.Vim.Mode == "" {
+func renderVimMode(ctx renderCtx) (string, bool) {
+	if ctx.P.Vim.Mode == "" {
 		return "", false
 	}
-	return c.Vim + "[" + p.Vim.Mode + "]" + c.Rst, true
+	return ctx.C.Vim + "[" + ctx.P.Vim.Mode + "]" + ctx.C.Rst, true
 }
 
-func renderSessionName(p payload, c palette) (string, bool) {
-	name := firstNonEmpty(p.SessionName, p.ConversationID)
+func renderSessionName(ctx renderCtx) (string, bool) {
+	name := firstNonEmpty(ctx.P.SessionName, ctx.P.ConversationID)
 	if name == "" {
 		return "", false
 	}
 	if len(name) == 36 && strings.Count(name, "-") == 4 {
 		name = name[:8]
 	}
-	return c.Session + name + c.Rst, true
+	return ctx.C.Session + name + ctx.C.Rst, true
 }
 
-func renderAgentName(p payload, c palette) (string, bool) {
-	if p.Agent.Name == "" {
+func renderAgentName(ctx renderCtx) (string, bool) {
+	if ctx.P.Agent.Name == "" {
 		return "", false
 	}
-	return c.Agent + p.Agent.Name + c.Rst, true
+	return ctx.C.Agent + ctx.P.Agent.Name + ctx.C.Rst, true
 }
 
-func renderDirectory(p payload, c palette) (string, bool) {
-	currentDir := firstNonEmpty(p.Workspace.CurrentDir, p.Cwd, "~")
-	projectDir := p.Workspace.ProjectDir
-	return c.Dir + formatPath(currentDir, projectDir) + c.Rst, true
+func renderDirectory(ctx renderCtx) (string, bool) {
+	currentDir := firstNonEmpty(ctx.P.Workspace.CurrentDir, ctx.P.Cwd, "~")
+	projectDir := ctx.P.Workspace.ProjectDir
+	return ctx.C.Dir + formatPath(currentDir, projectDir) + ctx.C.Rst, true
 }
 
-func renderGitBranch(p payload, c palette) (string, bool) {
-	currentDir := firstNonEmpty(p.Workspace.CurrentDir, p.Cwd, "~")
-	branch := p.Worktree.Branch
+func renderGitBranch(ctx renderCtx) (string, bool) {
+	currentDir := firstNonEmpty(ctx.P.Workspace.CurrentDir, ctx.P.Cwd, "~")
+	branch := ctx.P.Worktree.Branch
 	if branch == "" {
 		branch = gitBranch(currentDir)
 	}
 	if branch == "" {
 		return "", false
 	}
-	worktreeName := p.Worktree.Name
+	worktreeName := ctx.P.Worktree.Name
 	if worktreeName == "" {
-		worktreeName = p.Workspace.GitWorktree
+		worktreeName = ctx.P.Workspace.GitWorktree
 	}
 	display := branch
 	if worktreeName != "" && worktreeName != branch {
-		display = branch + " " + c.Dim + "(" + worktreeName + ")" + c.Rst
+		display = branch + " " + ctx.C.Dim + "(" + worktreeName + ")" + ctx.C.Rst
 	}
-	return c.Git + display + c.Rst, true
+	return ctx.C.Git + display + ctx.C.Rst, true
 }
 
-func renderLinesChanged(p payload, c palette) (string, bool) {
-	if p.Cost.TotalLinesAdded == 0 && p.Cost.TotalLinesRemoved == 0 {
+func renderLinesChanged(ctx renderCtx) (string, bool) {
+	if ctx.P.Cost.TotalLinesAdded == 0 && ctx.P.Cost.TotalLinesRemoved == 0 {
 		return "", false
 	}
-	return c.Chg + fmt.Sprintf("+%d/-%d", p.Cost.TotalLinesAdded, p.Cost.TotalLinesRemoved) + c.Rst, true
+	return ctx.C.Chg + fmt.Sprintf("+%d/-%d", ctx.P.Cost.TotalLinesAdded, ctx.P.Cost.TotalLinesRemoved) + ctx.C.Rst, true
 }
 
-func renderCachePercent(p payload, c palette) (string, bool) {
-	cacheTotal := p.ContextWindow.CurrentUsage.InputTokens +
-		p.ContextWindow.CurrentUsage.CacheCreationInputTokens +
-		p.ContextWindow.CurrentUsage.CacheReadInputTokens
-	if cacheTotal <= 0 || p.ContextWindow.CurrentUsage.CacheReadInputTokens <= 0 {
+func renderCachePercent(ctx renderCtx) (string, bool) {
+	cacheTotal := ctx.P.ContextWindow.CurrentUsage.InputTokens +
+		ctx.P.ContextWindow.CurrentUsage.CacheCreationInputTokens +
+		ctx.P.ContextWindow.CurrentUsage.CacheReadInputTokens
+	if cacheTotal <= 0 || ctx.P.ContextWindow.CurrentUsage.CacheReadInputTokens <= 0 {
 		return "", false
 	}
-	cacheBP := p.ContextWindow.CurrentUsage.CacheReadInputTokens * 10000 / cacheTotal
-	return c.Dim + fmt.Sprintf("cache:%d.%02d%%", cacheBP/100, cacheBP%100) + c.Rst, true
+	cacheBP := ctx.P.ContextWindow.CurrentUsage.CacheReadInputTokens * 10000 / cacheTotal
+	return ctx.C.Dim + fmt.Sprintf("cache:%d.%02d%%", cacheBP/100, cacheBP%100) + ctx.C.Rst, true
 }
 
-func renderCost(p payload, c palette) (string, bool) {
-	if p.Cost.TotalCostUSD == 0 {
+func renderCost(ctx renderCtx) (string, bool) {
+	if ctx.P.Cost.TotalCostUSD == 0 {
 		return "", false
 	}
-	return c.Cost + "$" + formatCost(p.Cost.TotalCostUSD) + c.Rst, true
+	return ctx.C.Cost + "$" + formatCost(ctx.P.Cost.TotalCostUSD) + ctx.C.Rst, true
 }
 
-func renderModel(p payload, c palette) (string, bool) {
-	modelName := firstNonEmpty(p.Model.DisplayName, p.Model.ID, "Claude")
-	effortLevel := p.Effort.Level
+func renderModel(ctx renderCtx) (string, bool) {
+	modelName := firstNonEmpty(ctx.P.Model.DisplayName, ctx.P.Model.ID, "Claude")
+	effortLevel := ctx.P.Effort.Level
 	if effortLevel == "" {
 		effortLevel = readEffortLevel()
 	}
@@ -99,103 +99,103 @@ func renderModel(p payload, c palette) (string, bool) {
 	if badge != "" {
 		modelLabel += " " + badge
 	}
-	return c.Model + "[" + modelLabel + "]" + c.Rst, true
+	return ctx.C.Model + "[" + modelLabel + "]" + ctx.C.Rst, true
 }
 
-func renderVersion(p payload, c palette) (string, bool) {
-	if p.Version == "" {
+func renderVersion(ctx renderCtx) (string, bool) {
+	if ctx.P.Version == "" {
 		return "", false
 	}
-	return c.Dim + "v" + p.Version + c.Rst, true
+	return ctx.C.Dim + "v" + ctx.P.Version + ctx.C.Rst, true
 }
 
-func renderDuration(p payload, c palette) (string, bool) {
-	if p.Cost.TotalDurationMS == 0 {
+func renderDuration(ctx renderCtx) (string, bool) {
+	if ctx.P.Cost.TotalDurationMS == 0 {
 		return "", false
 	}
-	elapsed := formatHHMMSS(p.Cost.TotalDurationMS)
-	return c.Dur + elapsed + c.Rst, true
+	elapsed := formatHHMMSS(ctx.P.Cost.TotalDurationMS)
+	return ctx.C.Dur + elapsed + ctx.C.Rst, true
 }
 
-func renderAPIEfficiency(p payload, c palette) (string, bool) {
-	if p.Cost.TotalDurationMS <= 0 {
+func renderAPIEfficiency(ctx renderCtx) (string, bool) {
+	if ctx.P.Cost.TotalDurationMS <= 0 {
 		return "", false
 	}
-	return fmt.Sprintf("%s(API:%d%%)%s", c.Dim, p.Cost.TotalAPIDuration*100/p.Cost.TotalDurationMS, c.Rst), true
+	return fmt.Sprintf("%s(API:%d%%)%s", ctx.C.Dim, ctx.P.Cost.TotalAPIDuration*100/ctx.P.Cost.TotalDurationMS, ctx.C.Rst), true
 }
 
-func renderTokens(p payload, c palette) (string, bool) {
-	inStr := formatTokens(p.ContextWindow.TotalInputTokens)
-	outStr := formatTokens(p.ContextWindow.TotalOutputTokens)
-	return c.Dim + "↑" + inStr + " ↓" + outStr + c.Rst, true
+func renderTokens(ctx renderCtx) (string, bool) {
+	inStr := formatTokens(ctx.P.ContextWindow.TotalInputTokens)
+	outStr := formatTokens(ctx.P.ContextWindow.TotalOutputTokens)
+	return ctx.C.Dim + "↑" + inStr + " ↓" + outStr + ctx.C.Rst, true
 }
 
-func renderContextWindow(p payload, c palette) (string, bool) {
+func renderContextWindow(ctx renderCtx) (string, bool) {
 	ctxPct := 0
-	if p.ContextWindow.UsedPercentage != nil {
-		ctxPct = int(*p.ContextWindow.UsedPercentage)
+	if ctx.P.ContextWindow.UsedPercentage != nil {
+		ctxPct = int(*ctx.P.ContextWindow.UsedPercentage)
 	} else {
-		usageTokens := p.ContextWindow.CurrentUsage.InputTokens +
-			p.ContextWindow.CurrentUsage.CacheCreationInputTokens +
-			p.ContextWindow.CurrentUsage.CacheReadInputTokens
+		usageTokens := ctx.P.ContextWindow.CurrentUsage.InputTokens +
+			ctx.P.ContextWindow.CurrentUsage.CacheCreationInputTokens +
+			ctx.P.ContextWindow.CurrentUsage.CacheReadInputTokens
 		if usageTokens == 0 {
-			usageTokens = p.ContextWindow.TotalInputTokens
+			usageTokens = ctx.P.ContextWindow.TotalInputTokens
 		}
-		if p.ContextWindow.ContextWindowSize > 0 && usageTokens > 0 {
-			ctxPct = int(usageTokens * 100 / p.ContextWindow.ContextWindowSize)
+		if ctx.P.ContextWindow.ContextWindowSize > 0 && usageTokens > 0 {
+			ctxPct = int(usageTokens * 100 / ctx.P.ContextWindow.ContextWindowSize)
 		}
 	}
-	s := settingsFor(buildCfg, "context-window")
-	ctxColor := pctColorWithSettings(ctxPct, c, s)
-	result := c.Dim + "ctx "
+	s := ctx.S
+	ctxColor := pctColorWithSettings(ctxPct, ctx.C, s)
+	result := ctx.C.Dim + "ctx "
 	if *s.ShowBar {
-		result += progressBarWithIconset(ctxPct, ctxColor, c.Dim, c, *s.BarWidth, *s.Iconset) + " "
+		result += progressBarWithIconset(ctxPct, ctxColor, ctx.C.Dim, ctx.C, *s.BarWidth, *s.Iconset) + " "
 	}
-	result += ctxColor + strconv.Itoa(ctxPct) + "%" + c.Rst
-	if *s.ShowWarning && p.Exceeds200K != nil && *p.Exceeds200K {
-		result += " " + c.RCrit + ">200k" + c.Rst
+	result += ctxColor + strconv.Itoa(ctxPct) + "%" + ctx.C.Rst
+	if *s.ShowWarning && ctx.P.Exceeds200K != nil && *ctx.P.Exceeds200K {
+		result += " " + ctx.C.RCrit + ">200k" + ctx.C.Rst
 	}
 	return result, true
 }
 
-func renderRateLimit5h(p payload, c palette) (string, bool) {
-	return rateLimitSegment("5h", p.RateLimits.FiveHour, 5*3600, c, settingsFor(buildCfg, "rate-limit-5h"))
+func renderRateLimit5h(ctx renderCtx) (string, bool) {
+	return rateLimitSegment("5h", ctx.P.RateLimits.FiveHour, 5*3600, ctx)
 }
 
-func renderRateLimit7d(p payload, c palette) (string, bool) {
-	return rateLimitSegment("7d", p.RateLimits.SevenDay, 7*24*3600, c, settingsFor(buildCfg, "rate-limit-7d"))
+func renderRateLimit7d(ctx renderCtx) (string, bool) {
+	return rateLimitSegment("7d", ctx.P.RateLimits.SevenDay, 7*24*3600, ctx)
 }
 
-func renderAgentState(p payload, c palette) (string, bool) {
-	if p.AgentState == "" {
+func renderAgentState(ctx renderCtx) (string, bool) {
+	if ctx.P.AgentState == "" {
 		return "", false
 	}
-	stateColor := c.Dim
-	if p.AgentState == "working" {
-		stateColor = c.Git
+	stateColor := ctx.C.Dim
+	if ctx.P.AgentState == "working" {
+		stateColor = ctx.C.Git
 	}
-	return stateColor + "[" + p.AgentState + "]" + c.Rst, true
+	return stateColor + "[" + ctx.P.AgentState + "]" + ctx.C.Rst, true
 }
 
-func renderSandbox(p payload, c palette) (string, bool) {
-	if !p.Sandbox.Enabled {
+func renderSandbox(ctx renderCtx) (string, bool) {
+	if !ctx.P.Sandbox.Enabled {
 		return "", false
 	}
-	return c.RCrit + "[SANDBOX]" + c.Rst, true
+	return ctx.C.RCrit + "[SANDBOX]" + ctx.C.Rst, true
 }
 
-func renderArtifactCount(p payload, c palette) (string, bool) {
-	if p.ArtifactCount <= 0 {
+func renderArtifactCount(ctx renderCtx) (string, bool) {
+	if ctx.P.ArtifactCount <= 0 {
 		return "", false
 	}
-	return c.Chg + fmt.Sprintf("artifacts:%d", p.ArtifactCount) + c.Rst, true
+	return ctx.C.Chg + fmt.Sprintf("artifacts:%d", ctx.P.ArtifactCount) + ctx.C.Rst, true
 }
 
-func renderPlanTier(p payload, c palette) (string, bool) {
-	if p.PlanTier == "" {
+func renderPlanTier(ctx renderCtx) (string, bool) {
+	if ctx.P.PlanTier == "" {
 		return "", false
 	}
-	return c.Purple + p.PlanTier + c.Rst, true
+	return ctx.C.Purple + ctx.P.PlanTier + ctx.C.Rst, true
 }
 
 // ─── Segment Registry ────────────────────────────────────────────────
@@ -205,7 +205,7 @@ type segmentInfo struct {
 	line         int
 	desc         string
 	primaryColor string
-	render       func(p payload, c palette) (string, bool)
+	render       func(ctx renderCtx) (string, bool)
 }
 
 func allSegmentInfos() []segmentInfo {
@@ -316,18 +316,19 @@ func formatTokens(n int64) string {
 	}
 }
 
-func rateLimitSegment(label string, window limitWindow, windowSecs int64, c palette, s segmentSettings) (string, bool) {
+func rateLimitSegment(label string, window limitWindow, windowSecs int64, ctx renderCtx) (string, bool) {
 	if window.UsedPercentage == nil {
 		return "", false
 	}
+	c, s := ctx.C, ctx.S
 	pct := int(*window.UsedPercentage)
 	color := pctColorWithSettings(pct, c, s)
 	countdown := "?"
 	timePct := -1
 	if window.ResetsAt != nil {
-		countdown = resetCountdown(*window.ResetsAt)
+		countdown = resetCountdown(*window.ResetsAt, ctx.Now)
 		if windowSecs > 0 {
-			remaining := *window.ResetsAt - time.Now().Unix()
+			remaining := *window.ResetsAt - ctx.Now.Unix()
 			if remaining >= 0 && remaining <= windowSecs {
 				timePct = int((windowSecs - remaining) * 100 / windowSecs)
 			}
@@ -345,8 +346,8 @@ func rateLimitSegment(label string, window limitWindow, windowSecs int64, c pale
 	return result, true
 }
 
-func resetCountdown(resetUnix int64) string {
-	remaining := resetUnix - time.Now().Unix()
+func resetCountdown(resetUnix int64, now time.Time) string {
+	remaining := resetUnix - now.Unix()
 	if remaining <= 0 {
 		return "now"
 	}
