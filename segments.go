@@ -148,11 +148,11 @@ func renderContextWindow(ctx renderCtx) (string, bool) {
 	s := ctx.S
 	ctxColor := pctColorWithSettings(ctxPct, ctx.C, s)
 	result := ctx.C.Dim + "ctx "
-	if *s.ShowBar {
-		result += progressBarWithIconset(ctxPct, ctxColor, ctx.C.Dim, ctx.C, *s.BarWidth, *s.Iconset) + " "
+	if s.Bool("show_bar") {
+		result += progressBarWithIconset(ctxPct, ctxColor, ctx.C.Dim, ctx.C, s.Int("bar_width"), s.Str("iconset")) + " "
 	}
 	result += ctxColor + strconv.Itoa(ctxPct) + "%" + ctx.C.Rst
-	if *s.ShowWarning && ctx.P.Exceeds200K != nil && *ctx.P.Exceeds200K {
+	if s.Bool("show_warning") && ctx.P.Exceeds200K != nil && *ctx.P.Exceeds200K {
 		result += " " + ctx.C.RCrit + ">200k" + ctx.C.Rst
 	}
 	return result, true
@@ -205,6 +205,7 @@ type segmentInfo struct {
 	line         int
 	desc         string
 	primaryColor string
+	settings     []settingSpec // nil → no flyout, no settings entry
 	render       func(ctx renderCtx) (string, bool)
 }
 
@@ -227,9 +228,9 @@ func allSegmentInfos() []segmentInfo {
 		{id: "duration", line: 2, desc: "Elapsed session duration", primaryColor: "Dur", render: renderDuration},
 		{id: "api-efficiency", line: 2, desc: "API efficiency percentage", primaryColor: "Dim", render: renderAPIEfficiency},
 		{id: "tokens", line: 2, desc: "Input / output token counts", primaryColor: "Dim", render: renderTokens},
-		{id: "context-window", line: 3, desc: "Context window usage bar", primaryColor: "Dim", render: renderContextWindow},
-		{id: "rate-limit-5h", line: 3, desc: "5-hour quota bar", primaryColor: "Dim", render: renderRateLimit5h},
-		{id: "rate-limit-7d", line: 3, desc: "7-day quota bar", primaryColor: "Dim", render: renderRateLimit7d},
+		{id: "context-window", line: 3, desc: "Context window usage bar with configurable width, iconset, thresholds, and colors", primaryColor: "Dim", settings: barSettingSpecs(false, true, true), render: renderContextWindow},
+		{id: "rate-limit-5h", line: 3, desc: "5-hour quota bar with reset countdown", primaryColor: "Dim", settings: barSettingSpecs(true, false, true), render: renderRateLimit5h},
+		{id: "rate-limit-7d", line: 3, desc: "7-day quota bar with reset countdown", primaryColor: "Dim", settings: barSettingSpecs(true, false, true), render: renderRateLimit7d},
 	}
 }
 
@@ -335,11 +336,11 @@ func rateLimitSegment(label string, window limitWindow, windowSecs int64, ctx re
 		}
 	}
 	result := c.Dim + label + " "
-	if *s.ShowBar {
-		result += progressBarWithTimeAndIconset(pct, timePct, color, c.Dim, c, *s.BarWidth, *s.Iconset) + " "
+	if s.Bool("show_bar") {
+		result += progressBarWithTimeAndIconset(pct, timePct, color, c.Dim, c, s.Int("bar_width"), s.Str("iconset")) + " "
 	}
 	result += color + strconv.Itoa(pct) + "%" + c.Dim
-	if *s.ShowCountdown {
+	if s.Bool("show_countdown") {
 		result += " (" + countdown + ")"
 	}
 	result += c.Rst

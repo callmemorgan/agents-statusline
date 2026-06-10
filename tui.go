@@ -105,23 +105,23 @@ func runConfigure() {
 		if currentFlyoutSegment == "" {
 			return
 		}
-		features := flyoutFeatures[currentFlyoutSegment]
+		specs := segmentSpecs(currentFlyoutSegment)
 		currentIdx := flyoutList.GetCurrentItem()
 		flyoutList.Clear()
-		for _, f := range features {
-			val := flyoutValueStr(currentFlyoutSegment, f, cfg)
+		for _, sp := range specs {
+			val := flyoutValueStr(currentFlyoutSegment, sp, cfg)
 			mark := "  "
-			display := f.name
-			if f.kind == kindToggle {
+			display := sp.Name
+			if sp.Kind == kindBool {
 				if val == "on" {
 					mark = "✓ "
 				}
 			} else {
-				display = fmt.Sprintf("%s: %s", f.name, val)
+				display = fmt.Sprintf("%s: %s", sp.Name, val)
 			}
 			flyoutList.AddItem(mark+display, "", 0, nil)
 		}
-		if currentIdx >= 0 && currentIdx < len(features) {
+		if currentIdx >= 0 && currentIdx < len(specs) {
 			flyoutList.SetCurrentItem(currentIdx)
 		}
 		flyoutList.SetTitle(fmt.Sprintf(" %s settings ", currentFlyoutSegment))
@@ -138,7 +138,7 @@ func runConfigure() {
 			ctx := renderCtx{
 				P:   p,
 				C:   segPalette,
-				S:   settingsFor(cfg, currentFlyoutSegment),
+				S:   settingsFor(cfg, s),
 				Now: time.Now(),
 			}
 			if rendered, show := s.render(ctx); show {
@@ -153,9 +153,9 @@ func runConfigure() {
 		if currentFlyoutSegment == "" {
 			return
 		}
-		features := flyoutFeatures[currentFlyoutSegment]
-		if idx >= 0 && idx < len(features) {
-			flyoutDescView.SetText(features[idx].desc)
+		specs := segmentSpecs(currentFlyoutSegment)
+		if idx >= 0 && idx < len(specs) {
+			flyoutDescView.SetText(specs[idx].Desc)
 		} else {
 			flyoutDescView.SetText("")
 		}
@@ -164,16 +164,15 @@ func runConfigure() {
 	pages := tview.NewPages()
 
 	openFlyout := func(segID string) {
-		if len(flyoutFeatures[segID]) == 0 {
+		specs := segmentSpecs(segID)
+		if len(specs) == 0 {
 			descView.SetText("(no configurable options for this segment)")
 			return
 		}
 		currentFlyoutSegment = segID
 		flyoutTitle.SetText(fmt.Sprintf("[yellow::b]  %s — sub-features[-::-]", segID))
 		updateFlyout()
-		if len(flyoutFeatures[segID]) > 0 {
-			flyoutDescView.SetText(flyoutFeatures[segID][0].desc)
-		}
+		flyoutDescView.SetText(specs[0].Desc)
 		pages.SwitchToPage("flyout")
 		app.SetFocus(flyoutList)
 	}
@@ -218,58 +217,37 @@ func runConfigure() {
 		return action, event
 	})
 
+	// activateFlyoutRow handles "primary action" on a flyout row (space, enter,
+	// double-click): bools toggle, enums cycle forward, ints step up.
+	// sync_to_all opens the confirm modal instead of mutating directly.
+	activateFlyoutRow := func(idx int) {
+		specs := segmentSpecs(currentFlyoutSegment)
+		if idx < 0 || idx >= len(specs) {
+			return
+		}
+		sp := specs[idx]
+		if sp.Key == "sync_to_all" {
+			pages.SwitchToPage("confirm")
+			app.SetFocus(confirmModal)
+			return
+		}
+		applyFlyoutChange(currentFlyoutSegment, sp, &cfg, 1)
+		if sp.Key == "stress_test" && stressTestActive[currentFlyoutSegment] {
+			scheduleStressTick(app, currentFlyoutSegment, updateFlyout)
+		}
+		updateFlyout()
+	}
+
 	flyoutList.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
 		if action == tview.MouseLeftDoubleClick && flyoutList.InRect(event.Position()) {
-			idx := flyoutList.GetCurrentItem()
-			features := flyoutFeatures[currentFlyoutSegment]
-			if idx >= 0 && idx < len(features) {
-				f := features[idx]
-				switch f.kind {
-				case kindToggle:
-					if f.id == "sync_to_all" {
-						pages.SwitchToPage("confirm")
-						app.SetFocus(confirmModal)
-						return tview.MouseConsumed, nil
-					}
-					applyFlyoutToggle(currentFlyoutSegment, f, &cfg)
-					if f.id == "stress_test" && stressTestActive[currentFlyoutSegment] {
-						scheduleStressTick(app, currentFlyoutSegment, updateFlyout)
-					}
-				case kindCycle:
-					applyFlyoutCycle(currentFlyoutSegment, f, &cfg, 1)
-				case kindNumber:
-					applyFlyoutNumber(currentFlyoutSegment, f, &cfg, 1)
-				}
-				updateFlyout()
-			}
+			activateFlyoutRow(flyoutList.GetCurrentItem())
 			return tview.MouseConsumed, nil
 		}
 		return action, event
 	})
 
 	flyoutList.SetSelectedFunc(func(idx int, _, _ string, _ rune) {
-		features := flyoutFeatures[currentFlyoutSegment]
-		if idx < 0 || idx >= len(features) {
-			return
-		}
-		f := features[idx]
-		switch f.kind {
-		case kindToggle:
-			if f.id == "sync_to_all" {
-				pages.SwitchToPage("confirm")
-				app.SetFocus(confirmModal)
-				return
-			}
-			applyFlyoutToggle(currentFlyoutSegment, f, &cfg)
-			if f.id == "stress_test" && stressTestActive[currentFlyoutSegment] {
-				scheduleStressTick(app, currentFlyoutSegment, updateFlyout)
-			}
-		case kindCycle:
-			applyFlyoutCycle(currentFlyoutSegment, f, &cfg, 1)
-		case kindNumber:
-			applyFlyoutNumber(currentFlyoutSegment, f, &cfg, 1)
-		}
-		updateFlyout()
+		activateFlyoutRow(idx)
 	})
 
 	flyoutTopRow := tview.NewFlex().
@@ -317,7 +295,7 @@ func runConfigure() {
 			}
 
 			arrow := ""
-			if len(flyoutFeatures[s.id]) > 0 {
+			if len(s.settings) > 0 {
 				arrow = " →"
 			}
 			mainText := fmt.Sprintf("%s%s%s%s", mark, s.id, lineStr, colorStr)
@@ -403,49 +381,21 @@ func runConfigure() {
 					return nil
 				}
 				if r == ' ' {
-					idx := flyoutList.GetCurrentItem()
-					features := flyoutFeatures[currentFlyoutSegment]
-					if idx >= 0 && idx < len(features) {
-						f := features[idx]
-						switch f.kind {
-						case kindToggle:
-							if f.id == "sync_to_all" {
-								pages.SwitchToPage("confirm")
-								app.SetFocus(confirmModal)
-								return nil
-							}
-							applyFlyoutToggle(currentFlyoutSegment, f, &cfg)
-							if f.id == "stress_test" && stressTestActive[currentFlyoutSegment] {
-								scheduleStressTick(app, currentFlyoutSegment, updateFlyout)
-							}
-						case kindCycle:
-							applyFlyoutCycle(currentFlyoutSegment, f, &cfg, 1)
-						}
-						updateFlyout()
-					}
+					activateFlyoutRow(flyoutList.GetCurrentItem())
 					return nil
 				}
-			case tcell.KeyLeft:
+			case tcell.KeyLeft, tcell.KeyRight:
 				idx := flyoutList.GetCurrentItem()
-				features := flyoutFeatures[currentFlyoutSegment]
-				if idx >= 0 && idx < len(features) && features[idx].kind == kindNumber {
-					delta := -1
-					if event.Modifiers()&tcell.ModShift != 0 && features[idx].step > 1 {
-						delta *= features[idx].step
-					}
-					applyFlyoutNumber(currentFlyoutSegment, features[idx], &cfg, delta)
-					updateFlyout()
-					return nil
-				}
-			case tcell.KeyRight:
-				idx := flyoutList.GetCurrentItem()
-				features := flyoutFeatures[currentFlyoutSegment]
-				if idx >= 0 && idx < len(features) && features[idx].kind == kindNumber {
+				specs := segmentSpecs(currentFlyoutSegment)
+				if idx >= 0 && idx < len(specs) && specs[idx].Kind == kindInt {
 					delta := 1
-					if event.Modifiers()&tcell.ModShift != 0 && features[idx].step > 1 {
-						delta *= features[idx].step
+					if event.Key() == tcell.KeyLeft {
+						delta = -1
 					}
-					applyFlyoutNumber(currentFlyoutSegment, features[idx], &cfg, delta)
+					if event.Modifiers()&tcell.ModShift != 0 && specs[idx].Step > 1 {
+						delta *= specs[idx].Step
+					}
+					applyFlyoutChange(currentFlyoutSegment, specs[idx], &cfg, delta)
 					updateFlyout()
 					return nil
 				}
@@ -697,16 +647,7 @@ func runConfigure() {
 		AddButtons([]string{"Yes", "No"}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			if buttonLabel == "Yes" {
-				s := settingsFor(cfg, currentFlyoutSegment)
-				if cfg.Settings == nil {
-					cfg.Settings = map[string]segmentSettings{}
-				}
-				for _, target := range progressBarSegmentIDs() {
-					if target == currentFlyoutSegment {
-						continue
-					}
-					cfg.Settings[target] = cloneSettings(s)
-				}
+				syncSettingsToAllBars(&cfg, currentFlyoutSegment)
 			}
 			pages.SwitchToPage("flyout")
 			app.SetFocus(flyoutList)

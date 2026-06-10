@@ -37,7 +37,7 @@ func visibleWidth(s string) int {
 type renderCtx struct {
 	P     payload
 	C     palette
-	S     segmentSettings
+	S     settings
 	Width int
 	Now   time.Time
 }
@@ -65,7 +65,7 @@ func buildStatusline(in buildInput) []string {
 			ctx := renderCtx{
 				P:     in.P,
 				C:     segPalette,
-				S:     settingsFor(in.Cfg, id),
+				S:     settingsFor(in.Cfg, s),
 				Width: in.Width,
 				Now:   in.Now,
 			}
@@ -228,6 +228,14 @@ var iconsetChars = map[string][2]string{
 	"minimal": {"|", " "},
 }
 
+// iconsetOrder is the cycle order offered in the TUI (map iteration order is
+// random, so the list is explicit).
+var iconsetOrder = []string{"default", "blocks", "dots", "ascii", "minimal"}
+
+func iconsetNames() []string {
+	return iconsetOrder
+}
+
 func iconsetPair(name string) (string, string) {
 	if p, ok := iconsetChars[name]; ok {
 		return p[0], p[1]
@@ -281,23 +289,20 @@ func progressBarWithTimeAndIconset(pct, timePct int, fillColor, emptyColor strin
 	return b.String()
 }
 
-func pctColorWithSettings(pct int, c palette, s segmentSettings) string {
-	warnAt := 60
-	critAt := 80
-	if s.WarnAt != nil {
-		warnAt = *s.WarnAt
-	}
-	if s.CritAt != nil {
-		critAt = *s.CritAt
-	}
-	var colorName string
+func pctColorWithSettings(pct int, c palette, s settings) string {
+	warnAt, critAt := s.Int("warn_at"), s.Int("crit_at")
+	var colorName, natural string
 	switch {
 	case pct > critAt:
-		colorName = pickColor(s.CritColor, "bright-red")
+		colorName, natural = s.Str("crit_color"), "bright-red"
 	case pct >= warnAt:
-		colorName = pickColor(s.WarnColor, "yellow")
+		colorName, natural = s.Str("warn_color"), "yellow"
 	default:
-		colorName = pickColor(s.OkColor, "green")
+		colorName, natural = s.Str("ok_color"), "green"
+	}
+	// "" or "default" both mean "use the natural color for this state".
+	if colorName == "" || colorName == "default" {
+		colorName = natural
 	}
 	return resolveColor(colorName, c)
 }

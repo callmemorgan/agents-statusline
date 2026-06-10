@@ -23,26 +23,13 @@ type pluginDef struct {
 	Fields    []pluginField `json:"fields"`
 }
 
-type segmentSettings struct {
-	ShowBar       *bool   `json:"show_bar,omitempty"`
-	ShowCountdown *bool   `json:"show_countdown,omitempty"`
-	ShowWarning   *bool   `json:"show_warning,omitempty"`
-	BarWidth      *int    `json:"bar_width,omitempty"`
-	Iconset       *string `json:"iconset,omitempty"`
-	WarnAt        *int    `json:"warn_at,omitempty"`
-	CritAt        *int    `json:"crit_at,omitempty"`
-	OkColor       *string `json:"ok_color,omitempty"`
-	WarnColor     *string `json:"warn_color,omitempty"`
-	CritColor     *string `json:"crit_color,omitempty"`
-}
-
 type config struct {
-	Segments []string                   `json:"segments"`
-	Lines    map[string]int             `json:"lines"`
-	Colors   map[string]string          `json:"colors"`
-	Plugins  []pluginDef                `json:"plugins"`
-	Reflow   string                     `json:"reflow"`
-	Settings map[string]segmentSettings `json:"settings"`
+	Segments []string                  `json:"segments"`
+	Lines    map[string]int            `json:"lines"`
+	Colors   map[string]string         `json:"colors"`
+	Plugins  []pluginDef               `json:"plugins"`
+	Reflow   string                    `json:"reflow"`
+	Settings map[string]map[string]any `json:"settings"`
 }
 
 func defaultConfig() config {
@@ -129,55 +116,4 @@ func saveConfig(cfg config) error {
 		return err
 	}
 	return os.WriteFile(path, append(data, '\n'), 0644)
-}
-
-// settingsFor returns the segmentSettings for a segment ID, with all defaults
-// applied so callers never have to check nil.
-func settingsFor(cfg config, id string) segmentSettings {
-	s := segmentSettings{}
-	if loaded, ok := cfg.Settings[id]; ok {
-		s = loaded
-	}
-	// Apply defaults for any nil fields.
-	if s.ShowBar == nil {
-		t := true
-		s.ShowBar = &t
-	}
-	if s.ShowCountdown == nil {
-		t := true
-		s.ShowCountdown = &t
-	}
-	if s.ShowWarning == nil {
-		t := true
-		s.ShowWarning = &t
-	}
-	if s.BarWidth == nil {
-		w := barWidth
-		s.BarWidth = &w
-	}
-	if s.Iconset == nil {
-		i := "default"
-		s.Iconset = &i
-	}
-	if s.WarnAt == nil {
-		w := 60
-		s.WarnAt = &w
-	}
-	if s.CritAt == nil {
-		c := 80
-		s.CritAt = &c
-	}
-	if s.OkColor == nil {
-		c := "green"
-		s.OkColor = &c
-	}
-	if s.WarnColor == nil {
-		c := "yellow"
-		s.WarnColor = &c
-	}
-	if s.CritColor == nil {
-		c := "bright-red"
-		s.CritColor = &c
-	}
-	return s
 }

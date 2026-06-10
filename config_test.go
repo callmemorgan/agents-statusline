@@ -66,13 +66,12 @@ func TestLoadConfigAutoAppendsPlugins(t *testing.T) {
 
 func TestSaveConfigRoundTrip(t *testing.T) {
 	useTempConfigDir(t)
-	w := 30
 	in := config{
 		Segments: []string{"model", "cost"},
 		Lines:    map[string]int{"cost": 2},
 		Colors:   map[string]string{"model": "cyan"},
 		Reflow:   "group",
-		Settings: map[string]segmentSettings{"context-window": {BarWidth: &w}},
+		Settings: map[string]map[string]any{"context-window": {"bar_width": 30}},
 	}
 	if err := saveConfig(in); err != nil {
 		t.Fatal(err)
@@ -84,7 +83,9 @@ func TestSaveConfigRoundTrip(t *testing.T) {
 	if out.Lines["cost"] != 2 || out.Colors["model"] != "cyan" || out.Reflow != "group" {
 		t.Errorf("fields not round-tripped: %+v", out)
 	}
-	if s, ok := out.Settings["context-window"]; !ok || s.BarWidth == nil || *s.BarWidth != 30 {
-		t.Errorf("settings not round-tripped: %+v", out.Settings)
+	initSegments(nil)
+	seg, _ := segmentByID("context-window")
+	if s := settingsFor(out, seg); s.Int("bar_width") != 30 {
+		t.Errorf("settings not round-tripped through JSON: %v", out.Settings)
 	}
 }

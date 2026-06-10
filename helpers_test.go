@@ -107,23 +107,66 @@ func TestEffortBadge(t *testing.T) {
 	}
 }
 
-func TestSettingsForDefaults(t *testing.T) {
-	s := settingsFor(config{}, "context-window")
-	if !*s.ShowBar || !*s.ShowCountdown || !*s.ShowWarning {
-		t.Error("expected all toggles to default to true")
+func ctxWindowSegment(t *testing.T) segmentInfo {
+	t.Helper()
+	initSegments(nil)
+	seg, ok := segmentByID("context-window")
+	if !ok {
+		t.Fatal("context-window segment not registered")
 	}
-	if *s.BarWidth != 20 || *s.Iconset != "default" || *s.WarnAt != 60 || *s.CritAt != 80 {
-		t.Errorf("unexpected defaults: width=%d iconset=%q warn=%d crit=%d",
-			*s.BarWidth, *s.Iconset, *s.WarnAt, *s.CritAt)
-	}
+	return seg
+}
 
-	w := 35
-	cfg := config{Settings: map[string]segmentSettings{"context-window": {BarWidth: &w}}}
-	s = settingsFor(cfg, "context-window")
-	if *s.BarWidth != 35 {
-		t.Errorf("override not applied: %d", *s.BarWidth)
+func TestSettingsForDefaults(t *testing.T) {
+	seg := ctxWindowSegment(t)
+	s := settingsFor(config{}, seg)
+	if !s.Bool("show_bar") || !s.Bool("show_warning") {
+		t.Error("expected toggles to default to true")
 	}
-	if *s.Iconset != "default" {
-		t.Errorf("unset fields should still default: %q", *s.Iconset)
+	if s.Int("bar_width") != 20 || s.Str("iconset") != "default" || s.Int("warn_at") != 60 || s.Int("crit_at") != 80 {
+		t.Errorf("unexpected defaults: width=%d iconset=%q warn=%d crit=%d",
+			s.Int("bar_width"), s.Str("iconset"), s.Int("warn_at"), s.Int("crit_at"))
+	}
+	if _, ok := s["show_countdown"]; ok {
+		t.Error("context-window should not resolve a show_countdown setting")
+	}
+	if _, ok := s["stress_test"]; ok {
+		t.Error("ephemeral specs must not appear in resolved settings")
+	}
+}
+
+func TestSettingsForOverridesAndCoercion(t *testing.T) {
+	seg := ctxWindowSegment(t)
+	cfg := config{Settings: map[string]map[string]any{"context-window": {
+		"bar_width": float64(35), // JSON numbers decode as float64
+		"iconset":   "nonsense",  // invalid enum value → default
+		"warn_at":   999,         // out of range → clamped
+		"show_bar":  "yes",       // wrong type → default
+	}}}
+	s := settingsFor(cfg, seg)
+	if s.Int("bar_width") != 35 {
+		t.Errorf("float64 not coerced: %d", s.Int("bar_width"))
+	}
+	if s.Str("iconset") != "default" {
+		t.Errorf("invalid enum should fall back to default: %q", s.Str("iconset"))
+	}
+	if s.Int("warn_at") != 100 {
+		t.Errorf("out-of-range int should clamp: %d", s.Int("warn_at"))
+	}
+	if !s.Bool("show_bar") {
+		t.Error("wrong-typed bool should fall back to default true")
+	}
+}
+
+func TestPruneSettings(t *testing.T) {
+	seg := ctxWindowSegment(t)
+	s := settingsFor(config{}, seg)
+	if got := pruneSettings(seg, s); got != nil {
+		t.Errorf("all-default settings should prune to nil, got %v", got)
+	}
+	s["bar_width"] = 35
+	got := pruneSettings(seg, s)
+	if len(got) != 1 || got["bar_width"] != 35 {
+		t.Errorf("expected only the changed key, got %v", got)
 	}
 }

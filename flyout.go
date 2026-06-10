@@ -1,25 +1,35 @@
 package main
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/rivo/tview"
 )
 
-// ─── Flyout Test Segment ─────────────────────────────────────────────
+// ─── Flyout Helpers ──────────────────────────────────────────────────
+//
+// The flyout panel is fully schema-driven: it renders whatever settingSpec
+// list the selected segment declares (segmentInfo.settings). Only the two
+// ephemeral actions — stress_test and sync_to_all — have bespoke handling.
 
-// progressBarSegmentIDs returns the set of segments that share bar settings
-// via "Sync to all bars". Derived from flyoutFeatures: any segment whose
-// flyout contains a "bar_width" feature is considered a bar segment and
-// participates in sync. This way adding a new bar segment only requires
-// updating flyoutFeatures — the sync group follows automatically.
+// segmentSpecs returns the settings schema for a segment ID, or nil when the
+// segment has no configurable settings (no flyout).
+func segmentSpecs(segID string) []settingSpec {
+	if s, ok := segmentByID(segID); ok {
+		return s.settings
+	}
+	return nil
+}
+
+// progressBarSegmentIDs returns the segments that share bar settings via
+// "Sync to all bars": any registered segment whose schema contains a
+// bar_width setting. Adding a new bar segment automatically joins the group.
 func progressBarSegmentIDs() []string {
-	ids := make([]string, 0, len(flyoutFeatures))
-	for id, features := range flyoutFeatures {
-		for _, f := range features {
-			if f.id == "bar_width" {
-				ids = append(ids, id)
+	var ids []string
+	for _, s := range registeredSegments {
+		for _, sp := range s.settings {
+			if sp.Key == "bar_width" {
+				ids = append(ids, s.id)
 				break
 			}
 		}
@@ -27,74 +37,12 @@ func progressBarSegmentIDs() []string {
 	return ids
 }
 
-type featureKind string
+func ptrBool(v bool) *bool          { return &v }
+func ptrFloat64(v float64) *float64 { return &v }
 
-const (
-	kindToggle featureKind = "toggle"
-	kindCycle  featureKind = "cycle"
-	kindNumber featureKind = "number"
-)
-
-type subFeature struct {
-	id      string
-	name    string
-	desc    string
-	kind    featureKind
-	options []string // for cycle: ordered list of valid values
-	min     int      // for number
-	max     int      // for number
-	step    int      // for number: per-press increment (1 for fine, 5+ for coarse)
-}
-
-// flyoutFeatures defines which segments have configurable sub-features.
-var flyoutFeatures = map[string][]subFeature{
-	"context-window": {
-		{id: "show_bar", name: "Show bar", desc: "Render the progress bar", kind: kindToggle},
-		{id: "show_warning", name: "Show >200k warning", desc: "Append red >200k when context exceeds 200k tokens", kind: kindToggle},
-		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50, step: 1},
-		{id: "iconset", name: "Iconset", desc: "Visual style of the progress bar", kind: kindCycle, options: []string{"default", "blocks", "dots", "ascii", "minimal"}},
-		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100, step: 5},
-		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100, step: 5},
-		{id: "ok_color", name: "OK color", desc: "Color below warning threshold", kind: kindCycle, options: colorCycle},
-		{id: "warn_color", name: "Warn color", desc: "Color between warn and critical thresholds", kind: kindCycle, options: colorCycle},
-		{id: "crit_color", name: "Critical color", desc: "Color above critical threshold", kind: kindCycle, options: colorCycle},
-		{id: "stress_test", name: "Stress test preview", desc: "Animate preview from 0% to 100% to see all colors", kind: kindToggle},
-	},
-	"rate-limit-5h": {
-		{id: "show_bar", name: "Show bar", desc: "Render the progress bar", kind: kindToggle},
-		{id: "show_countdown", name: "Show countdown", desc: "Append (2h30m) countdown timer", kind: kindToggle},
-		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50, step: 1},
-		{id: "iconset", name: "Iconset", desc: "Visual style of the progress bar", kind: kindCycle, options: []string{"default", "blocks", "dots", "ascii", "minimal"}},
-		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100, step: 5},
-		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100, step: 5},
-		{id: "ok_color", name: "OK color", desc: "Color below warning threshold", kind: kindCycle, options: colorCycle},
-		{id: "warn_color", name: "Warn color", desc: "Color between warn and critical thresholds", kind: kindCycle, options: colorCycle},
-		{id: "crit_color", name: "Critical color", desc: "Color above critical threshold", kind: kindCycle, options: colorCycle},
-		{id: "stress_test", name: "Stress test preview", desc: "Animate preview from 0% to 100% to see all colors", kind: kindToggle},
-		{id: "sync_to_all", name: "Sync to all bars", desc: "Copy these settings to context-window and rate-limit-7d", kind: kindToggle},
-	},
-	"rate-limit-7d": {
-		{id: "show_bar", name: "Show bar", desc: "Render the progress bar", kind: kindToggle},
-		{id: "show_countdown", name: "Show countdown", desc: "Append (3d4h) countdown timer", kind: kindToggle},
-		{id: "bar_width", name: "Bar width", desc: "Number of characters in the progress bar", kind: kindNumber, min: 5, max: 50, step: 1},
-		{id: "iconset", name: "Iconset", desc: "Visual style of the progress bar", kind: kindCycle, options: []string{"default", "blocks", "dots", "ascii", "minimal"}},
-		{id: "warn_at", name: "Warn at", desc: "Percentage threshold for yellow warning color", kind: kindNumber, min: 0, max: 100, step: 5},
-		{id: "crit_at", name: "Critical at", desc: "Percentage threshold for red critical color", kind: kindNumber, min: 0, max: 100, step: 5},
-		{id: "ok_color", name: "OK color", desc: "Color below warning threshold", kind: kindCycle, options: colorCycle},
-		{id: "warn_color", name: "Warn color", desc: "Color between warn and critical thresholds", kind: kindCycle, options: colorCycle},
-		{id: "crit_color", name: "Critical color", desc: "Color above critical threshold", kind: kindCycle, options: colorCycle},
-		{id: "stress_test", name: "Stress test preview", desc: "Animate preview from 0% to 100% to see all colors", kind: kindToggle},
-		{id: "sync_to_all", name: "Sync to all bars", desc: "Copy these settings to context-window and rate-limit-5h", kind: kindToggle},
-	},
-}
-
-// ─── Flyout Helpers ──────────────────────────────────────────────────
-
-func ptrBool(v bool) *bool    { return &v }
-func ptrInt(v int) *int       { return &v }
-func ptrStr(v string) *string { return &v }
-
-// stressTestActive tracks which flyout segments have stress-test preview enabled.
+// stressTestActive tracks which flyout segments have stress-test preview
+// enabled. Session-only by design: it is never persisted to the config, so
+// reopening the TUI always starts with the animation off.
 var stressTestActive = map[string]bool{}
 var stressTestTimers = map[string]*time.Timer{}
 
@@ -117,51 +65,22 @@ func stopStressTest(segID string) {
 	}
 }
 
-func flyoutValueStr(segID string, f subFeature, cfg config) string {
-	s := settingsFor(cfg, segID)
-	switch f.kind {
-	case kindToggle:
-		switch f.id {
-		case "show_bar":
-			if *s.ShowBar {
-				return "on"
-			}
-		case "show_countdown":
-			if *s.ShowCountdown {
-				return "on"
-			}
-		case "show_warning":
-			if *s.ShowWarning {
-				return "on"
-			}
-		case "stress_test":
-			if stressTestActive[segID] {
-				return "on"
-			}
+// flyoutValueStr renders the current value of a flyout row.
+func flyoutValueStr(segID string, sp settingSpec, cfg config) string {
+	switch sp.Key {
+	case "stress_test":
+		if stressTestActive[segID] {
+			return "on"
 		}
 		return "off"
-	case kindCycle:
-		switch f.id {
-		case "iconset":
-			return *s.Iconset
-		case "ok_color":
-			return *s.OkColor
-		case "warn_color":
-			return *s.WarnColor
-		case "crit_color":
-			return *s.CritColor
-		}
-	case kindNumber:
-		switch f.id {
-		case "bar_width":
-			return strconv.Itoa(*s.BarWidth)
-		case "warn_at":
-			return strconv.Itoa(*s.WarnAt)
-		case "crit_at":
-			return strconv.Itoa(*s.CritAt)
-		}
+	case "sync_to_all":
+		return ""
 	}
-	return ""
+	seg, ok := segmentByID(segID)
+	if !ok {
+		return ""
+	}
+	return settingsFor(cfg, seg).ValueString(sp)
 }
 
 func cycleOption(options []string, current string, delta int) string {
@@ -176,85 +95,56 @@ func cycleOption(options []string, current string, delta int) string {
 	return options[idx]
 }
 
-func applyFlyoutToggle(segID string, f subFeature, cfg *config) {
-	s := settingsFor(*cfg, segID)
-	switch f.id {
-	case "show_bar":
-		s.ShowBar = ptrBool(!*s.ShowBar)
-	case "show_countdown":
-		s.ShowCountdown = ptrBool(!*s.ShowCountdown)
-	case "show_warning":
-		s.ShowWarning = ptrBool(!*s.ShowWarning)
-	case "stress_test":
+// applyFlyoutChange mutates one setting by kind: bools toggle, enums cycle by
+// delta, ints step by delta (clamped to the spec bounds). The pruned result is
+// written back to cfg.Settings. Ephemeral specs never touch the config.
+func applyFlyoutChange(segID string, sp settingSpec, cfg *config, delta int) {
+	if sp.Key == "stress_test" {
 		stressTestActive[segID] = !stressTestActive[segID]
-		return // don't save stress_test to cfg.Settings
+		return
 	}
-	if cfg.Settings == nil {
-		cfg.Settings = map[string]segmentSettings{}
+	seg, ok := segmentByID(segID)
+	if !ok {
+		return
 	}
-	cfg.Settings[segID] = pruneSettings(segID, s)
+	s := settingsFor(*cfg, seg)
+	switch sp.Kind {
+	case kindBool:
+		s[sp.Key] = !s.Bool(sp.Key)
+	case kindEnum:
+		s[sp.Key] = cycleOption(sp.Options, s.Str(sp.Key), delta)
+	case kindInt:
+		v := s.Int(sp.Key) + delta
+		if v < sp.Min {
+			v = sp.Min
+		}
+		if v > sp.Max {
+			v = sp.Max
+		}
+		s[sp.Key] = v
+	}
+	setSegmentSettings(cfg, segID, pruneSettings(seg, s))
 }
 
-func applyFlyoutCycle(segID string, f subFeature, cfg *config, delta int) {
-	s := settingsFor(*cfg, segID)
-	cur := ""
-	switch f.id {
-	case "iconset":
-		cur = *s.Iconset
-	case "ok_color":
-		cur = *s.OkColor
-	case "warn_color":
-		cur = *s.WarnColor
-	case "crit_color":
-		cur = *s.CritColor
+// syncSettingsToAllBars copies the source segment's settings to every other
+// bar segment, pruned against each target's own schema (keys a target doesn't
+// declare are dropped).
+func syncSettingsToAllBars(cfg *config, sourceID string) {
+	source, ok := segmentByID(sourceID)
+	if !ok {
+		return
 	}
-	next := cycleOption(f.options, cur, delta)
-	switch f.id {
-	case "iconset":
-		s.Iconset = &next
-	case "ok_color":
-		s.OkColor = &next
-	case "warn_color":
-		s.WarnColor = &next
-	case "crit_color":
-		s.CritColor = &next
+	s := settingsFor(*cfg, source)
+	for _, target := range progressBarSegmentIDs() {
+		if target == sourceID {
+			continue
+		}
+		tseg, ok := segmentByID(target)
+		if !ok {
+			continue
+		}
+		setSegmentSettings(cfg, target, pruneSettings(tseg, s))
 	}
-	if cfg.Settings == nil {
-		cfg.Settings = map[string]segmentSettings{}
-	}
-	cfg.Settings[segID] = pruneSettings(segID, s)
-}
-
-func applyFlyoutNumber(segID string, f subFeature, cfg *config, delta int) {
-	s := settingsFor(*cfg, segID)
-	var v int
-	switch f.id {
-	case "bar_width":
-		v = *s.BarWidth
-	case "warn_at":
-		v = *s.WarnAt
-	case "crit_at":
-		v = *s.CritAt
-	}
-	v += delta
-	if v < f.min {
-		v = f.min
-	}
-	if v > f.max {
-		v = f.max
-	}
-	switch f.id {
-	case "bar_width":
-		s.BarWidth = &v
-	case "warn_at":
-		s.WarnAt = &v
-	case "crit_at":
-		s.CritAt = &v
-	}
-	if cfg.Settings == nil {
-		cfg.Settings = map[string]segmentSettings{}
-	}
-	cfg.Settings[segID] = pruneSettings(segID, s)
 }
 
 // flyoutPreviewPayload returns a payload modified for the flyout preview.
@@ -276,68 +166,4 @@ func flyoutPreviewPayload(segID string, base payload) payload {
 		p.RateLimits.SevenDay.UsedPercentage = ptrFloat64(float64(pct))
 	}
 	return p
-}
-
-func ptrFloat64(v float64) *float64 { return &v }
-
-func cloneSettings(s segmentSettings) segmentSettings {
-	c := segmentSettings{}
-	if s.ShowBar != nil {
-		v := *s.ShowBar
-		c.ShowBar = &v
-	}
-	if s.ShowCountdown != nil {
-		v := *s.ShowCountdown
-		c.ShowCountdown = &v
-	}
-	if s.ShowWarning != nil {
-		v := *s.ShowWarning
-		c.ShowWarning = &v
-	}
-	if s.BarWidth != nil {
-		v := *s.BarWidth
-		c.BarWidth = &v
-	}
-	if s.Iconset != nil {
-		v := *s.Iconset
-		c.Iconset = &v
-	}
-	if s.WarnAt != nil {
-		v := *s.WarnAt
-		c.WarnAt = &v
-	}
-	if s.CritAt != nil {
-		v := *s.CritAt
-		c.CritAt = &v
-	}
-	if s.OkColor != nil {
-		v := *s.OkColor
-		c.OkColor = &v
-	}
-	if s.WarnColor != nil {
-		v := *s.WarnColor
-		c.WarnColor = &v
-	}
-	if s.CritColor != nil {
-		v := *s.CritColor
-		c.CritColor = &v
-	}
-	return c
-}
-
-// pruneSettings drops fields from s that the renderer for segID never reads,
-// so the saved config doesn't accumulate dead keys. The settingsFor default
-// (which is the source of these fields) populates every field for every
-// segment; without pruning, opening the flyout on a segment and changing one
-// setting would write the whole defaulted struct back.
-func pruneSettings(segID string, s segmentSettings) segmentSettings {
-	switch segID {
-	case "context-window":
-		// context-window ignores ShowCountdown (only rate-limit-* use it).
-		s.ShowCountdown = nil
-	case "rate-limit-5h", "rate-limit-7d":
-		// rate-limit-* ignore ShowWarning (only context-window uses it).
-		s.ShowWarning = nil
-	}
-	return s
 }

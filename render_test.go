@@ -56,10 +56,6 @@ func TestBuildStatuslineGolden(t *testing.T) {
 	// reads under $HOME when payload fields are absent.
 	t.Setenv("HOME", t.TempDir())
 
-	barWidth30 := 30
-	showWarnOff := false
-	iconBlocks := "blocks"
-
 	cases := []struct {
 		name    string
 		payload string
@@ -81,8 +77,8 @@ func TestBuildStatuslineGolden(t *testing.T) {
 		}, 0},
 		{"claude-full__bar-settings", "claude-full.json", config{
 			Segments: []string{"context-window", "rate-limit-5h"},
-			Settings: map[string]segmentSettings{
-				"context-window": {BarWidth: &barWidth30, Iconset: &iconBlocks, ShowWarning: &showWarnOff},
+			Settings: map[string]map[string]any{
+				"context-window": {"bar_width": 30, "iconset": "blocks", "show_warning": false},
 			},
 		}, 0},
 	}

@@ -115,16 +115,6 @@ func paletteWithOverride(c palette, primaryColor, colorName string) palette {
 	return p
 }
 
-// pickColor resolves a per-segment color override against the segment's natural
-// color for this threshold state. An empty string or "default" both mean
-// "use the natural color" — the same no-op semantics as paletteWithOverride.
-func pickColor(override *string, natural string) string {
-	if override == nil || *override == "" || *override == "default" {
-		return natural
-	}
-	return *override
-}
-
 // resolveColor maps a color name to its ANSI escape code. Returns the palette's
 // ok color if the name is unknown or unset, so callers never have to handle the
 // "no code found" case inline. When colors are disabled (NO_COLOR / TERM=dumb,
