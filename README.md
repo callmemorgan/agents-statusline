@@ -2,9 +2,15 @@
 
 A fast statusline renderer for [Claude Code](https://claude.ai/code) and [Antigravity CLI](https://antigravity.dev) (`agy`).
 
-Both tools pipe a JSON payload to this binary on every turn. It renders a colored, multi-line summary in your terminal. The number of lines is fully configurable — segments are assigned to lines 1–9 and empty lines collapse automatically.
+Both tools pipe a JSON payload to this binary on every turn. It renders a colored, multi-line summary in your terminal:
 
-The core renderer has no dependencies. The interactive `--configure` TUI uses [tview](https://github.com/rivo/tview).
+- **Six built-in themes** — classic, Catppuccin Mocha, Nord, Dracula, Gruvbox Dark, Tokyo Night — in truecolor with automatic 256/16-color fallback.
+- **Burn-rate intelligence** — rate-limit projections (`→58%` at reset), cost per hour (`$1.84/h`), and time-to-compact estimates (`↗ ~35m`), computed from your session's own history.
+- **One-command setup** — `claude-statusline install` wires everything up and verifies it.
+- **A real configuration TUI** — live width-aware preview, theme and preset pickers, a color swatch picker, per-segment settings, and search.
+- **24 built-in segments + plugins** — assigned to lines 1–9, empty lines collapse, segments hide automatically when their data is missing.
+
+The core renderer is a single static binary (one TOML dependency); the interactive TUI uses [tview](https://github.com/rivo/tview).
 
 ---
 
@@ -15,27 +21,23 @@ The core renderer has no dependencies. The interactive `--configure` TUI uses [t
 ```bash
 brew tap callmemorgan/tap
 brew install claude-statusline
+claude-statusline install
 ```
 
 Upgrade later with `brew upgrade claude-statusline`.
-
----
 
 **Any platform — `go install`:**
 
 ```bash
 go install github.com/callmemorgan/claude-statusline@latest
+claude-statusline install
 ```
 
 Requires Go 1.22+. Make sure `$(go env GOPATH)/bin` is on your `$PATH`.
 
----
-
 **Prebuilt binaries:**
 
-Download a signed binary from the [releases page](https://github.com/callmemorgan/claude-statusline/releases). Each asset includes a cosign certificate and signature for verification.
-
-Verify with [cosign](https://sigstore.dev):
+Download a signed binary from the [releases page](https://github.com/callmemorgan/claude-statusline/releases). Each asset includes a cosign certificate and signature:
 
 ```bash
 cosign verify-blob \
@@ -47,8 +49,6 @@ cosign verify-blob \
 ```
 
 > **macOS note:** Downloaded binaries are not notarized. If Gatekeeper blocks the binary on first run, run `xattr -d com.apple.quarantine /path/to/claude-statusline`, or use Homebrew/`go install` instead.
-
----
 
 **Build from source:**
 
@@ -62,9 +62,16 @@ go build -o claude-statusline .
 
 ## Wiring it up
 
-### Claude Code
+```bash
+claude-statusline install
+```
 
-Add to your Claude Code settings (`~/.claude/settings.json`):
+This backs up `~/.claude/settings.json`, splices in the `statusLine` key **without reformatting the rest of the file**, and verifies the wiring by rendering a sample payload through the exact command Claude Code will run. Flags: `--dry-run` to preview, `--force` to overwrite an existing entry, `--target agy` for Antigravity, `--settings-path` for non-standard locations. `claude-statusline uninstall` removes the wiring (`--restore` swaps the backup back).
+
+<details>
+<summary>Manual wiring (fallback)</summary>
+
+Claude Code — add to `~/.claude/settings.json`:
 
 ```json
 {
@@ -75,11 +82,7 @@ Add to your Claude Code settings (`~/.claude/settings.json`):
 }
 ```
 
-If you installed via Homebrew or `go install`, the binary is already on your `$PATH`. If you built from source or downloaded a binary manually, use the full path instead of `claude-statusline`.
-
-### Antigravity CLI (agy)
-
-Add to your agy config:
+Antigravity CLI — add to your agy config:
 
 ```json
 {
@@ -88,6 +91,7 @@ Add to your agy config:
 ```
 
 If the binary isn't on your `$PATH`, use the full path instead.
+</details>
 
 The binary auto-detects which tool is calling it via the `product` field in the payload and hides segments that aren't applicable (e.g. rate limits are hidden under agy, plan tier is hidden under Claude Code).
 
@@ -95,21 +99,21 @@ The binary auto-detects which tool is calling it via the `product` field in the 
 
 ## What it looks like
 
-**Claude Code (default config):**
+**Claude Code (default config, after a few minutes of session history):**
 
 ```
- my-project /Users/me/code/my-project feature/test +128/-45 cache:12.34% $1.23 │ 0.3ms
- [Claude Sonnet 4.6 ⬆] v2.1.90 01:00:41 (API:65%) ↑1.2M ↓89k
- ctx [##############------] 72% >200k
- 5h [########------------] 45% (2h30m) │ 7d [###-----------------] 12% (3d4h)
+ my-project │ feature/test │ +128/-45 │ cache:12.34% │ $1.23 │ 0.3ms
+ [Claude Sonnet 4.6 ⬆] │ ✎ Explanatory │ v2.1.90 │ 01:00:41 │ $1.84/h │ (API:65%) │ ↑1.2M ↓89k
+ ctx ##############------ 72% ↗ ~35m >200k
+ 5h ########--|--------- 45% (2h30m) →58% │ 7d ###-------|--------- 12% (3d4h)
 ```
 
 **agy (default config):**
 
 ```
- fbce29fe /Users/me/code/my-project feature/test artifacts:2 Google AI Pro
- [Gemini 3.5 Flash (High)] v1.0.2 ↑116.7k ↓35.4k
- ctx [#-------------------] 11%
+ fbce29fe │ my-project │ artifacts:2 │ Google AI Pro
+ [Gemini 3.5 Flash (High)] │ v1.0.2 │ ↑116.7k ↓35.4k
+ ctx #------------------- 11%
 ```
 
 Segments that receive no data from the active tool hide themselves automatically — no configuration needed.
@@ -126,158 +130,136 @@ Segments that receive no data from the active tool hide themselves automatically
 | `agent-state` | 1 | agy | Agent working status, e.g. `[working]` — green when active |
 | `agent-name` | 1 | Claude Code | Agent name when running with `--agent` |
 | `directory` | 1 | both | Current / project directory. Shows `project→subdir` when inside a project subdirectory |
-| `git-branch` | 1 | both | Git branch and worktree name. Falls back to reading `.git/HEAD` if not in payload |
+| `added-dirs` | 1 | Claude Code | Count of extra directories added with `/add-dir`, e.g. `+2 dirs` |
+| `git-branch` | 1 | both | Git branch and worktree name. Optional rich status (settings): dirty marker and ahead/behind counts, e.g. `main* ↑1↓2` |
 | `artifact-count` | 1 | agy | Number of generated artifacts |
 | `lines-changed` | 1 | Claude Code | Session cumulative lines added/removed, e.g. `+128/-45` |
 | `cache-percent` | 1 | Claude Code | Cache read percentage from `context_window.current_usage` |
 | `plan-tier` | 1 | agy | Subscription plan tier |
 | `cost` | 1 | Claude Code | Estimated session cost in USD, e.g. `$1.23` |
 | `model` | 2 | both | Model name with effort badge (⬇ → ⬆ ⬆⬆ ⬆⬆⬆) |
+| `output-style` | 2 | Claude Code | Output style, e.g. `✎ Explanatory` — hidden when default |
+| `email` | 2 | agy | Account email, user part only (`morgan@…`) — **off by default** |
 | `version` | 2 | both | Tool version |
 | `duration` | 2 | Claude Code | Elapsed session wall-clock time in `HH:MM:SS` |
+| `cost-rate` | 2 | Claude Code | Cost burn rate over recent history, e.g. `$1.84/h` |
 | `api-efficiency` | 2 | Claude Code | Percentage of time spent in API calls vs. total elapsed |
 | `tokens` | 2 | both | Input/output token counts in compact notation (`↑1.2M ↓89k`) |
-| `context-window` | 3 | both | 20-char progress bar with color-coded context usage % |
-| `rate-limit-5h` | 3 | Claude Code | 5-hour rate limit bar with countdown timer (Pro/Max only) |
-| `rate-limit-7d` | 3 | Claude Code | 7-day rate limit bar with countdown timer (Pro/Max only) |
+| `context-window` | 3 | both | Usage bar with color-coded %, growth trend arrow, and time-to-compact estimate (`↗ ~35m`) |
+| `rate-limit-5h` | 3 | Claude Code | 5-hour rate limit bar with countdown and burn-rate projection (`→58%`) (Pro/Max only) |
+| `rate-limit-7d` | 3 | Claude Code | 7-day rate limit bar with countdown and burn-rate projection (Pro/Max only) |
 
-### Color coding
+### Burn rates, projections, and trends
 
-- **Model**: magenta
-- **Directory**: cyan
-- **Git**: green
-- **Changes / Cost**: yellow
-- **Duration**: blue
-- **Context / Rate limits**: green (< 60%), yellow (60–80%), red (> 80%)
-- **Agent**: bright magenta
-- **Vim**: bright white
-- **Session**: bright cyan
+`cost-rate`, the rate-limit `→58%` projections, and the context `↗ ~35m` trend are computed from a small per-session history file the renderer maintains at `~/.local/state/claude-statusline/sessions/` (`$XDG_STATE_HOME` respected). They appear after ~5 minutes of session history, never extrapolate a short burst across a long window, and stay hidden when usage is flat or falling. Disable or tune via the `[state]` config table.
+
+---
+
+## Themes
+
+```toml
+theme = "tokyo-night"   # classic | catppuccin-mocha | nord | dracula | gruvbox-dark | tokyo-night
+```
+
+Themes map fifteen semantic roles (model, dir, git, ok/warn/crit, accent, sep, …) to colors. On truecolor terminals you get the real hex palette; 256-color and 16-color terminals get automatic nearest-match fallbacks. `classic` (the default) reproduces the original ANSI look exactly.
+
+- **Color depth** is auto-detected from `COLORTERM`/`TERM`/terminal program; override with `color_depth = "truecolor" | "256" | "16" | "none"`. `NO_COLOR=1` always wins.
+- **Per-role overrides** layer on top of any theme:
+
+```toml
+[theme_colors]
+git = "#a3be8c"   # hex
+cost = "yellow"   # 16-color name
+dim = "245"       # xterm-256 index
+```
+
+- **Per-segment colors** (`[colors]` or the TUI) accept the same grammar plus theme role names: `model = "accent"`.
 
 ---
 
 ## Configuration
 
 ```bash
-claude-statusline --configure
+claude-statusline configure
 ```
 
-Opens an interactive TUI: a scrollable segment list on the left, a live description panel on the right, and a statusline preview below.
+An interactive TUI: segment list (left), description panel (right), a **live preview that reflows at your real terminal width**, and a status strip showing the active theme/preset and unsaved-changes marker.
 
 | Key | Action |
 |-----|--------|
 | `↑` / `↓` | Navigate segments |
 | `Space` | Toggle segment on/off |
 | `1`–`9` | Move segment to that line (enables it if disabled) |
-| `c` | Cycle segment color (enables it if disabled) |
+| `c` | Cycle segment color |
+| `C` | Open the color picker — theme roles, ANSI names, recents; hover live-previews |
 | `←` / `→` | Reorder segment within its current line |
 | `Shift+↑` / `Shift+↓` | Swap all segments on the current line with the adjacent line |
-| `o` | Open per-segment settings (bar width, icons, colors, thresholds) |
-| `r` | Reset to defaults |
-| `s` | Save and exit |
-| `q` | Quit without saving |
-| `h` | Open help (README); `q`/`Esc` to close |
+| `o` | Open per-segment settings (bar width, iconsets, thresholds, projections, git status…) |
+| `t` | Theme picker with live preview |
+| `p` | Preset picker with live preview |
+| `/` | Filter the segment list |
+| `w` | Cycle preview width (auto → 80 → 60 → 40) to test reflow |
+| `r` | Reset to defaults (asks first) |
+| `s` | Save and keep editing (`✓ Saved` flash) |
+| `q` / `Esc` | Quit — asks if there are unsaved changes |
+| `h` / `?` | Help overlay (`r` inside it opens the full README) |
+
+In the flyout (`o`): `space`/`enter` toggles or cycles, `←`/`→` adjusts numbers (`Shift` for coarse steps), and `enter` on a color row opens the swatch picker.
+
+### Presets
+
+Eight named layouts, applied from the TUI (`p`) or used as your config baseline:
+
+`classic` · `minimal` · `zen` · `cost-tracker` · `git-focus` · `vim-coder` · `quota-watch` · `full-dashboard`
+
+```toml
+preset = "cost-tracker"   # used when `segments` is absent; your lines/settings/theme win over it
+```
 
 ### Manual config
 
-Config lives at `~/.config/claude-statusline/config.json`. An annotated example is provided at [`config.json.example`](config.json.example):
+Config lives at `~/.config/claude-statusline/config.toml` — a pre-1.0 `config.json` is **migrated automatically** on first run (the original is kept as `config.json.bak`). An annotated example is at [`config.toml.example`](config.toml.example).
 
-```bash
-cp config.json.example ~/.config/claude-statusline/config.json
+```toml
+theme = "nord"
+reflow = "group"
+segments = ["session-name", "directory", "git-branch", "cost", "model", "context-window", "rate-limit-5h"]
+
+[style]
+separator = "chevron"   # bar | dot | slash | chevron | powerline | space | custom
+padding = 1
+
+[lines]
+cost = 2
+
+[colors]
+model = "#cba6f7"       # names, hex, 256 indexes, or theme roles
+
+[settings.context-window]
+bar_width = 30
+iconset = "smooth"
+warn_at = 70
+crit_at = 90
+
+[settings.git-branch]
+git_status = true       # dirty marker + ahead/behind (cached git exec)
+
+[state]
+enabled = true          # session history for burn rates / projections
+retention_hours = 48
 ```
 
-```json
-{
-  "segments": [
-    "session-name",
-    "directory",
-    "git-branch",
-    "cost",
-    "model",
-    "version",
-    "context-window",
-    "rate-limit-5h",
-    "rate-limit-7d"
-  ],
-  "lines": {
-    "cost": 2
-  },
-  "colors": {
-    "model": "cyan",
-    "cost": "green"
-  },
-  "settings": {
-    "context-window": {
-      "bar_width": 30,
-      "iconset": "blocks",
-      "warn_at": 70,
-      "crit_at": 90
-    },
-    "rate-limit-5h": {
-      "show_countdown": true,
-      "bar_width": 25
-    }
-  },
-  "reflow": "group"
-}
-```
-
-- `segments` — which segments to show and in what order. Omit to use defaults.
-- `lines` — override which line a segment renders on (1–9). Omit a segment to use its natural line.
-- `colors` — override the display color of a segment. Supported names: `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, and `bright-*` variants. Set to `"default"` or omit to use the segment's natural color.
-- `settings` — per-segment configuration for segments with configurable sub-features. Currently used by `context-window`, `rate-limit-5h`, and `rate-limit-7d`. Open the TUI (`o` on a segment) to discover what's available; common fields:
-  - `show_bar` (bool) — render the progress bar at all
-  - `show_countdown` (bool, rate limits only) — append the time-until-reset text
-  - `show_warning` (bool, context-window only) — append `>200k` when context exceeds 200k tokens
-  - `bar_width` (int, 5–50) — number of characters in the bar
-  - `iconset` (`"default"`, `"blocks"`, `"dots"`, `"ascii"`, `"minimal"`) — visual style of the bar
-  - `warn_at` / `crit_at` (int, 0–100) — percentage thresholds for warn/critical colors
-  - `ok_color` / `warn_color` / `crit_color` (color name or `"default"`) — bar color at each threshold
-
-  In the TUI, numeric fields use `←` / `→` to step by 1 and `Shift+←` / `Shift+→` to step by the field's step size (5 for `warn_at` and `crit_at`, 1 for `bar_width`).
-- `reflow` — how segments wrap when the terminal is too narrow:
-  - `"cascade"` (default) — segments spill greedily across line boundaries.
-  - `"group"` — each logical line wraps independently, preserving the boundaries set in `lines`.
-- Empty array `[]` — hides the statusline entirely.
-- Blank lines (no active segments) are collapsed automatically.
-- When the terminal is too narrow for a line to fit, segments automatically spill to the next line.
-
-### Common configurations
-
-**Minimal — model + context only:**
-
-```json
-{
-  "segments": ["model", "context-window"]
-}
-```
-
-**Git-focused — directory + branch on line 1, model + tokens on line 2:**
-
-```json
-{
-  "segments": ["directory", "git-branch", "model", "tokens", "context-window"],
-  "lines": {
-    "model": 2,
-    "tokens": 2,
-    "context-window": 2
-  }
-}
-```
-
-**Cost tracking — cost + duration on line 1:**
-
-```json
-{
-  "segments": ["session-name", "directory", "cost", "duration", "model", "tokens", "context-window"],
-  "lines": {
-    "cost": 1,
-    "duration": 1,
-    "model": 2,
-    "tokens": 2,
-    "context-window": 3
-  }
-}
-```
+- `segments` — which segments to show and in what order. Omit for defaults (plugins auto-append); `[]` hides everything.
+- `[lines]` — override which line a segment renders on (1–9).
+- `[colors]` — per-segment color: names (`red`…`bright-white`), `#rrggbb` hex, `0`–`255` xterm indexes, or theme roles (`accent`, `dim`, …).
+- `[settings.<segment>]` — per-segment settings. Press `o` on a segment in the TUI to discover its settings interactively; highlights:
+  - bars (`context-window`, `rate-limit-*`): `show_bar`, `bar_width` (5–50), `iconset` (`default`, `blocks`, `dots`, `ascii`, `minimal`, `smooth`, `braille`, `braille-fine`, `shade`, `line`, `slim`, `vertical`), `warn_at`/`crit_at`, `ok_color`/`warn_color`/`crit_color`, `show_countdown`, `show_warning`
+  - projections (`rate-limit-*`): `show_projection`, `projection_window_min`
+  - context trend: `show_trend`, `compact_at`
+  - `cost-rate`: `window_min`
+  - `git-branch`: `git_status` (off by default), `git_status_ttl_sec`, `git_timeout_ms`
+- `reflow` — `"cascade"` (default: segments spill greedily across line boundaries) or `"group"` (each logical line wraps independently).
+- Invalid values never break rendering — they're normalized with warnings, visible in `debug` output and the TUI.
 
 ---
 
@@ -289,45 +271,40 @@ Add your own segments with any executable — a shell script, Python script, or 
 
 One segment, whole stdout is the value:
 
-```json
-{
-  "plugins": [
-    {
-      "id": "memory",
-      "command": "~/.config/claude-statusline/plugins/memory.sh",
-      "line": 1,
-      "desc": "RAM usage",
-      "timeout_ms": 200
-    }
-  ]
-}
+```toml
+[[plugins]]
+id = "memory"
+command = "~/.config/claude-statusline/plugins/memory.sh"
+line = 1
+desc = "RAM usage"
+timeout_ms = 200
 ```
 
 ### Multi-field plugin
 
 One command, multiple independent segments. The command runs **once** per turn; each field reads its value from a `key:value` line in stdout:
 
-```json
-{
-  "plugins": [
-    {
-      "command": "~/.config/claude-statusline/plugins/memory.sh",
-      "timeout_ms": 200,
-      "fields": [
-        {"id": "mem-used", "line": 1, "desc": "RAM used"},
-        {"id": "mem-swap", "line": 1, "desc": "Swap used"},
-        {"id": "mem-free", "line": 3, "desc": "Free RAM"}
-      ]
-    }
-  ]
-}
+```toml
+[[plugins]]
+command = "~/.config/claude-statusline/plugins/memory.sh"
+timeout_ms = 200
+
+  [[plugins.fields]]
+  id = "mem-used"
+  line = 1
+  desc = "RAM used"
+
+  [[plugins.fields]]
+  id = "swap-used"
+  line = 1
+  desc = "Swap used"
 ```
 
 Each field ID is an independent segment — independently togglable, positionable, and reorderable in the TUI.
 
 - `id` — segment identifier (used in `segments` list and TUI)
 - `command` — path to the executable; `~` is expanded
-- `line` — default line (1–9); overridable via TUI or `lines` config
+- `line` — default line (1–9); overridable via TUI or `[lines]`
 - `desc` — shown in the TUI description panel
 - `timeout_ms` — kill the process after this many ms (default: 200); hidden if it times out or exits non-zero
 - `fields` — multi-field mode; output must use `key:value` lines; mutually exclusive with top-level `id`
@@ -358,25 +335,7 @@ cp examples/plugins/memory.sh ~/.config/claude-statusline/plugins/memory.sh
 chmod +x ~/.config/claude-statusline/plugins/memory.sh
 ```
 
-Add to your config:
-
-```json
-{
-  "plugins": [
-    {
-      "command": "~/.config/claude-statusline/plugins/memory.sh",
-      "timeout_ms": 200,
-      "fields": [
-        {"id": "mem-used",   "line": 1, "desc": "RAM used"},
-        {"id": "swap-used",  "line": 1, "desc": "Swap used"},
-        {"id": "%-mem-used", "line": 1, "desc": "RAM % used"}
-      ]
-    }
-  ]
-}
-```
-
-Plugin segments appear in `--configure` with a `[plugin]` label alongside built-in segments — same toggle, line assignment, and reorder controls.
+Plugin segments appear in `configure` with a `[plugin]` label alongside built-in segments — same toggle, line assignment, and reorder controls.
 
 ---
 
@@ -397,6 +356,7 @@ Claude Code sends this JSON structure via stdin:
     "id": "claude-opus-4-7",
     "display_name": "Opus"
   },
+  "output_style": { "name": "Explanatory" },
   "workspace": {
     "current_dir": "/current/working/directory",
     "project_dir": "/original/project/directory",
@@ -440,6 +400,7 @@ Claude Code sends this JSON structure via stdin:
 - `session_name` — only when set via `--name` or `/rename`
 - `workspace.git_worktree` — only inside a linked git worktree
 - `effort` — only when the model supports reasoning effort
+- `output_style` — only when an output style is set
 - `vim` — only when vim mode is enabled
 - `agent` — only when running with `--agent`
 - `worktree` — only during `--worktree` sessions
@@ -460,7 +421,8 @@ agy sends a similar payload with these additional fields:
   "agent_state": "working",
   "sandbox": { "enabled": false },
   "artifact_count": 3,
-  "plan_tier": "Google AI Pro"
+  "plan_tier": "Google AI Pro",
+  "email": "user@example.com"
 }
 ```
 
@@ -471,10 +433,10 @@ The binary detects agy by the `product: "antigravity"` field and automatically h
 ## Debug
 
 ```bash
-echo '{"product":"antigravity",...}' | claude-statusline --debug
+echo '{"product":"antigravity",...}' | claude-statusline debug
 ```
 
-Prints a field presence table comparing the received payload against the Claude Code and agy schemas, plus all parsed values. Useful for diagnosing missing segments or unexpected payload shapes.
+Prints a field presence table comparing the received payload against the Claude Code and agy schemas, all parsed values, and any config validation warnings. Useful for diagnosing missing segments or unexpected payload shapes. Set `STATUSLINE_VERBOSE=1` to also print config warnings to stderr during normal renders.
 
 ---
 
@@ -482,23 +444,29 @@ Prints a field presence table comparing the received payload against the Claude 
 
 **Status line not appearing**
 
-- Verify your binary is executable and on your `$PATH`
-- Check that the tool is actually piping JSON (test with `--debug`)
+- Run `claude-statusline install` again — it reports "Already installed" or exactly what's wrong
+- Check that the tool is actually piping JSON (test with `debug`)
 - Claude Code: run `claude --debug` to log exit code and stderr from statusline invocations
 - Ensure workspace trust is accepted (statusline requires the same trust as hooks)
 
 **Segments are hidden unexpectedly**
 
-- Check `--debug` output to see if the fields are present in the payload
+- Check `debug` output to see if the fields are present in the payload
 - Remember: zero values hide `cost`, `duration`, `lines-changed`, etc.
 - `rate_limits` only appears for Claude Pro/Max after the first API call
-- `agent-name` only appears when running with `--agent`
-- `vim-mode` only appears when vim mode is enabled
+- Burn rates, projections, and trends need ~5 minutes of session history
+- `agent-name` only appears when running with `--agent`; `vim-mode` only with vim mode on
 
-**Colors not showing**
+**Colors not showing / look wrong**
 
-- Set `NO_COLOR=1` or `TERM=dumb` to disable colors intentionally
-- If colors appear garbled, your terminal may not support the ANSI sequences used
+- `NO_COLOR=1` or `TERM=dumb` disables colors intentionally
+- Claude Code may strip `COLORTERM` from the statusline environment; force themes with `color_depth = "truecolor"` in config.toml
+- 256/16-color terminals get quantized theme colors — that's the fallback working as intended
+
+**Config seems ignored**
+
+- The config moved to `~/.config/claude-statusline/config.toml` in 1.0 (your old `config.json` was migrated automatically and kept as `config.json.bak`)
+- Run `claude-statusline debug < payload.json` to see config warnings (unknown keys, bad values)
 
 **Context percentage looks wrong**
 
@@ -511,4 +479,4 @@ MIT
 
 ## AI use
 
-This project was developed primarily with [Moonshot AI's Kimi Code](https://www.moonshot.cn/), with contributions from [Warp.dev GLM 5.1](https://www.warp.dev/) and [Claude Code](https://claude.ai/code) for code review.
+This project was developed primarily with [Moonshot AI's Kimi Code](https://www.moonshot.cn/), with contributions from [Warp.dev GLM 5.1](https://www.warp.dev/) and [Claude Code](https://claude.ai/code) for code review. The 1.0.0 overhaul was built with [Claude Code](https://claude.ai/code).

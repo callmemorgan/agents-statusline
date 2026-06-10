@@ -4,10 +4,24 @@
 
 schema_version = 1
 
+# theme: built-in color palette.
+#   classic (default) | catppuccin-mocha | nord | dracula | gruvbox-dark | tokyo-night
+theme = "classic"
+
+# color_depth: how colors are emitted. "auto" (default) detects from
+# COLORTERM/TERM; set explicitly if your terminal is misdetected.
+#   auto | truecolor | 256 | 16 | none
+#color_depth = "auto"
+
 # reflow: how segments wrap on narrow terminals.
 #   "cascade" (default) — segments spill greedily across line boundaries
 #   "group"             — each logical line wraps independently
 reflow = "group"
+
+# preset: named layout used only when `segments` is absent.
+#   classic | minimal | zen | cost-tracker | git-focus | vim-coder |
+#   quota-watch | full-dashboard
+#preset = "cost-tracker"
 
 # Which segments to show, in order. Omit the key for the default set
 # (plugins are auto-appended); use [] to hide everything.
@@ -17,14 +31,17 @@ segments = [
   "session-name",
   "agent-state",
   "directory",
+  "added-dirs",
   "git-branch",
   "artifact-count",
   "lines-changed",
   "cache-percent",
   "cost",
   "model",
+  "output-style",
   "version",
   "duration",
+  "cost-rate",
   "api-efficiency",
   "tokens",
   "context-window",
@@ -33,6 +50,20 @@ segments = [
   "plan-tier",
 ]
 
+# Separator and padding between segments.
+[style]
+# separator: bar (default) | dot | slash | chevron | powerline | space | custom
+separator = "bar"
+#separator_custom = " ∘ "   # used when separator = "custom"
+#padding = 1                # leading spaces per line
+
+# Override individual theme roles. Values: #rrggbb hex, 0-255 index, or a
+# 16-color name. Roles: model dir git changes duration cost dim ok warn crit
+# agent vim accent session sep
+#[theme_colors]
+#git = "#a3be8c"
+#dim = "245"
+
 # Override which line (1-9) a segment renders on.
 [lines]
 cost = 1
@@ -40,16 +71,28 @@ model = 2
 "context-window" = 3
 
 # Override a segment's primary color.
-# Names: red green yellow blue magenta cyan white + bright-* variants.
+# Values: #rrggbb hex, 0-255 index, theme role, or a 16-color name
+# (red green yellow blue magenta cyan white + bright-* variants).
 [colors]
-model = "cyan"
+model = "#cba6f7"
 cost = "green"
 
 # Per-segment settings. Open the TUI and press `o` on a segment to discover
 # its settings interactively.
 [settings.context-window]
 bar_width = 30
-iconset = "blocks"
+iconset = "smooth"
+
+# Rich git status (dirty marker + ahead/behind counts) is opt-in:
+#[settings.git-branch]
+#git_status = true
+
+# Session history store — powers $/h burn rates, →NN% rate-limit projections,
+# and the context growth trend. Files live under
+# ${XDG_STATE_HOME:-~/.local/state}/claude-statusline/sessions/.
+[state]
+enabled = true
+retention_hours = 48
 
 # Custom executable segments.
 # Single-field plugin — whole stdout becomes the segment value:

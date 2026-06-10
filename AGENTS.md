@@ -2,91 +2,73 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build and run
+## Build and test
 
 ```bash
 go build -o claude-statusline .
+go test ./...                      # full suite (golden, migration, state, install splicer…)
+go test -run Golden -update .      # regenerate golden files after intentional render changes
+go test -run TestSessionState .    # single test
 
 # Smoke test
 echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline
 
-# Full Claude Code payload (see TESTING.md for full agy payload)
-cat TESTING.md  # contains copy-pasteable test payloads for all cases
+# Schema/config debugging
+./claude-statusline debug < testdata/payloads/agy-full.json
 
-# Debug schema detection
-echo '{"product":"antigravity","model":{"display_name":"Gemini"}}' | ./claude-statusline --debug
-
-# Interactive config TUI
-./claude-statusline --configure
+# Interactive config TUI (the one thing tests don't cover — verify manually)
+./claude-statusline configure
 ```
 
-No automated tests. All validation is manual; see `TESTING.md` for the exhaustive test suite.
+Golden tests render `testdata/payloads/* × configs` with an empty palette (color-free) and a fixed clock (`testNow`); fixtures use `resets_at` values relative to that clock so countdowns are deterministic. TESTING.md keeps copy-pasteable payloads for manual verification, mainly of the TUI.
+
+**Careful when smoke-testing locally:** running `./claude-statusline` with no `config.toml` but an existing `config.json` migrates the real config (renames it to `.bak`). Use an isolated home: `HOME=/tmp/fake-home ./claude-statusline`.
 
 ## Architecture
 
-Single-file Go project (`main.go`, ~2600 lines). The binary has three modes:
-
-1. **Default** — reads JSON from stdin, prints a colored multi-line statusline to stdout.
-2. **`--configure`** — interactive TUI (tview) to toggle/order/assign segments. Saves to `~/.config/claude-statusline/config.json`.
-3. **`--debug`** — prints a field-presence table comparing the received payload against Claude Code and agy schemas.
+One Go module, `package main`, split by concern. The binary's subcommands (`cmd.go` dispatch): bare stdin→stdout rendering (how Claude Code invokes it — must never change behavior), `install`/`uninstall`, `configure` (tview TUI), `version`, `debug`, `help`.
 
 ### Data flow
 
 ```
-stdin JSON → readInput() → parsePayload() → buildStatusline() → stdout
+stdin JSON → readInput() → parsePayload() ┐
+config.toml → loadConfigWarn() ───────────┼→ buildStatusline(buildInput) → stdout
+state file  → loadState()/Record() ───────┘            └→ st.Save() after printing
 ```
 
-`buildStatusline` iterates `cfg.Segments`, calls each segment's `render()` function, groups results by line number (1–9), then applies reflow logic. The `reflow` config setting controls two modes: `"cascade"` (segments spill greedily across line boundaries) and `"group"` (each logical line wraps independently).
+`buildStatusline` (render.go) iterates `cfg.Segments`, builds a `renderCtx` per segment (payload, override-applied palette, resolved settings, optional state, injected clock), groups results by line (1–9), then reflows (`cascade` spills across line boundaries; `group` wraps each logical line independently).
 
-### Segment system
+### Key subsystems and their files
 
-Segments are registered in `allSegmentInfos()` as `segmentInfo` structs:
-
-```go
-type segmentInfo struct {
-    id           string
-    line         int      // natural line (1–9)
-    desc         string
-    primaryColor string   // palette field name for color override
-    render       func(p payload, c palette) (string, bool)
-}
-```
-
-Each `render` function returns `(text, show)`. Return `("", false)` to hide the segment. Segments auto-hide when their source data is missing or zero — never add explicit tool-type checks.
-
-Renderer functions are named `render<SegmentName>` (e.g., `renderCost`, `renderContextWindow`).
-
-### Global state note
-
-`buildCfg` is a package-level variable set at the start of `buildStatusline`. Segment renderers that need per-segment settings (like `context-window` and `rate-limit-*`) read from `buildCfg` via `settingsFor(buildCfg, id)`. This avoids threading `config` through every render signature.
-
-### Plugin system
-
-Plugins are executable commands defined in config. Single-field plugins return their whole stdout as the segment value. Multi-field plugins output `key:value` lines and are cached per command (so a multi-field plugin runs once per turn regardless of how many fields it has).
-
-Plugins receive context via environment variables: `STATUSLINE_MODEL`, `STATUSLINE_DIR`, `STATUSLINE_BRANCH`, `STATUSLINE_SESSION`, `STATUSLINE_PRODUCT`, `STATUSLINE_COLUMNS`, `STATUSLINE_LINES`, `STATUSLINE_PAYLOAD` (full JSON).
+- **Segments** (`segments.go`) — `segmentInfo` registry in `allSegmentInfos()`; renderers are `func(ctx renderCtx) (string, bool)`; return `("", false)` to hide. Segments auto-hide when source data is missing/zero — never add tool-type checks.
+- **Settings schema** (`schema.go`) — each segment declares `[]settingSpec` (kind bool/int/enum/color, default, bounds). `settingsFor` resolves+validates, `pruneSettings` strips defaults before saving, and the TUI flyout renders rows straight from the schema. There is no parallel feature map: adding a spec to a segment is the whole job.
+- **Config** (`config.go`, `migrate.go`) — TOML at `~/.config/claude-statusline/config.toml` via go-toml/v2; legacy `config.json` migrates automatically (kept as `.bak`, TOML always wins). `validateConfig` normalizes bad values with warnings (shown in `debug`/TUI; stderr only with `STATUSLINE_VERBOSE=1`). Nil-vs-empty `segments` semantics: absent = defaults + plugin auto-append; `[]` = hide all.
+- **Themes** (`themes.go`, `depth.go`, `colors.go`) — themes map 15 semantic roles to `themeColor{Hex, Ansi16}` and resolve into the `palette` struct renderers consume; depth (truecolor/256/16/none) detected from env or forced by `color_depth`. The palette carries its theme+depth so `resolveColorSpec` (hex / 256 index / role / legacy name) works wherever a palette flows. **`classic` must stay byte-identical to pre-1.0 output** — locked by tests.
+- **Session state** (`state.go`) — per-session sample history under `$XDG_STATE_HOME/claude-statusline/sessions/`, keyed by `session_id`; powers `cost-rate`, rate-limit projections, and the context trend via the `series` API (Rate/Delta/Span/ProjectWhen/ProjectAt). Segments opt in with `needsState`. Trend features require ≥5min of history (projections: ≥window/4) and hide on flat/falling slopes.
+- **Plugins** (`plugins.go`) — executable commands from `[[plugins]]`; single-field (whole stdout) or multi-field (`key:value` lines, one exec per turn). Context via `STATUSLINE_*` env vars.
+- **Install** (`install.go`) — settings.json wiring via parse-gated byte splicing (never reformats the user's file; unparseable JSON aborts with a manual snippet); always verifies by piping a sample payload through the configured command.
+- **TUI** (`tui.go`, `flyout.go`, `tui_pickers.go`, `tui_colorpicker.go`, `tui_help.go`, `keymap.go`) — single segment-list home screen with floating picker overlays (`tview.Pages`); all selection goes through the `visible` slice + `selectedSegment()`; every mutation goes through `mutate()` (dirty tracking); footer and help generate from the `keymap` table. tview/tcell/term stay confined to these files.
 
 ## Key conventions
 
-- **Keep the runtime renderer stdlib-only.** External deps (`tview`, `tcell`, `term`) are confined to `--configure` mode.
+- **The bare no-args render path is sacred** — Claude Code invokes the bare binary; subcommands must never change its behavior, and it must never print hints to stdout/stderr.
 - **Versioning**: MAJOR.MINOR.REVISION — not strict SemVer. Bump REVISION for bugfixes and features; MINOR for larger milestones.
-- **Colors**: Always respect `NO_COLOR` and `TERM=dumb` (palette fields are empty strings when disabled). Use `palette` struct fields, not hardcoded ANSI codes.
-- **Section dividers** in `main.go` use the pattern: `// ─── Section Name ───────────────────────────────────────────────────────────`
-- **Config path** is hardcoded to `~/.config/claude-statusline/config.json`.
+- **Colors**: always respect `NO_COLOR` and `TERM=dumb` (empty palette). Use `palette` fields or `resolveColorSpec` — never hardcode ANSI codes in renderers. Settings-driven colors must also pass through `resolveColor`, which returns "" when colors are off.
+- **Section dividers** use the pattern: `// ─── Section Name ───────────────────────────────────────────────────────────`
 - **`AGENTS.md` is an identical copy of this file.** When editing `CLAUDE.md`, copy it over `AGENTS.md` so they stay in sync.
 
 ## Releases
 
-Releases are cut by pushing a `vX.Y.Z` git tag — `.github/workflows/release.yml` runs GoReleaser (`.goreleaser.yaml`) to build darwin/linux/windows binaries and sign them with cosign. There is no version constant in the code; the `version` segment displays the *calling tool's* version from the payload, not this binary's.
+Releases are cut by pushing a `vX.Y.Z` git tag — `.github/workflows/release.yml` runs GoReleaser (`.goreleaser.yaml`) to build darwin/linux/windows binaries, inject the version via ldflags (`-X main.version=…`), and sign with cosign. The `version` *segment* displays the calling tool's version from the payload; `claude-statusline version` shows this binary's.
 
 ## Adding a new built-in segment
 
-1. Write a `renderXxx(p payload, c palette) (string, bool)` function.
-2. Add an entry to `allSegmentInfos()` with the segment's natural line (1–9), description, primary color field name, and render function.
-3. Add the segment ID to `defaultConfig()` in the appropriate position.
-4. If the segment has configurable sub-features (like the progress bars), add entries to `flyoutFeatures` and implement the relevant `settingsFor` / `applyFlyout*` logic following the `context-window` pattern.
-5. Update the segment table in `README.md`, and `config.json.example` if the config schema changed. Add a test payload to `TESTING.md` if the segment reads new payload fields.
+1. Write a `renderXxx(ctx renderCtx) (string, bool)` function in `segments.go`.
+2. Add an entry to `allSegmentInfos()`: id, natural line (1–9), description, primary color role, optional `settings: []settingSpec` (gives it a flyout automatically), optional `needsState`.
+3. Add the segment ID to `defaultConfig()` if it should be on by default (fine when it self-hides without data).
+4. Update the segment table in `README.md` and the lists in `help.go`; extend `config.toml.example` if the config schema changed.
+5. Add a fixture/assertion: extend a `testdata/payloads/*.json` fixture (regenerate goldens with `-update`) or add a direct renderer test.
 
 ## Homebrew vs local binary
 
-`/opt/homebrew/bin/claude-statusline` is the Homebrew install. `./claude-statusline` in the repo root is the local build. When testing changes, build locally and use `./claude-statusline` directly or copy over the Homebrew binary.
+`/opt/homebrew/bin/claude-statusline` is the Homebrew install. `./claude-statusline` in the repo root is the local build. When testing changes, build locally and use `./claude-statusline` directly — and remember the config-migration caution above.

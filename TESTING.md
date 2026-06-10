@@ -1,6 +1,27 @@
-# Testing claude-statusline
+# Testing
 
-No automated tests. The tool is a pure function from stdin JSON → stdout text, so validation is manual.
+Most behavior is covered by the automated suite — run it first:
+
+```bash
+go test ./...
+```
+
+| Area | Where |
+|------|-------|
+| Renderer output (payload × config) | `render_test.go` + `testdata/golden/` (regenerate: `go test -run Golden -update .`) |
+| Reflow (cascade spill, group boundaries) | `reflow_test.go` |
+| Config load/save, validation, presets | `config_test.go` |
+| JSON→TOML migration | `migrate_test.go` |
+| Session state, burn rates, projections | `state_test.go`, `state_segments_test.go` |
+| Themes, depth detection, color specs | `colors_test.go` |
+| Install/uninstall JSON splicing | `install_test.go` |
+| Rich git status (incl. real-git integration) | `gitstatus_test.go` |
+| Plugins (exec, timeout, multi-field) | `plugins_test.go` |
+| Format helpers, iconsets, filter, ansiToTview | `helpers_test.go` |
+
+What follows is the **manual** checklist: smoke tests against the real binary and the interactive TUI, which the suite can't drive.
+
+> **Isolation:** run manual tests with `HOME=/tmp/csl-test-home` (and optionally `XDG_STATE_HOME`/`XDG_CACHE_HOME` pointed at temp dirs) so you never migrate or overwrite your real config.
 
 ## Build
 
@@ -16,18 +37,20 @@ go build -o claude-statusline .
 echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline
 ```
 
-Expect: default segments render across 3 lines. Segments with no data (cost, rate limits, etc.) are hidden.
+Expect: directory + model + tokens + empty context bar; timing suffix on line 1.
 
 ### Full Claude Code payload
 
 ```bash
 cat <<'JSON' | ./claude-statusline
 {
+  "session_id": "manual-test",
   "session_name": "my-project",
   "version": "1.5.0",
   "exceeds_200k_tokens": true,
   "model": {"display_name": "Claude Sonnet 4.6", "id": "claude-sonnet-4-6"},
-  "workspace": {"current_dir": "/Users/me/code/my-project", "project_dir": "/Users/me/code/my-project", "git_worktree": "my-project"},
+  "output_style": {"name": "Explanatory"},
+  "workspace": {"current_dir": "/Users/me/code/my-project", "project_dir": "/Users/me/code/my-project", "git_worktree": "my-project", "added_dirs": ["/tmp/lib-a"]},
   "cost": {"total_cost_usd": 1.23, "total_lines_added": 100, "total_lines_removed": 50, "total_duration_ms": 3661000, "total_api_duration_ms": 2400000},
   "context_window": {"total_input_tokens": 1234567, "total_output_tokens": 89012, "context_window_size": 200000, "used_percentage": 72.5, "current_usage": {"input_tokens": 1200000, "output_tokens": 89012, "cache_creation_input_tokens": 10000, "cache_read_input_tokens": 50000}},
   "rate_limits": {"five_hour": {"used_percentage": 45, "resets_at": 9999999999}, "seven_day": {"used_percentage": 12, "resets_at": 9999999999}},
@@ -39,7 +62,7 @@ cat <<'JSON' | ./claude-statusline
 JSON
 ```
 
-Expect: all Claude Code segments visible — vim mode, session name, directory, branch, lines changed, cache %, cost, model with ⬆ badge, version, duration, API efficiency, tokens, context bar with >200k warning, 5h and 7d rate limit bars.
+Expect: all Claude Code segments — vim mode, session name, directory, `+1 dir`, branch, lines changed, cache %, cost, model with ⬆ badge, `✎ Explanatory`, version, duration, API efficiency, tokens, context bar with `>200k`, both rate-limit bars with countdowns. Run it a few times over five minutes (same `session_id`, rising `used_percentage`/`total_cost_usd`) and `$X/h` plus `→NN%` projections appear.
 
 ### Full Antigravity (agy) payload
 
@@ -60,395 +83,75 @@ cat <<'JSON' | ./claude-statusline
 JSON
 ```
 
-Expect: UUID trimmed to `fbce29fe`, `file://` stripped from project path, plan tier visible, agent state visible. No cost, duration, rate limits (not in payload — hidden automatically).
+Expect: UUID trimmed to `fbce29fe`, `file://` stripped, plan tier and agent state visible; no cost/duration/rate limits.
 
-### Debug schema
-
-```bash
-echo '{"product":"antigravity","model":{"display_name":"Gemini 3.5 Flash (High)"}}' | ./claude-statusline --debug
-```
-
-Expect: field presence table with `✓`/`✗` per field, parsed values printed below. No statusline output.
-
----
-
-## Config behavior
-
-### Default (no config file)
+### Themes at each depth
 
 ```bash
-rm -f ~/.config/claude-statusline/config.json
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline
+P='testdata/payloads/claude-full.json'
+printf 'theme = "tokyo-night"\n' > /tmp/csl-test-home/.config/claude-statusline/config.toml
+COLORTERM=truecolor          ./claude-statusline < $P   # 38;2;… escapes
+COLORTERM= TERM=xterm-256color TERM_PROGRAM= ./claude-statusline < $P   # 38;5;… escapes
+COLORTERM= TERM=xterm TERM_PROGRAM=          ./claude-statusline < $P   # basic 16
+NO_COLOR=1                   ./claude-statusline < $P   # no escapes at all
 ```
 
-Expect: default 20 segments in default order.
-
-### Custom segments and order
+### Migration
 
 ```bash
-echo '{"segments":["model","directory","cost","context-window"]}' > ~/.config/claude-statusline/config.json
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"cost":{"total_cost_usd":0.42}}' | ./claude-statusline
+mkdir -p /tmp/csl-test-home/.config/claude-statusline
+cp ~/.config/claude-statusline/config.json.bak /tmp/csl-test-home/.config/claude-statusline/config.json  # or any v0.3 config
+HOME=/tmp/csl-test-home ./claude-statusline < testdata/payloads/claude-full.json
 ```
 
-Expect: only those 4 segments in that order.
+Expect: one stderr line about migration; `config.toml` created, `config.json.bak` kept; second run silent; rendering identical to v0.3.
 
-### Hide everything
+### Install / uninstall
 
 ```bash
-echo '{"segments":[]}' > ~/.config/claude-statusline/config.json
-echo '{}' | ./claude-statusline
+HOME=/tmp/csl-test-home ./claude-statusline install --dry-run
+HOME=/tmp/csl-test-home ./claude-statusline install --yes      # backup + splice + verified sample render
+HOME=/tmp/csl-test-home ./claude-statusline install --yes      # "Already installed"
+HOME=/tmp/csl-test-home ./claude-statusline uninstall --yes
 ```
 
-Expect: only the timing suffix, no segment output.
+Expect: only the `statusLine` key changes — every other byte of settings.json is preserved. A JSONC settings file aborts untouched with a paste-able snippet.
 
-### Line overrides
+### Errors and edge cases
 
 ```bash
-cat > ~/.config/claude-statusline/config.json <<'EOF'
-{
-  "segments": ["model", "directory", "cost", "context-window"],
-  "lines": {"cost": 1, "context-window": 2}
-}
-EOF
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"cost":{"total_cost_usd":0.42}}' | ./claude-statusline
+echo 'not json' | ./claude-statusline          # falls back to minimal render
+./claude-statusline bogus; echo $?             # unknown command → exit 2
+./claude-statusline version                    # version, commit, date, go
+echo '{}' | ./claude-statusline debug          # schema table + config warnings
 ```
 
-Expect: `cost` on line 1, `context-window` on line 2.
+## --configure TUI checklist
 
-### Blank lines collapse
+Run `HOME=/tmp/csl-test-home ./claude-statusline configure` in a real terminal:
+
+- [ ] **Toggle / line / reorder**: `space`, `1-9`, `←/→`, `⇧↑/↓` behave; preview updates live; status strip shows yellow ● once dirty
+- [ ] **Save & stay**: `s` flashes `✓ Saved to …config.toml` and stays; quit after save is instant
+- [ ] **Dirty quit**: make a change, `q` → Save & quit / Discard / Cancel modal
+- [ ] **Reset confirm**: `r` asks before resetting
+- [ ] **Theme picker**: `t` — moving the highlight restyles the preview underneath; Esc restores; Enter applies and updates the strip
+- [ ] **Preset picker**: `p` — hover previews the full layout; Esc restores the snapshot; Enter applies; manual edit flips strip to `(custom)`
+- [ ] **Color picker**: `C` on a segment — swatch grid (theme/ANSI/recent), hover live-previews, `d` resets, Esc cancels; in a flyout, `enter` on `ok_color` opens the same picker
+- [ ] **Filter**: `/` then type — list filters; Enter keeps it; Esc clears; actions work on filtered rows
+- [ ] **Width preview**: `w` cycles auto/80/60/40 — ruler appears, reflow visible; resizing the terminal in auto mode re-wraps the preview
+- [ ] **Flyout**: `o` on `context-window` — value rows render from the schema; `⇧←/→` coarse-steps numbers; clamped values stay in range; `sync_to_all` modal names source and targets
+- [ ] **Stress test**: in a rate-limit flyout, toggle `stress_test` — bar AND countdown animate together
+- [ ] **Help**: `?` shows the keymap-generated overlay; `r` inside opens the README; Esc backs out level by level
+- [ ] **Mouse**: click toggles a segment, double-click opens its flyout
+
+## Plugins (manual)
+
+Point a `[[plugins]]` entry at a script that prints `key:value` lines; verify the segments appear, a `sleep 5` script with `timeout_ms = 200` hides quietly, and `debug` mode still renders.
+
+## Performance
 
 ```bash
-cat > ~/.config/claude-statusline/config.json <<'EOF'
-{"segments":["model","context-window"],"lines":{"model":1,"context-window":5}}
-EOF
-echo '{"model":{"display_name":"Claude"},"context_window":{"used_percentage":50,"context_window_size":200000}}' | ./claude-statusline
+time (for i in $(seq 100); do ./claude-statusline < testdata/payloads/claude-full.json > /dev/null; done)
 ```
 
-Expect: 2 lines output (lines 2, 3, 4 are empty and collapsed).
-
-### Multi-line grouping
-
-```bash
-cat > ~/.config/claude-statusline/config.json <<'EOF'
-{
-  "segments": ["session-name", "directory", "model", "version", "context-window"],
-  "lines": {
-    "session-name": 1,
-    "directory": 1,
-    "model": 2,
-    "version": 2,
-    "context-window": 3
-  }
-}
-EOF
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"version":"1.0"}' | ./claude-statusline
-```
-
-Expect: line 1 has session-name and directory, line 2 has model and version, line 3 has context-window.
-
-### Group reflow (`reflow: "group"`)
-
-```bash
-cat > ~/.config/claude-statusline/config.json <<'EOF'
-{
-  "segments": ["directory", "git-branch", "cost", "model", "version", "context-window"],
-  "lines": {
-    "directory": 1,
-    "git-branch": 1,
-    "cost": 1,
-    "model": 2,
-    "version": 2,
-    "context-window": 3
-  },
-  "reflow": "group"
-}
-EOF
-echo '{"model":{"display_name":"Claude 3.7 Sonnet"},"workspace":{"current_dir":"~/my-project"},"worktree":{"branch":"feature/my-branch"},"cost":{"total_cost_usd":1.23},"version":"2.1.158","context_window":{"used_percentage":50,"context_window_size":200000}}' | COLUMNS=40 ./claude-statusline
-```
-
-Expect: each logical line wraps independently. Line 1 segments (`directory`, `git-branch`, `cost`) do not mix with line 2 segments (`model`, `version`) even when line 1 overflows. No blank lines inserted between wrapped groups.
-
-Compare with `"reflow": "cascade"` (or omitting the key) — segments spill across line boundaries and blank lines may appear before original lines that received overflow.
-
----
-
-## Edge cases
-
-### Malformed / empty input
-
-```bash
-echo -n '' | ./claude-statusline
-echo 'not json' | ./claude-statusline
-echo '{"model":{' | ./claude-statusline
-```
-
-Expect: all fall back to minimal output (model="Claude", dir="~").
-
-### Color disable
-
-```bash
-NO_COLOR=1 echo '{"model":{"display_name":"Claude"}}' | ./claude-statusline
-TERM=dumb echo '{"model":{"display_name":"Claude"}}' | ./claude-statusline
-```
-
-Expect: plain text, no ANSI escape codes.
-
-### Outside a git repo
-
-```bash
-cd /tmp
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"/tmp"}}' | /path/to/claude-statusline
-```
-
-Expect: `git-branch` hidden even if it's in the config.
-
-### Zero values hidden
-
-```bash
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"cost":{"total_cost_usd":0,"total_duration_ms":0}}' | ./claude-statusline
-```
-
-Expect: `cost`, `duration`, `api-efficiency` hidden (zero values suppress those segments).
-
-### agy file:// URI stripping
-
-```bash
-echo '{"model":{"display_name":"Gemini"},"workspace":{"current_dir":"/Users/me/code","project_dir":"file:///Users/me/code"}}' | ./claude-statusline
-```
-
-Expect: directory renders as `code`, not `file:///Users/me/code`.
-
-### agy UUID session name truncation
-
-```bash
-echo '{"conversation_id":"fbce29fe-0688-4fba-8cc1-0b769834c6d7","model":{"display_name":"Gemini"}}' | ./claude-statusline
-```
-
-Expect: session name shows `fbce29fe`, not the full UUID.
-
-### Real project name preserved
-
-```bash
-echo '{"session_name":"skyslope-convoy","model":{"display_name":"Claude"}}' | ./claude-statusline
-```
-
-Expect: session name shows `skyslope-convoy` in full (not truncated — it's not a UUID).
-
-### Null rate limits
-
-```bash
-cat <<'JSON' | ./claude-statusline
-{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"rate_limits":{"five_hour":null,"seven_day":null}}
-JSON
-```
-
-Expect: rate-limit segments hidden (null `used_percentage` suppresses them).
-
-### Missing rate_limits object entirely
-
-```bash
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline
-```
-
-Expect: rate-limit segments hidden (object absent).
-
-### Context window without used_percentage
-
-```bash
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"context_window":{"current_usage":{"input_tokens":50000,"output_tokens":1000,"cache_creation_input_tokens":2000,"cache_read_input_tokens":3000},"context_window_size":200000}}' | ./claude-statusline
-```
-
-Expect: context-window segment calculates percentage manually: `(50000+2000+3000)/200000*100 = 27.5%`.
-
-### Context window with zero tokens
-
-```bash
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"context_window":{"used_percentage":0,"context_window_size":200000}}' | ./claude-statusline
-```
-
-Expect: context bar shows 0% in green (empty bar).
-
-### Context window at 100%
-
-```bash
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"},"context_window":{"used_percentage":100,"context_window_size":200000}}' | ./claude-statusline
-```
-
-Expect: context bar shows 100% in red (full bar).
-
----
-
-## Plugin tests
-
-### Single-field plugin
-
-```bash
-mkdir -p ~/.config/claude-statusline/plugins
-cat > ~/.config/claude-statusline/plugins/hello.sh <<'EOF'
-#!/bin/bash
-echo "hello:$STATUSLINE_PRODUCT"
-EOF
-chmod +x ~/.config/claude-statusline/plugins/hello.sh
-
-cat > ~/.config/claude-statusline/config.json <<'EOF'
-{
-  "segments": ["model", "directory"],
-  "plugins": [
-    {
-      "id": "hello",
-      "command": "~/.config/claude-statusline/plugins/hello.sh",
-      "line": 1,
-      "desc": "Hello test"
-    }
-  ]
-}
-EOF
-
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline
-```
-
-Expect: `hello:` appears on line 1 (product is empty for Claude Code).
-
-### Multi-field plugin
-
-```bash
-cat > ~/.config/claude-statusline/plugins/multi.sh <<'EOF'
-#!/bin/bash
-echo "field-a:alpha"
-echo "field-b:beta"
-EOF
-chmod +x ~/.config/claude-statusline/plugins/multi.sh
-
-cat > ~/.config/claude-statusline/config.json <<'EOF'
-{
-  "segments": ["model"],
-  "plugins": [
-    {
-      "command": "~/.config/claude-statusline/plugins/multi.sh",
-      "timeout_ms": 200,
-      "fields": [
-        {"id": "field-a", "line": 1, "desc": "Field A"},
-        {"id": "field-b", "line": 2, "desc": "Field B"}
-      ]
-    }
-  ]
-}
-EOF
-
-echo '{"model":{"display_name":"Claude"}}' | ./claude-statusline
-```
-
-Expect: `alpha` on line 1, `beta` on line 2.
-
-### Plugin timeout
-
-```bash
-cat > ~/.config/claude-statusline/plugins/slow.sh <<'EOF'
-#!/bin/bash
-sleep 5
-echo "too late"
-EOF
-chmod +x ~/.config/claude-statusline/plugins/slow.sh
-
-cat > ~/.config/claude-statusline/config.json <<'EOF'
-{
-  "segments": ["model"],
-  "plugins": [
-    {
-      "id": "slow",
-      "command": "~/.config/claude-statusline/plugins/slow.sh",
-      "timeout_ms": 100
-    }
-  ]
-}
-EOF
-
-echo '{"model":{"display_name":"Claude"}}' | ./claude-statusline
-```
-
-Expect: no `slow` segment appears (timed out, hidden automatically).
-
-### Plugin non-zero exit
-
-```bash
-cat > ~/.config/claude-statusline/plugins/fail.sh <<'EOF'
-#!/bin/bash
-echo "error" >&2
-exit 1
-EOF
-chmod +x ~/.config/claude-statusline/plugins/fail.sh
-
-cat > ~/.config/claude-statusline/config.json <<'EOF'
-{
-  "segments": ["model"],
-  "plugins": [
-    {
-      "id": "fail",
-      "command": "~/.config/claude-statusline/plugins/fail.sh"
-    }
-  ]
-}
-EOF
-
-echo '{"model":{"display_name":"Claude"}}' | ./claude-statusline
-```
-
-Expect: no `fail` segment appears (non-zero exit, hidden automatically).
-
----
-
-## --configure TUI
-
-```bash
-./claude-statusline --configure
-```
-
-### Basic toggle
-
-1. Navigate with `↑`/`↓`.
-2. Press `Space` to toggle a segment off.
-3. Press `s` to save. Verify with `cat ~/.config/claude-statusline/config.json`.
-
-### Line assignment
-
-1. Navigate to `cost`. Press `2`. Verify `[L2]` appears in the list.
-2. Navigate to `model`. Press `1`. Verify `[L1]` appears.
-3. Press `s`. Verify config contains `"lines": {"cost": 2, "model": 1}`.
-
-### Reorder within line
-
-1. Navigate to two segments on line 1.
-2. Press `←`/`→` to swap their order.
-3. Verify the preview updates immediately.
-
-### Swap lines (Shift+↑/↓)
-
-1. Navigate to any segment on line 1.
-2. Press `Shift+↓` to swap all line-1 segments with line-2 segments.
-3. Verify the preview updates and segments move between lines.
-
-### Arbitrary line
-
-1. Navigate to any segment. Press `7`.
-2. Verify `[L7]` appears. Preview should show it on its own line.
-3. Press `s` and re-run the binary to confirm.
-
-### Reset
-
-Press `r` at any time. Verify all toggles and line assignments return to defaults in the preview.
-
-### Help page
-
-Press `h`. Verify README content appears in scrollable view. Press `q` to close.
-
----
-
-## Performance sanity check
-
-```bash
-time for i in {1..100}; do
-  echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline > /dev/null
-done
-```
-
-Expect: total time under 1 second for 100 iterations on modern hardware.
+Expect well under 1 second for 100 renders (state recording included).
