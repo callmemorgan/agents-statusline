@@ -503,6 +503,31 @@ Prints a field presence table comparing the received payload against the Claude 
 
 ---
 
+## Release notes
+
+```bash
+claude-statusline release-notes             # current version
+claude-statusline release-notes v1.0.2      # any past version
+claude-statusline release-notes --all       # every version, newest first
+claude-statusline --release-notes           # flag form also works
+```
+
+Prints notes sourced from the embedded `CHANGELOG.md` (no network). Each version's section is the same data that ships with the binary, so the on-disk content can't get out of sync with what you installed.
+
+### What's new announcement
+
+The first time the binary renders under a new version, the statusline briefly replaces itself with a short release-notes announcement, then goes back to normal on the next refresh. The window is 25 seconds by default and is configurable:
+
+```toml
+[release_notes]
+announce = true
+duration_seconds = 25   # 0 disables the takeover entirely
+```
+
+`announce = false` and `duration_seconds = 0` both fully disable it. Source builds (`version = "dev"`) never announce and never write the version state file. An unwritable state directory degrades silently — your render is unaffected, and nothing is printed to stderr.
+
+---
+
 ## Troubleshooting
 
 **Status line not appearing**

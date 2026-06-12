@@ -19,6 +19,21 @@ const (
 	safetyMargin        = 5
 )
 
+// lineBudget is the visible-column budget for one physical line: the full
+// width minus the safety margin, and on the first line also the timing-suffix
+// reserve (floored so pathological widths stay renderable). Shared by both
+// reflow modes and the release-notes takeover so the reserves can't desync.
+func lineBudget(columns int, first bool) int {
+	b := columns - safetyMargin
+	if first {
+		b -= timingSuffixReserve
+		if b < 10 {
+			b = 10
+		}
+	}
+	return b
+}
+
 var reANSI = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func stripANSI(s string) string {
@@ -152,13 +167,7 @@ func buildStatuslineCascade(parts map[int][]string, columns int, st lineStyle) [
 	if columns > 0 {
 		lineNum := 1
 		for lineNum <= maxLine {
-			budget := columns - safetyMargin
-			if lineNum == 1 {
-				budget = columns - timingSuffixReserve - safetyMargin
-				if budget < 10 {
-					budget = 10
-				}
-			}
+			budget := lineBudget(columns, lineNum == 1)
 			for {
 				segs := parts[lineNum]
 				if len(segs) <= 1 {
@@ -227,13 +236,7 @@ func buildStatuslineGroup(parts map[int][]string, columns int, st lineStyle) []s
 				sep = st.sepWidth
 			}
 
-			budget := columns - safetyMargin
-			if firstPhysicalLine && len(out) == 0 {
-				budget = columns - timingSuffixReserve - safetyMargin
-				if budget < 10 {
-					budget = 10
-				}
-			}
+			budget := lineBudget(columns, firstPhysicalLine && len(out) == 0)
 
 			if len(current) == 0 || currentWidth+sep+segWidth <= budget {
 				current = append(current, seg)

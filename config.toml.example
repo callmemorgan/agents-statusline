@@ -130,3 +130,9 @@ timeout_ms = 200
 # async = true
 # refresh_ms = 10000   # consider cache stale after 10s
 # timeout_ms = 8000    # kill the background run after 8s
+
+# Post-upgrade announcement: after updating, the statusline shows the
+# release notes for a short window, then returns to normal.
+# [release_notes]
+# announce = true
+# duration_seconds = 25   # 0 disables the takeover entirely

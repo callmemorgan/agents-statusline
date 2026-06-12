@@ -26,6 +26,7 @@ Commands:
                segment shows the calling tool's version, not this binary's.)
   debug        Read JSON from stdin and print a schema-comparison table plus
                any config warnings.
+  release-notes  Show what changed in this version (also: vX.Y.Z, --all).
   help         Show this message.
   (none)       Read the JSON payload from stdin and print the statusline —
                this is how Claude Code invokes the binary.
@@ -53,6 +54,8 @@ Configuration:
                padding
   [state]      session history store powering burn rates and projections
                (enabled, retention_hours)
+  [release_notes]  post-upgrade announcement: announce (default true),
+               duration_seconds (default 25, 0 = off)
   [[plugins]]  custom executable segments — see README.md
 
 Line 1 segments — Session & workspace:

@@ -38,6 +38,9 @@ func dispatch() {
 				os.Exit(1)
 			}
 			return
+		case "release-notes":
+			runReleaseNotes(os.Args[2:])
+			return
 		default:
 			fmt.Fprintf(os.Stderr, "unknown command %q (try: claude-statusline --help)\n", os.Args[1])
 			os.Exit(2)
@@ -75,12 +78,15 @@ func runRender(debug bool) {
 	st := loadState(cfg.State, firstNonEmpty(p.SessionID, p.ConversationID), start)
 	st.Record(p, start)
 
-	lines := buildStatusline(buildInput{P: p, C: colors, Cfg: cfg, State: st, Width: terminalWidth(p), Now: start})
+	width := terminalWidth(p)
+	style := styleFor(cfg, colors)
+	lines := buildStatusline(buildInput{P: p, C: colors, Cfg: cfg, State: st, Width: width, Now: start})
+
+	lines = maybeReleaseTakeover(cfg.ReleaseNotes, lines, colors, width, style.padding, start)
 
 	elapsedMS := float64(time.Since(start).Microseconds()) / 1000.0
 	if len(lines) > 0 {
-		sep := styleFor(cfg, colors).sep
-		fmt.Printf("%s%s%s%.1fms%s\n", lines[0], sep, colors.Dim, elapsedMS, colors.Rst)
+		fmt.Printf("%s%s%s%.1fms%s\n", lines[0], style.sep, colors.Dim, elapsedMS, colors.Rst)
 		for _, l := range lines[1:] {
 			fmt.Println(l)
 		}

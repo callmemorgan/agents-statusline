@@ -49,6 +49,7 @@ type config struct {
 	Settings      map[string]map[string]any `toml:"settings,omitempty"`
 	Style         styleConfig               `toml:"style,omitempty"`
 	State         stateConfig               `toml:"state,omitempty"`
+	ReleaseNotes  releaseNotesConfig        `toml:"release_notes,omitempty"`
 	Plugins       []pluginDef               `toml:"plugins,omitempty"`
 }
 
@@ -187,6 +188,7 @@ func mergeWithDefaults(loaded config) config {
 	cfg.Settings = loaded.Settings
 	cfg.Style = loaded.Style
 	cfg.State = loaded.State
+	cfg.ReleaseNotes = loaded.ReleaseNotes
 	if loaded.Segments == nil {
 		inSegments := make(map[string]bool, len(cfg.Segments))
 		for _, id := range cfg.Segments {
@@ -316,6 +318,10 @@ func validateConfig(cfg *config) []configWarning {
 				cfg.Plugins[i].TimeoutMS = 60000
 			}
 		}
+	}
+	if d := cfg.ReleaseNotes.DurationSeconds; d != nil && (*d < 0 || *d > 600) {
+		warns = append(warns, configWarning{Path: "release_notes.duration_seconds", Msg: fmt.Sprintf("%d out of range 0-600 (using %d)", *d, defaultAnnounceSeconds)})
+		cfg.ReleaseNotes.DurationSeconds = nil
 	}
 	return warns
 }

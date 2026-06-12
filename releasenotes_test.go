@@ -1,0 +1,757 @@
+package main
+
+// ─── Release Notes Tests ──────────────────────────────────────────────
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/pelletier/go-toml/v2"
+)
+
+// ─── parseChangelog ───────────────────────────────────────────────────
+
+func TestParseChangelog(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  []releaseNote
+	}{
+		{
+			name:  "empty",
+			input: "",
+			want:  nil,
+		},
+		{
+			name: "well-formed multi-section",
+			input: `# Changelog
+
+## v1.1.0 — 2026-06-12
+- first
+- second
+
+## v1.0.0 — 2026-06-10
+- only
+`,
+			want: []releaseNote{
+				{Version: "1.1.0", Date: "2026-06-12", Bullets: []string{"first", "second"}},
+				{Version: "1.0.0", Date: "2026-06-10", Bullets: []string{"only"}},
+			},
+		},
+		{
+			name: "missing date",
+			input: `## v1.0.0
+- x
+`,
+			want: []releaseNote{{Version: "1.0.0", Date: "", Bullets: []string{"x"}}},
+		},
+		{
+			name: "stray prose between sections is ignored",
+			input: `# header
+
+intro paragraph
+more prose
+
+## v0.1.0 — 2025-01-01
+- a
+- b
+
+in-between commentary
+
+## v0.0.1
+- c
+`,
+			want: []releaseNote{
+				{Version: "0.1.0", Date: "2025-01-01", Bullets: []string{"a", "b"}},
+				{Version: "0.0.1", Date: "", Bullets: []string{"c"}},
+			},
+		},
+		{
+			name: "bullets with - inside text",
+			input: `## v1.0.0 — 2025-01-01
+- feat: foo - bar
+- plain bullet
+`,
+			want: []releaseNote{{
+				Version: "1.0.0", Date: "2025-01-01",
+				Bullets: []string{"feat: foo - bar", "plain bullet"},
+			}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseChangelog(tc.input)
+			if len(got) != len(tc.want) {
+				t.Fatalf("len = %d, want %d (got %+v)", len(got), len(tc.want), got)
+			}
+			for i := range got {
+				if got[i].Version != tc.want[i].Version {
+					t.Errorf("[%d] version = %q, want %q", i, got[i].Version, tc.want[i].Version)
+				}
+				if got[i].Date != tc.want[i].Date {
+					t.Errorf("[%d] date = %q, want %q", i, got[i].Date, tc.want[i].Date)
+				}
+				if strings.Join(got[i].Bullets, "\n") != strings.Join(tc.want[i].Bullets, "\n") {
+					t.Errorf("[%d] bullets = %v, want %v", i, got[i].Bullets, tc.want[i].Bullets)
+				}
+			}
+		})
+	}
+}
+
+// ─── announceLines ────────────────────────────────────────────────────
+
+func TestAnnounceLines(t *testing.T) {
+	emptyPalette := palette{}
+	coloredPalette := palette{Purple: "\x1b[35m", Dim: "\x1b[2m", Rst: "\x1b[0m"}
+	note := releaseNote{
+		Version: "1.1.0",
+		Date:    "2026-06-12",
+		Bullets: []string{"first bullet", "second bullet", "third bullet"},
+	}
+	// noBudgets disables truncation; padding=1 matches the renderer's default.
+	noBudgets := func(n int) []int { return nil }
+	t.Run("n=1 compressed form", func(t *testing.T) {
+		got := announceLines(note, 1, noBudgets(1), emptyPalette, 1)
+		if len(got) != 1 {
+			t.Fatalf("len = %d, want 1", len(got))
+		}
+		if !strings.Contains(got[0], "v1.1.0") || !strings.Contains(got[0], "first bullet") {
+			t.Errorf("missing version or first bullet: %q", got[0])
+		}
+		if !strings.Contains(got[0], "release-notes") {
+			t.Errorf("missing subcommand hint: %q", got[0])
+		}
+		if strings.ContainsRune(got[0], 0x1b) {
+			t.Errorf("empty palette should produce no escapes: %q", got[0])
+		}
+		if !strings.HasPrefix(got[0], " ") {
+			t.Errorf("line should start with single-space pad, got %q", got[0])
+		}
+	})
+	t.Run("n=3 header/bullet/hint", func(t *testing.T) {
+		got := announceLines(note, 3, noBudgets(3), emptyPalette, 1)
+		if len(got) != 3 {
+			t.Fatalf("len = %d, want 3", len(got))
+		}
+		if !strings.Contains(got[0], "v1.1.0") {
+			t.Errorf("line 0 should mention version: %q", got[0])
+		}
+		if !strings.Contains(got[1], "first bullet") {
+			t.Errorf("line 1 should be first bullet: %q", got[1])
+		}
+		if !strings.Contains(got[2], "config.toml") {
+			t.Errorf("line 2 should be the hint: %q", got[2])
+		}
+	})
+	t.Run("n=8 with 3 bullets pads middle to keep hint last", func(t *testing.T) {
+		got := announceLines(note, 8, noBudgets(8), emptyPalette, 1)
+		if len(got) != 8 {
+			t.Fatalf("len = %d, want 8", len(got))
+		}
+		// 1 header (0) + 3 bullets (1,2,3) + 3 empty middle pads (4,5,6)
+		// + hint last (7).
+		if !strings.Contains(got[7], "config.toml") {
+			t.Errorf("line 7 should be hint, got %q", got[7])
+		}
+		if !strings.Contains(got[1], "first bullet") {
+			t.Errorf("line 1 should be first bullet, got %q", got[1])
+		}
+		// Middle pads should be empty visible content (just the pad space).
+		for i := 4; i <= 6; i++ {
+			if got[i] != " " {
+				t.Errorf("line %d should be a single pad space, got %q", i, got[i])
+			}
+		}
+	})
+	t.Run("n=4 truncates trailing bullets", func(t *testing.T) {
+		got := announceLines(note, 4, noBudgets(4), emptyPalette, 1)
+		if len(got) != 4 {
+			t.Fatalf("len = %d, want 4", len(got))
+		}
+		// header + 2 bullets + hint
+		if !strings.Contains(got[2], "second bullet") {
+			t.Errorf("line 2 should be second bullet: %q", got[2])
+		}
+		if !strings.Contains(got[3], "config.toml") {
+			t.Errorf("line 3 should be the hint: %q", got[3])
+		}
+		if strings.Contains(got[2], "third bullet") {
+			t.Errorf("line 2 should not contain third bullet: %q", got[2])
+		}
+	})
+	t.Run("long bullet truncated at budget", func(t *testing.T) {
+		wide := releaseNote{
+			Version: "1.1.0",
+			Bullets: []string{strings.Repeat("a", 200)},
+		}
+		// budgets[0] reserves timing suffix, budgets[1+] is safety-margin only.
+		budgets := takeoverLineBudgets(40, 3, 1)
+		got := announceLines(wide, 3, budgets, emptyPalette, 1)
+		if visibleWidth(got[1]) > 40 {
+			t.Errorf("line 1 visible width = %d, want <= 40", visibleWidth(got[1]))
+		}
+		if !strings.HasSuffix(got[1], "…") {
+			t.Errorf("truncated line should end with ellipsis: %q", got[1])
+		}
+	})
+	t.Run("empty palette output has no escapes", func(t *testing.T) {
+		got := announceLines(note, 4, noBudgets(4), emptyPalette, 1)
+		for i, l := range got {
+			if strings.ContainsRune(l, 0x1b) {
+				t.Errorf("line %d contains ANSI escape: %q", i, l)
+			}
+		}
+	})
+	t.Run("colored palette wraps header in accent", func(t *testing.T) {
+		got := announceLines(note, 3, noBudgets(3), coloredPalette, 1)
+		if !strings.Contains(got[0], "\x1b[35m") {
+			t.Errorf("line 0 missing accent color: %q", got[0])
+		}
+	})
+	t.Run("no bullets still produces header+hint", func(t *testing.T) {
+		empty := releaseNote{Version: "1.1.0"}
+		got := announceLines(empty, 2, noBudgets(2), emptyPalette, 1)
+		if len(got) != 2 {
+			t.Fatalf("len = %d, want 2", len(got))
+		}
+		if !strings.Contains(got[0], "v1.1.0") {
+			t.Errorf("line 0 should have version: %q", got[0])
+		}
+		if !strings.Contains(got[1], "config.toml") {
+			t.Errorf("line 1 should be the hint: %q", got[1])
+		}
+	})
+	t.Run("padding=3 indents all lines by 3", func(t *testing.T) {
+		got := announceLines(note, 3, noBudgets(3), emptyPalette, 3)
+		for i, l := range got {
+			if !strings.HasPrefix(l, "   ") {
+				t.Errorf("line %d should start with 3-space pad, got %q", i, l)
+			}
+		}
+	})
+	t.Run("padding=0 no leading indent", func(t *testing.T) {
+		got := announceLines(note, 3, noBudgets(3), emptyPalette, 0)
+		for i, l := range got {
+			// Visible-width of the leading pad should be 0 — but the bullet
+			// formatter adds its own internal space, so we just check no
+			// extra indent was added by announceLines.
+			if strings.HasPrefix(l, " ") {
+				// Acceptable: bullet lines start with " •". Reject: a second
+				// leading space.
+				if strings.HasPrefix(l, "  ") {
+					t.Errorf("line %d has double leading space, got %q", i, l)
+				}
+			}
+		}
+	})
+}
+
+// ─── takeoverLineBudgets ─────────────────────────────────────────────
+
+func TestTakeoverLineBudgets(t *testing.T) {
+	t.Run("no width returns nil", func(t *testing.T) {
+		if got := takeoverLineBudgets(0, 3, 1); got != nil {
+			t.Errorf("expected nil, got %v", got)
+		}
+	})
+	t.Run("line 0 reserves timing suffix, others only safety margin + padding", func(t *testing.T) {
+		budgets := takeoverLineBudgets(80, 3, 1)
+		if len(budgets) != 3 {
+			t.Fatalf("len = %d, want 3", len(budgets))
+		}
+		// line 0: 80 - 5 (safety) - 15 (timing) - 1 (pad) = 59
+		// lines 1,2: 80 - 5 - 1 = 74
+		if budgets[0] != 59 {
+			t.Errorf("line 0 budget = %d, want 59", budgets[0])
+		}
+		if budgets[1] != 74 || budgets[2] != 74 {
+			t.Errorf("lines 1,2 budgets = %d,%d, want 74,74", budgets[1], budgets[2])
+		}
+	})
+	t.Run("narrow terminals get a floor of 10", func(t *testing.T) {
+		budgets := takeoverLineBudgets(15, 2, 1)
+		for i, b := range budgets {
+			if b < 10 {
+				t.Errorf("budget %d below floor at line %d", b, i)
+			}
+		}
+	})
+}
+
+// ─── versionSeen round-trip ───────────────────────────────────────────
+
+func TestVersionSeenRoundTrip(t *testing.T) {
+	t.Run("save and load equality", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("XDG_STATE_HOME", dir)
+		// versionSeenPath uses stateBaseDir() which joins XDG_STATE_HOME with
+		// "claude-statusline". We need that to be created on save.
+		v := versionSeen{Version: "1.1.0", FirstSeen: 1700000000}
+		saveVersionSeen(v)
+		got, ok := loadVersionSeen()
+		if !ok {
+			t.Fatal("loadVersionSeen returned ok=false after save")
+		}
+		if got != v {
+			t.Errorf("got %+v, want %+v", got, v)
+		}
+	})
+	t.Run("corrupt JSON returns ok=false", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("XDG_STATE_HOME", dir)
+		if err := os.MkdirAll(filepath.Join(dir, "claude-statusline"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "claude-statusline", "last-version.json"), []byte("not json"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := loadVersionSeen(); ok {
+			t.Error("ok=true on corrupt file")
+		}
+	})
+	t.Run("missing file returns ok=false", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("XDG_STATE_HOME", dir)
+		if _, ok := loadVersionSeen(); ok {
+			t.Error("ok=true on missing file")
+		}
+	})
+	t.Run("save creates directory", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "deep", "nested"))
+		saveVersionSeen(versionSeen{Version: "1.1.0", FirstSeen: 1})
+		if _, err := os.Stat(filepath.Join(dir, "deep", "nested", "claude-statusline", "last-version.json")); err != nil {
+			t.Errorf("file not created: %v", err)
+		}
+	})
+	t.Run("JSON shape matches spec", func(t *testing.T) {
+		v := versionSeen{Version: "1.0.2", FirstSeen: 1718200000}
+		data, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(data)
+		if !strings.Contains(s, `"version":"1.0.2"`) {
+			t.Errorf("missing version field: %s", s)
+		}
+		if !strings.Contains(s, `"first_seen":1718200000`) {
+			t.Errorf("missing first_seen field: %s", s)
+		}
+	})
+}
+
+// ─── config: [release_notes] ──────────────────────────────────────────
+
+func TestReleaseNotesConfigRoundTrip(t *testing.T) {
+	t.Run("TOML round-trip", func(t *testing.T) {
+		announce := false
+		dur := 60
+		loaded := config{ReleaseNotes: releaseNotesConfig{Announce: &announce, DurationSeconds: &dur}}
+		data, err := marshalConfigTOML(loaded)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), "[release_notes]") {
+			t.Errorf("expected [release_notes] table in:\n%s", data)
+		}
+		var got config
+		if err := toml.Unmarshal(data, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.ReleaseNotes.Announce == nil || *got.ReleaseNotes.Announce != false {
+			t.Errorf("Announce not preserved: %+v", got.ReleaseNotes.Announce)
+		}
+		if got.ReleaseNotes.DurationSeconds == nil || *got.ReleaseNotes.DurationSeconds != 60 {
+			t.Errorf("DurationSeconds not preserved: %+v", got.ReleaseNotes.DurationSeconds)
+		}
+	})
+	t.Run("mergeWithDefaults preserves", func(t *testing.T) {
+		announce := false
+		dur := 0
+		loaded := config{Segments: []string{}, ReleaseNotes: releaseNotesConfig{Announce: &announce, DurationSeconds: &dur}}
+		got := mergeWithDefaults(loaded)
+		if got.ReleaseNotes.Announce == nil || *got.ReleaseNotes.Announce != false {
+			t.Errorf("Announce lost in merge: %+v", got.ReleaseNotes.Announce)
+		}
+		if got.ReleaseNotes.DurationSeconds == nil || *got.ReleaseNotes.DurationSeconds != 0 {
+			t.Errorf("DurationSeconds lost in merge: %+v", got.ReleaseNotes.DurationSeconds)
+		}
+	})
+	t.Run("out of range duration warns and resets", func(t *testing.T) {
+		dur := 9999
+		cfg := config{ReleaseNotes: releaseNotesConfig{DurationSeconds: &dur}}
+		warns := validateConfig(&cfg)
+		found := false
+		for _, w := range warns {
+			if w.Path == "release_notes.duration_seconds" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("expected warning, got %+v", warns)
+		}
+		if cfg.ReleaseNotes.DurationSeconds != nil {
+			t.Errorf("expected nil after reset, got %+v", *cfg.ReleaseNotes.DurationSeconds)
+		}
+	})
+	t.Run("defaults", func(t *testing.T) {
+		var r releaseNotesConfig
+		if !r.announce() {
+			t.Error("announce() default should be true")
+		}
+		if r.duration() != 25*time.Second {
+			t.Errorf("duration() default = %v, want 25s", r.duration())
+		}
+	})
+}
+
+// ─── findNote helper ──────────────────────────────────────────────────
+
+func TestFindNote(t *testing.T) {
+	notes := []releaseNote{
+		{Version: "1.1.0", Bullets: []string{"a"}},
+		{Version: "1.0.2", Bullets: []string{"b"}},
+	}
+	if n, ok := findNote(notes, "1.0.2"); !ok || n.Version != "1.0.2" {
+		t.Errorf("expected to find 1.0.2, got %+v / %v", n, ok)
+	}
+	if _, ok := findNote(notes, "0.0.1"); ok {
+		t.Error("found nonexistent version")
+	}
+}
+
+// ─── runReleaseNotes selection ───────────────────────────────────────
+
+func TestSelectReleaseNote(t *testing.T) {
+	notes := []releaseNote{
+		{Version: "1.1.0", Bullets: []string{"a"}},
+		{Version: "1.0.2", Bullets: []string{"b"}},
+		{Version: "0.9.0", Bullets: []string{"c"}},
+	}
+	t.Run("no args picks current", func(t *testing.T) {
+		mode, target, fallback, missing := selectReleaseNote(notes, "1.0.2", nil)
+		if mode != "one" || target.Version != "1.0.2" || fallback != nil || len(missing) > 0 {
+			t.Errorf("got mode=%q target=%+v fallback=%v missing=%v", mode, target, fallback, missing)
+		}
+	})
+	t.Run("no args falls back to newest when current missing", func(t *testing.T) {
+		mode, _, fallback, missing := selectReleaseNote(notes, "9.9.9", nil)
+		if mode != "one" || fallback == nil || fallback.Version != "1.1.0" {
+			t.Errorf("got mode=%q fallback=%+v", mode, fallback)
+		}
+		if len(missing) == 0 || !strings.Contains(missing[0], "no notes for v9.9.9") {
+			t.Errorf("expected missing message, got %v", missing)
+		}
+	})
+	t.Run("no args on empty notes signals error", func(t *testing.T) {
+		mode, _, _, missing := selectReleaseNote(nil, "1.0.0", nil)
+		if mode != "" {
+			t.Errorf("expected empty mode, got %q", mode)
+		}
+		if len(missing) == 0 || !strings.Contains(missing[0], "empty or malformed") {
+			t.Errorf("expected empty-notes message, got %v", missing)
+		}
+	})
+	t.Run("arg picks matching version", func(t *testing.T) {
+		mode, target, fallback, missing := selectReleaseNote(notes, "9.9.9", []string{"v0.9.0"})
+		if mode != "one" || target.Version != "0.9.0" || fallback != nil || len(missing) > 0 {
+			t.Errorf("got mode=%q target=%+v fallback=%v missing=%v", mode, target, fallback, missing)
+		}
+	})
+	t.Run("arg without v prefix works", func(t *testing.T) {
+		_, target, _, _ := selectReleaseNote(notes, "9.9.9", []string{"1.0.2"})
+		if target.Version != "1.0.2" {
+			t.Errorf("target=%+v, want 1.0.2", target)
+		}
+	})
+	t.Run("arg unknown signals error with known-versions hint", func(t *testing.T) {
+		mode, _, _, missing := selectReleaseNote(notes, "9.9.9", []string{"v9.9.9"})
+		if mode != "" {
+			t.Errorf("expected empty mode, got %q", mode)
+		}
+		if len(missing) == 0 {
+			t.Fatal("expected missing message")
+		}
+		s := missing[0]
+		if !strings.Contains(s, "v9.9.9") {
+			t.Errorf("expected v9.9.9 in message: %q", s)
+		}
+		for _, v := range []string{"v1.1.0", "v1.0.2", "v0.9.0"} {
+			if !strings.Contains(s, v) {
+				t.Errorf("expected %q in known list: %q", v, s)
+			}
+		}
+	})
+	t.Run("--all returns all mode", func(t *testing.T) {
+		mode, _, _, _ := selectReleaseNote(notes, "9.9.9", []string{"--all"})
+		if mode != "all" {
+			t.Errorf("mode=%q, want all", mode)
+		}
+	})
+	t.Run("all (no dashes) also returns all mode", func(t *testing.T) {
+		mode, _, _, _ := selectReleaseNote(notes, "9.9.9", []string{"all"})
+		if mode != "all" {
+			t.Errorf("mode=%q, want all", mode)
+		}
+	})
+	t.Run("--all on empty notes signals error", func(t *testing.T) {
+		mode, _, _, missing := selectReleaseNote(nil, "1.0.0", []string{"--all"})
+		if mode != "" {
+			t.Errorf("expected empty mode, got %q", mode)
+		}
+		if len(missing) == 0 {
+			t.Error("expected missing message for --all on empty notes")
+		}
+	})
+}
+
+// ─── isReleaseVersion (strict gate) ───────────────────────────────────
+
+func TestIsReleaseVersion(t *testing.T) {
+	cases := []struct {
+		v    string
+		want bool
+	}{
+		{"1.1.0", true},
+		{"0.0.0", true},
+		{"10.20.30", true},
+		{"dev", false},
+		{"", false},
+		{"1.0.2+dirty", false},
+		{"1.0.2+unknown", false},
+		// Go pseudo-versions from `go install @commit`:
+		{"0.1.0-0.20260612120000-abc123abc123", false},
+		{"v0.0.0-20240101120000-abc123abc123", false},
+		// 4-part not allowed:
+		{"1.2.3.4", false},
+		// 2-part not allowed:
+		{"1.2", false},
+		// Leading v not allowed (we strip it earlier in the pipeline):
+		{"v1.1.0", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.v, func(t *testing.T) {
+			if got := isReleaseVersion(tc.v); got != tc.want {
+				t.Errorf("isReleaseVersion(%q) = %v, want %v", tc.v, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAnnounceDecision(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	announceFalse := false
+	durZero := 0
+	announceTrue := true
+	durPtr := func(d int) *int { return &d }
+
+	cases := []struct {
+		name     string
+		prev     versionSeen
+		prevOK   bool
+		current  string
+		cfg      releaseNotesConfig
+		now      time.Time
+		wantShow bool
+		wantNext versionSeen
+	}{
+		{
+			name:     "dev build never shows and never persists",
+			prev:     versionSeen{Version: "1.0.0", FirstSeen: now.Unix() - 10},
+			prevOK:   true,
+			current:  "dev",
+			cfg:      releaseNotesConfig{Announce: &announceTrue, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: false,
+			wantNext: versionSeen{},
+		},
+		{
+			name:     "empty current never shows",
+			prev:     versionSeen{Version: "1.0.0", FirstSeen: now.Unix() - 10},
+			prevOK:   true,
+			current:  "",
+			cfg:      releaseNotesConfig{Announce: &announceTrue, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: false,
+			wantNext: versionSeen{},
+		},
+		{
+			name:     "dirty dev build (v1.0.2+dirty) never shows",
+			prev:     versionSeen{Version: "1.0.0", FirstSeen: now.Unix() - 10},
+			prevOK:   true,
+			current:  "1.0.2+dirty",
+			cfg:      releaseNotesConfig{Announce: &announceTrue, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: false,
+			wantNext: versionSeen{},
+		},
+		{
+			name:     "Go pseudo-version never shows (go install @commit)",
+			prev:     versionSeen{Version: "1.0.0", FirstSeen: now.Unix() - 10},
+			prevOK:   true,
+			current:  "0.1.0-0.20260612120000-abc123abc123",
+			cfg:      releaseNotesConfig{Announce: &announceTrue, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: false,
+			wantNext: versionSeen{},
+		},
+		{
+			name:     "fresh install persists with no window anchor and does not show",
+			prev:     versionSeen{},
+			prevOK:   false,
+			current:  "1.1.0",
+			cfg:      releaseNotesConfig{Announce: &announceTrue, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: false,
+			wantNext: versionSeen{Version: "1.1.0", FirstSeen: 0},
+		},
+		{
+			name:     "second render after fresh install does not announce",
+			prev:     versionSeen{Version: "1.1.0", FirstSeen: 0},
+			prevOK:   true,
+			current:  "1.1.0",
+			cfg:      releaseNotesConfig{Announce: &announceTrue, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: false,
+			wantNext: versionSeen{},
+		},
+		{
+			name:     "upgrade shows and persists new anchor",
+			prev:     versionSeen{Version: "1.0.2", FirstSeen: now.Unix() - 1000},
+			prevOK:   true,
+			current:  "1.1.0",
+			cfg:      releaseNotesConfig{Announce: &announceTrue, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: true,
+			wantNext: versionSeen{Version: "1.1.0", FirstSeen: now.Unix()},
+		},
+		{
+			name:     "within window same version shows without persisting",
+			prev:     versionSeen{Version: "1.1.0", FirstSeen: now.Unix() - 10},
+			prevOK:   true,
+			current:  "1.1.0",
+			cfg:      releaseNotesConfig{Announce: &announceTrue, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: true,
+			wantNext: versionSeen{},
+		},
+		{
+			name:     "expired window does not show or persist",
+			prev:     versionSeen{Version: "1.1.0", FirstSeen: now.Unix() - 60},
+			prevOK:   true,
+			current:  "1.1.0",
+			cfg:      releaseNotesConfig{Announce: &announceTrue, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: false,
+			wantNext: versionSeen{},
+		},
+		{
+			name:     "announce=false suppresses but still persists version on change",
+			prev:     versionSeen{Version: "1.0.0", FirstSeen: now.Unix() - 10},
+			prevOK:   true,
+			current:  "1.1.0",
+			cfg:      releaseNotesConfig{Announce: &announceFalse, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: false,
+			wantNext: versionSeen{Version: "1.1.0", FirstSeen: now.Unix() - 10},
+		},
+		{
+			name:     "duration_seconds=0 suppresses but still persists version on change",
+			prev:     versionSeen{Version: "1.0.0", FirstSeen: now.Unix() - 10},
+			prevOK:   true,
+			current:  "1.1.0",
+			cfg:      releaseNotesConfig{Announce: &announceTrue, DurationSeconds: &durZero},
+			now:      now,
+			wantShow: false,
+			wantNext: versionSeen{Version: "1.1.0", FirstSeen: now.Unix() - 10},
+		},
+		{
+			name:     "announce=false same version noop",
+			prev:     versionSeen{Version: "1.1.0", FirstSeen: now.Unix() - 5},
+			prevOK:   true,
+			current:  "1.1.0",
+			cfg:      releaseNotesConfig{Announce: &announceFalse, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: false,
+			wantNext: versionSeen{},
+		},
+		{
+			name:     "re-enable after disabled upgrade does not fire (stale FirstSeen)",
+			prev:     versionSeen{Version: "1.1.0", FirstSeen: now.Unix() - 1000},
+			prevOK:   true,
+			current:  "1.1.0",
+			cfg:      releaseNotesConfig{Announce: &announceTrue, DurationSeconds: durPtr(25)},
+			now:      now,
+			wantShow: false,
+			wantNext: versionSeen{},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			show, next := announceDecision(tc.prev, tc.prevOK, tc.current, tc.cfg, tc.now)
+			if show != tc.wantShow {
+				t.Errorf("show = %v, want %v", show, tc.wantShow)
+			}
+			if next != tc.wantNext {
+				t.Errorf("next = %+v, want %+v", next, tc.wantNext)
+			}
+		})
+	}
+}
+
+// ─── maybeReleaseTakeover ─────────────────────────────────────────────
+
+// TestMaybeReleaseTakeoverSaveFailure locks the degrade path: when the new
+// version state can't be persisted, the takeover is suppressed (otherwise an
+// unwritable state dir would replay the announcement on every render).
+func TestMaybeReleaseTakeoverSaveFailure(t *testing.T) {
+	oldVersion := version
+	version = "1.1.0"
+	t.Cleanup(func() { version = oldVersion })
+
+	lines := []string{"normal statusline"}
+	now := time.Unix(1_750_000_000, 0)
+
+	setupPrev := func(t *testing.T) string {
+		t.Helper()
+		base := t.TempDir()
+		t.Setenv("XDG_STATE_HOME", base)
+		dir := filepath.Join(base, "claude-statusline")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		data, _ := json.Marshal(versionSeen{Version: "1.0.2", FirstSeen: 0})
+		if err := os.WriteFile(filepath.Join(dir, "last-version.json"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+
+	t.Run("upgrade with writable state fires", func(t *testing.T) {
+		setupPrev(t)
+		got := maybeReleaseTakeover(releaseNotesConfig{}, lines, palette{}, 80, 1, now)
+		if len(got) != 1 || got[0] == lines[0] {
+			t.Fatalf("takeover did not fire: %q", got)
+		}
+		if !strings.Contains(got[0], "v1.1.0") {
+			t.Errorf("takeover line missing version: %q", got[0])
+		}
+	})
+
+	t.Run("upgrade with unwritable state dir is suppressed", func(t *testing.T) {
+		dir := setupPrev(t)
+		if err := os.Chmod(dir, 0o555); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(dir, 0o755) })
+		got := maybeReleaseTakeover(releaseNotesConfig{}, lines, palette{}, 80, 1, now)
+		if len(got) != 1 || got[0] != lines[0] {
+			t.Fatalf("takeover not suppressed on save failure: %q", got)
+		}
+	})
+}
