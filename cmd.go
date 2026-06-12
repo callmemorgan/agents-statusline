@@ -33,6 +33,11 @@ func dispatch() {
 		case "debug":
 			runRender(true)
 			return
+		case "plugin-refresh":
+			if err := runPluginRefresh(); err != nil {
+				os.Exit(1)
+			}
+			return
 		default:
 			fmt.Fprintf(os.Stderr, "unknown command %q (try: claude-statusline --help)\n", os.Args[1])
 			os.Exit(2)

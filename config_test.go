@@ -148,6 +148,46 @@ func TestPresetConfigKey(t *testing.T) {
 	}
 }
 
+func TestAsyncPluginConfigValidation(t *testing.T) {
+	cfg := config{
+		Plugins: []pluginDef{
+			{ID: "a", Command: "x", Async: true, RefreshMS: 100},
+			{ID: "b", Command: "x", Async: true, TimeoutMS: 0},
+			{ID: "c", Command: "x", Async: true, TimeoutMS: 120000},
+			{ID: "d", Command: "x", Async: false, RefreshMS: 100},
+		},
+	}
+	warns := validateConfig(&cfg)
+	if cfg.Plugins[0].RefreshMS != 500 {
+		t.Errorf("refresh_ms 100 should clamp to 500, got %d", cfg.Plugins[0].RefreshMS)
+	}
+	if cfg.Plugins[1].TimeoutMS != 10000 {
+		t.Errorf("async timeout 0 should default to 10000, got %d", cfg.Plugins[1].TimeoutMS)
+	}
+	if cfg.Plugins[2].TimeoutMS != 60000 {
+		t.Errorf("timeout 120000 should clamp to 60000, got %d", cfg.Plugins[2].TimeoutMS)
+	}
+	if cfg.Plugins[3].RefreshMS != 100 {
+		t.Errorf("sync refresh_ms should be ignored, got %d", cfg.Plugins[3].RefreshMS)
+	}
+	foundRefresh := false
+	foundTimeout := false
+	for _, w := range warns {
+		if strings.Contains(w.String(), "refresh_ms") {
+			foundRefresh = true
+		}
+		if strings.Contains(w.String(), "timeout_ms") {
+			foundTimeout = true
+		}
+	}
+	if !foundRefresh {
+		t.Errorf("expected a refresh_ms clamp warning, got %v", warns)
+	}
+	if !foundTimeout {
+		t.Errorf("expected a timeout_ms clamp warning, got %v", warns)
+	}
+}
+
 func TestApplyPresetKeepsPluginsAndColors(t *testing.T) {
 	cfg := config{
 		Colors:  map[string]string{"model": "cyan"},

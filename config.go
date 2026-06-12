@@ -29,6 +29,8 @@ type pluginDef struct {
 	Line      int           `json:"line" toml:"line,omitempty"`
 	Desc      string        `json:"desc" toml:"desc,omitempty"`
 	TimeoutMS int           `json:"timeout_ms" toml:"timeout_ms,omitempty"`
+	Async     bool          `json:"async" toml:"async,omitempty"`
+	RefreshMS int           `json:"refresh_ms" toml:"refresh_ms,omitempty"`
 	Fields    []pluginField `json:"fields" toml:"fields,omitempty"`
 }
 
@@ -293,11 +295,26 @@ func validateConfig(cfg *config) []configWarning {
 		cfg.Style.Padding = nil
 	}
 	for i, p := range cfg.Plugins {
+		path := fmt.Sprintf("plugins[%d]", i)
 		if p.Command == "" {
-			warns = append(warns, configWarning{Path: fmt.Sprintf("plugins[%d]", i), Msg: "missing command (plugin disabled)"})
+			warns = append(warns, configWarning{Path: path, Msg: "missing command (plugin disabled)"})
 		}
 		if p.ID == "" && len(p.Fields) == 0 {
-			warns = append(warns, configWarning{Path: fmt.Sprintf("plugins[%d]", i), Msg: "missing id and fields (plugin unreachable)"})
+			warns = append(warns, configWarning{Path: path, Msg: "missing id and fields (plugin unreachable)"})
+		}
+		if p.Async {
+			if p.RefreshMS == 0 {
+				cfg.Plugins[i].RefreshMS = 5000
+			} else if p.RefreshMS < 500 {
+				warns = append(warns, configWarning{Path: path + ".refresh_ms", Msg: fmt.Sprintf("%d below minimum 500 (clamped)", p.RefreshMS)})
+				cfg.Plugins[i].RefreshMS = 500
+			}
+			if p.TimeoutMS == 0 {
+				cfg.Plugins[i].TimeoutMS = 10000
+			} else if p.TimeoutMS > 60000 {
+				warns = append(warns, configWarning{Path: path + ".timeout_ms", Msg: fmt.Sprintf("%d above maximum 60000 (clamped)", p.TimeoutMS)})
+				cfg.Plugins[i].TimeoutMS = 60000
+			}
 		}
 	}
 	return warns

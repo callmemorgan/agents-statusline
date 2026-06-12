@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -102,8 +106,38 @@ func parseKeyValueOutput(raw string) map[string]string {
 	return result
 }
 
-// runPluginRaw executes the plugin command and returns the full trimmed stdout.
+// runPluginRaw dispatches to the sync or async plugin implementation.
 func runPluginRaw(def pluginDef, p payload) string {
+	if def.Async {
+		return readAsyncPlugin(def, p)
+	}
+	return runPluginSync(def, p)
+}
+
+// pluginEnv returns the STATUSLINE_* environment variables passed to every
+// plugin. The caller prepends os.Environ().
+func pluginEnv(def pluginDef, p payload) []string {
+	session := p.SessionName
+	if session == "" {
+		session = p.ConversationID
+	}
+	env := []string{
+		"STATUSLINE_MODEL=" + p.Model.DisplayName,
+		"STATUSLINE_DIR=" + p.Workspace.CurrentDir,
+		"STATUSLINE_BRANCH=" + p.Worktree.Branch,
+		"STATUSLINE_SESSION=" + session,
+		"STATUSLINE_PRODUCT=" + p.Product,
+		"STATUSLINE_COLUMNS=" + strconv.Itoa(p.TerminalWidth),
+		"STATUSLINE_LINES=" + os.Getenv("LINES"),
+	}
+	if raw, err := json.Marshal(p); err == nil {
+		env = append(env, "STATUSLINE_PAYLOAD="+string(raw))
+	}
+	return env
+}
+
+// runPluginSync executes the plugin command and returns the full trimmed stdout.
+func runPluginSync(def pluginDef, p payload) string {
 	timeout := time.Duration(def.TimeoutMS) * time.Millisecond
 	if timeout <= 0 {
 		timeout = 200 * time.Millisecond
@@ -111,30 +145,227 @@ func runPluginRaw(def pluginDef, p payload) string {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	home, _ := os.UserHomeDir()
-	cmd := strings.Replace(def.Command, "~", home, 1)
+	cmd := expandPluginCommand(def.Command)
 	c := exec.CommandContext(ctx, cmd)
-
-	session := p.SessionName
-	if session == "" {
-		session = p.ConversationID
-	}
-	c.Env = append(os.Environ(),
-		"STATUSLINE_MODEL="+p.Model.DisplayName,
-		"STATUSLINE_DIR="+p.Workspace.CurrentDir,
-		"STATUSLINE_BRANCH="+p.Worktree.Branch,
-		"STATUSLINE_SESSION="+session,
-		"STATUSLINE_PRODUCT="+p.Product,
-		"STATUSLINE_COLUMNS="+strconv.Itoa(p.TerminalWidth),
-		"STATUSLINE_LINES="+os.Getenv("LINES"),
-	)
-	if raw, err := json.Marshal(p); err == nil {
-		c.Env = append(c.Env, "STATUSLINE_PAYLOAD="+string(raw))
-	}
+	c.Env = append(os.Environ(), pluginEnv(def, p)...)
 
 	out, err := c.Output()
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+func expandPluginCommand(command string) string {
+	home, _ := os.UserHomeDir()
+	return strings.Replace(command, "~", home, 1)
+}
+
+// ─── Async Plugin Cache ──────────────────────────────────────────────
+
+// spawnRefresher starts a detached background refresh for an async plugin.
+// Tests stub this package variable to avoid real process spawning.
+var spawnRefresher = spawnRefresherReal
+
+func spawnRefresherReal(def pluginDef, p payload, cachePath, lockPath string) {
+	exe, err := os.Executable()
+	if err != nil {
+		_ = os.Remove(lockPath)
+		return
+	}
+	c := exec.Command(exe, "plugin-refresh")
+	c.Env = append(os.Environ(),
+		"STATUSLINE_REFRESH_COMMAND="+def.Command,
+		"STATUSLINE_REFRESH_TIMEOUT_MS="+strconv.Itoa(def.TimeoutMS),
+		"STATUSLINE_REFRESH_CACHE="+cachePath,
+		"STATUSLINE_REFRESH_LOCK="+lockPath,
+	)
+	c.Env = append(c.Env, pluginEnv(def, p)...)
+	c.Stdin, c.Stdout, c.Stderr = nil, nil, nil
+	applyDetachSysProcAttr(c)
+	if err := c.Start(); err != nil {
+		_ = os.Remove(lockPath)
+		return
+	}
+	_ = c.Process.Release()
+}
+
+// pluginCacheKey returns the first 16 hex characters of sha256(command).
+func pluginCacheKey(command string) string {
+	sum := sha256.Sum256([]byte(command))
+	return hex.EncodeToString(sum[:])[:16]
+}
+
+// pluginCachePaths returns the cache, lock, and temp file paths for a command.
+func pluginCachePaths(command string) (cache, lock, tmp string) {
+	base := filepath.Join(pluginCacheDir(), pluginCacheKey(command))
+	return base + ".out", base + ".lock", base + ".out.tmp"
+}
+
+// needsRefresh reports whether the cache (mtime, possibly zero when the file is
+// missing) is stale relative to refresh_ms at time now.
+func needsRefresh(mtime time.Time, now time.Time, refresh time.Duration) bool {
+	if mtime.IsZero() {
+		return true
+	}
+	return now.Sub(mtime) >= refresh
+}
+
+// readAsyncPlugin returns the cached plugin output, triggering a background
+// refresh when the cache is stale or missing.
+func readAsyncPlugin(def pluginDef, p payload) string {
+	cachePath, lockPath, _ := pluginCachePaths(def.Command)
+	data, _ := os.ReadFile(cachePath)
+	cached := strings.TrimSpace(string(data))
+
+	var mtime time.Time
+	if info, err := os.Stat(cachePath); err == nil {
+		mtime = info.ModTime()
+	}
+
+	refresh := time.Duration(def.RefreshMS) * time.Millisecond
+	if refresh <= 0 {
+		refresh = 5000 * time.Millisecond
+	}
+	if needsRefresh(mtime, time.Now(), refresh) {
+		trySpawnRefresher(def, p, cachePath, lockPath)
+	}
+
+	return cached
+}
+
+// trySpawnRefresher acquires the plugin lock and, if successful, starts a
+// background refresh. It silently ignores cache/lock errors so the render is
+// never delayed.
+func trySpawnRefresher(def pluginDef, p payload, cachePath, lockPath string) {
+	cacheDir := filepath.Dir(cachePath)
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		return
+	}
+	if tryAcquireLock(lockPath, def.TimeoutMS) {
+		spawnRefresher(def, p, cachePath, lockPath)
+	}
+}
+
+// tryAcquireLock attempts to create the lock file with O_CREATE|O_EXCL. If the
+// lock already exists and is older than timeout+5s, it is removed and the
+// acquisition is retried once (handles crashed/killed refreshers).
+func tryAcquireLock(lockPath string, timeoutMS int) bool {
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL, 0o644)
+	if err == nil {
+		_ = f.Close()
+		return true
+	}
+	if !errors.Is(err, os.ErrExist) {
+		return false
+	}
+	info, err := os.Stat(lockPath)
+	if err != nil {
+		return false
+	}
+	timeout := time.Duration(timeoutMS) * time.Millisecond
+	if timeout <= 0 {
+		timeout = 10000 * time.Millisecond
+	}
+	if time.Since(info.ModTime()) <= timeout+5*time.Second {
+		return false
+	}
+	_ = os.Remove(lockPath)
+	f, err = os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL, 0o644)
+	if err == nil {
+		_ = f.Close()
+		return true
+	}
+	return false
+}
+
+// ─── Plugin Refresh Subcommand ───────────────────────────────────────
+
+// runPluginRefresh executes the hidden "plugin-refresh" subcommand. It reads
+// configuration from STATUSLINE_REFRESH_* env vars, runs the plugin command,
+// atomically updates the cache, and releases the lock. It returns an error
+// only when invoked without the required env vars; plugin execution failures
+// are handled internally and do not produce an error.
+func runPluginRefresh() error {
+	command := os.Getenv("STATUSLINE_REFRESH_COMMAND")
+	timeoutMS, _ := strconv.Atoi(os.Getenv("STATUSLINE_REFRESH_TIMEOUT_MS"))
+	cachePath := os.Getenv("STATUSLINE_REFRESH_CACHE")
+	lockPath := os.Getenv("STATUSLINE_REFRESH_LOCK")
+	if command == "" || cachePath == "" {
+		return errors.New("missing STATUSLINE_REFRESH_COMMAND or STATUSLINE_REFRESH_CACHE")
+	}
+	defer func() { _ = os.Remove(lockPath) }()
+
+	timeout := time.Duration(timeoutMS) * time.Millisecond
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := expandPluginCommand(command)
+	c := exec.CommandContext(ctx, cmd)
+	// Inherit the normal STATUSLINE_* env, but strip the refresher's internal
+	// control variables so plugins do not depend on them.
+	c.Env = filterRefresherEnv(os.Environ())
+	out, err := c.Output()
+
+	now := time.Now()
+	if err == nil {
+		trimmed := strings.TrimSpace(string(out))
+		// pluginCachePaths returns tmp as cachePath + ".tmp".
+		tmpPath := cachePath + ".tmp"
+		writeErr := os.WriteFile(tmpPath, []byte(trimmed), 0o644)
+		if writeErr == nil {
+			_ = os.Rename(tmpPath, cachePath)
+		}
+		_ = os.Remove(tmpPath)
+	} else {
+		if _, statErr := os.Stat(cachePath); statErr == nil {
+			_ = os.Chtimes(cachePath, now, now)
+		} else {
+			_ = os.WriteFile(cachePath, nil, 0o644)
+		}
+	}
+
+	prunePluginCacheDir(filepath.Dir(cachePath))
+	return nil
+}
+
+// filterRefresherEnv removes STATUSLINE_REFRESH_* variables from the env slice.
+func filterRefresherEnv(env []string) []string {
+	filtered := make([]string, 0, len(env))
+	for _, e := range env {
+		if strings.HasPrefix(e, "STATUSLINE_REFRESH_") {
+			continue
+		}
+		filtered = append(filtered, e)
+	}
+	return filtered
+}
+
+// prunePluginCacheDir removes cache, lock, and temp files older than 7 days,
+// covering plugins that have been removed from config.
+func prunePluginCacheDir(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-7 * 24 * time.Hour)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".out") && !strings.HasSuffix(name, ".lock") && !strings.HasSuffix(name, ".tmp") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			_ = os.Remove(filepath.Join(dir, e.Name()))
+		}
+	}
 }

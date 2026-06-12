@@ -61,15 +61,23 @@ type sessionState struct {
 	dirty     bool
 }
 
-func stateDir() string {
+func stateBaseDir() string {
 	if x := os.Getenv("XDG_STATE_HOME"); x != "" {
-		return filepath.Join(x, "claude-statusline", "sessions")
+		return filepath.Join(x, "claude-statusline")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "~"
 	}
-	return filepath.Join(home, ".local", "state", "claude-statusline", "sessions")
+	return filepath.Join(home, ".local", "state", "claude-statusline")
+}
+
+func stateDir() string {
+	return filepath.Join(stateBaseDir(), "sessions")
+}
+
+func pluginCacheDir() string {
+	return filepath.Join(stateBaseDir(), "plugins")
 }
 
 // sanitizeSessionID keeps [A-Za-z0-9._-]; anything else becomes '-'.
