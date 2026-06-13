@@ -176,9 +176,9 @@ never delayed):
 maybeSpawnUpdateCheck(cfg.Update, start)
 ```
 
-`maybeSpawnUpdateCheck`: return immediately unless `mode() != "off"` and
-`detectInstallKind(...) != kindDev`. Load the cache; if
-`now - checked_at < checkEvery()`, return. Otherwise acquire
+`maybeSpawnUpdateCheck`: return immediately unless `mode() != "off"`,
+`isReleaseVersion(current)`, and `detectInstallKind(...) != kindDev`. Load
+the cache; if `now - checked_at < checkEvery()`, return. Otherwise acquire
 `update-check.lock` (shared lock helper) and spawn the detached worker:
 
 ```go
@@ -196,11 +196,13 @@ Hidden: dispatch case in `cmd.go`, **not** listed in `help.go` (same
 treatment as `plugin-refresh`). Overall context timeout ~60s; lock released
 via defer.
 
-1. Resolve latest tag (redirect trick above; `http.Client` with
+1. Return immediately if `!isReleaseVersion(current)` (dev, dirty, or Go
+   pseudo-version) — non-release builds never hit the network.
+2. Resolve latest tag (redirect trick above; `http.Client` with
    `CheckRedirect: func(...) error { return http.ErrUseLastResponse }`,
    10s timeout, explicit User-Agent `claude-statusline/<version>`).
-2. `saveUpdateCheck({now, latest})` — notify mode stops here.
-3. Auto mode + `kindBrew` + `compareVersions(latest, current) > 0` →
+3. `saveUpdateCheck({now, latest})` — notify mode stops here.
+4. Auto mode + `kindBrew` + `compareVersions(latest, current) > 0` →
    run `brew upgrade claude-statusline`:
    - locate `brew` on PATH (also try `/opt/homebrew/bin/brew`,
      `/usr/local/bin/brew`); missing → fall back to notify-only silently.
@@ -211,7 +213,7 @@ via defer.
      match on this branch only); stdout/stderr discarded; failure is silent
      — brew's own locks make a concurrent user-run brew safe, and the next
      interval retries.
-4. Auto mode, all of: `kindManual`, `compareVersions(latest, current) > 0`,
+5. Auto mode, all of: `kindManual`, `compareVersions(latest, current) > 0`,
    exe dir writable → self-swap:
    a. Download `claude-statusline_<Os>_<Arch>.<ext>` from
       `…/releases/download/v<latest>/` into `stateBaseDir()/staging/`.
@@ -256,8 +258,9 @@ free). Renderer:
 func renderUpdate(ctx renderCtx) (string, bool)
 ```
 
-Hide (`"", false`) unless: mode ≠ off, kind ≠ dev, cache loads, and
-`compareVersions(cache.Latest, version) > 0`. When shown, two forms:
+Hide (`"", false`) unless: mode ≠ off, `isReleaseVersion(current)`,
+cache loads, and `compareVersions(cache.Latest, version) > 0`. When shown,
+two forms:
 
 - **Expanded** (the daily disclosure) while
   `ctx.Now - checked_at < expandedWindow` (const, **5 minutes**):
@@ -318,7 +321,8 @@ intent) but **not** the safety rails (kind, major, checksum, smoke-test):
    failed-check record `{now, ""}` loads and suppresses respawn.
 4. **`maybeSpawnUpdateCheck`** — stub the spawn (package var, like
    `spawnRefresher`): off-mode never spawns; fresh cache never spawns; stale
-   cache spawns once and lock blocks the second; dev never spawns.
+   cache spawns once and lock blocks the second; dev / non-release version
+   (`+dirty`, Go pseudo-version) never spawns.
 5. **Asset naming** — table mapping GOOS/GOARCH → exact GoReleaser asset
    filename (locks the template contract; a rename in `.goreleaser.yaml`
    must fail this test).
@@ -328,8 +332,9 @@ intent) but **not** the safety rails (kind, major, checksum, smoke-test):
    succeeds, content is the new binary, `.old` removed; failure injection at
    step 3 → rollback leaves the original intact and `.new`/`.old` cleaned.
 8. **`renderUpdate`** — hides on: no cache, equal version, older latest,
-   mode=off, dev; expanded form within 5min of `checked_at`, compact after
-   (fixed `ctx.Now`); empty palette → no `\x1b` bytes in either form.
+   mode=off, non-release version; expanded form within 5min of `checked_at`,
+   compact after (fixed `ctx.Now`); empty palette → no `\x1b` bytes in either
+   form.
 9. **Brew branch** — stub the exec (package var): auto+brew runs the upgrade
    command with `HOMEBREW_NO_AUTO_UPDATE=1`; brew missing falls back
    silently; notify+brew never execs.
