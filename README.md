@@ -136,6 +136,7 @@ Segments that receive no data from the active tool hide themselves automatically
 | `output-style` | 2 | Claude Code | Output style, e.g. `✎ Explanatory` — hidden when default |
 | `email` | 2 | agy | Account email, user part only (`morgan@…`) — **off by default** |
 | `version` | 2 | both | Tool version |
+| `update` | 1 | both | `⬆ vX.Y.Z` when behind, hides when current. Self-hides on dev builds. |
 | `duration` | 2 | Claude Code | Elapsed session wall-clock time in `HH:MM:SS` |
 | `cost-rate` | 2 | Claude Code | Cost burn rate over recent history, e.g. `$1.84/h` |
 | `api-efficiency` | 2 | Claude Code | Percentage of time spent in API calls vs. total elapsed |
@@ -374,21 +375,6 @@ The binary exposes these to every plugin:
 | `STATUSLINE_LINES` | Terminal height (`LINES`) |
 | `STATUSLINE_PAYLOAD` | Full JSON payload (for advanced use) |
 
-### Example: current PR (async, cwd-aware)
-
-A full working example lives at [`examples/plugins/current-pr.sh`](examples/plugins/current-pr.sh). It detects the current GitHub PR for the repository at `STATUSLINE_DIR`, caches the result, and invalidates its own cache when the working directory changes. Configure it as async so slow `gh` calls never block a render:
-
-```toml
-[[plugins]]
-id = "current-pr"
-command = "~/.config/claude-statusline/plugins/current-pr.sh"
-async = true
-refresh_ms = 10000   # how often the binary asks for a refresh
-timeout_ms = 8000    # how long the background gh call may run
-```
-
-`STATUSLINE_PR_TTL` (seconds, default 60) controls how long the plugin keeps its own cached value across invocations. Because the binary's async cache is keyed by command, a cwd change is reflected at the next `refresh_ms` boundary; the plugin clears its own cache immediately so the refresh fetches the correct value.
-
 ### Example: memory + swap (cross-platform, multi-field)
 
 A full working example lives at [`examples/plugins/memory.sh`](examples/plugins/memory.sh). It reports `mem-used`, `swap-used`, and `%-mem-used`, and works on both macOS (`vm_stat`/`sysctl`) and Linux (`/proc/meminfo`).
@@ -525,6 +511,40 @@ duration_seconds = 25   # 0 disables the takeover entirely
 ```
 
 `announce = false` and `duration_seconds = 0` both fully disable it. Source builds (`version = "dev"`) never announce and never write the version state file. An unwritable state directory degrades silently — your render is unaffected, and nothing is printed to stderr.
+
+---
+
+## Updates
+
+The binary checks GitHub for new releases in the background. Default is `notify` — a small `⬆ vX.Y.Z` segment appears on line 1 when you're behind, and the next render (or `claude-statusline update`) installs it.
+
+```bash
+claude-statusline update          # check + install
+claude-statusline update --check  # check + report only, never install
+```
+
+**The render path never touches the network.** The check is a detached worker spawned *after* the print loop, identical in shape to the async plugin refresh. It writes its result to a tiny cache file (`update.json` under the state dir) and the next render reads it. One `os.ReadFile` on the happy path, one detached `exec.Command` spawn at most once per check interval.
+
+The notify segment has two forms:
+
+- **Compact** (`⬆ v1.2.0`) the rest of the day.
+- **Expanded** for ~5 minutes after each check: `⬆ v1.2.0 · run: claude-statusline update · disable: [update] in config.toml`. The disclosure window is derived from the cache's `checked_at`, so no extra state is needed.
+
+Modes:
+
+```toml
+[update]
+mode = "notify"   # default: show segment only
+# mode = "auto"   # also install in the background (manual installs only)
+# mode = "off"    # no checks, no segment, no network ever
+check_hours = 24  # 1..168, default 24
+```
+
+`auto` mode **crosses MAJOR versions** — it's a one-way door that downloads, sha256-verifies against the release's `checksums.txt`, smoke-tests the staged binary, and atomically swaps the on-disk exe. Homebrew installs run `brew upgrade claude-statusline` instead of touching the binary directly (Cellar bookkeeping fights self-swap). Failures are silent on the next interval retries; a checksum mismatch or a failed smoke-test leaves the old binary in place.
+
+`mode = "off"` is the right choice for air-gapped or centrally-managed deployments — it produces zero spawns and zero reads beyond the config.
+
+Source builds (`version = "dev"`) short-circuit the whole feature: no check, no segment, no subcommand action beyond a hint to run `go install …@latest`. The carve-out mirrors the release-notes feature and keeps tests/goldens inert.
 
 ---
 
