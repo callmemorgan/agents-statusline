@@ -50,7 +50,7 @@ cosign verify-blob \
 shasum -a 256 -c checksums.txt --ignore-missing
 ```
 
-`--insecure-ignore-tlog` is expected: the bundle is signed with a key offline, so there's no public transparency-log entry to check — the flag only skips that auditability step, not the signature itself. The self-update path performs this same key-based verification in-process — no `cosign` needed at runtime.
+`--insecure-ignore-tlog` skips the online transparency-log inclusion check so verification works offline against just the embedded key — it does not weaken the signature check itself. The self-update path performs this same key-based verification in-process — no `cosign` needed at runtime.
 
 > **macOS note:** Downloaded binaries are not notarized. If Gatekeeper blocks the binary on first run, run `xattr -d com.apple.quarantine /path/to/claude-statusline`, or use Homebrew/`go install` instead.
 

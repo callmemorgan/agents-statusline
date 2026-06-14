@@ -38,9 +38,12 @@ checksum:
 
 # Key-based cosign signature over checksums.txt only. The binary embeds the
 # matching public key (cosign.pub) and verifies this bundle in-process before
-# trusting any digest, so the self-update path needs no cosign at runtime.
-# --tlog-upload=false + --use-signing-config=false keep it an offline bundle (no
-# public Rekor dependency); the in-process verifier reads only messageSignature.
+# trusting any digest, so the self-update path needs no cosign at runtime — the
+# in-process verifier reads only bundle.messageSignature (it ignores the Rekor
+# tlog entry cosign also records). Default flags only: the offline-bundle flags
+# drift across cosign versions (--use-signing-config landed after the pinned
+# v3.0.6; --tlog-upload=false needs a custom signing-config there), so we accept
+# cosign's default hashedrekord upload for cross-version stability.
 # Requires COSIGN_PRIVATE_KEY and COSIGN_PASSWORD in the release env.
 signs:
   - cmd: cosign
@@ -49,8 +52,6 @@ signs:
       - sign-blob
       - "--key=env://COSIGN_PRIVATE_KEY"
       - "--bundle=${signature}"
-      - "--tlog-upload=false"
-      - "--use-signing-config=false"
       - "${artifact}"
       - "--yes"
     artifacts: checksum
