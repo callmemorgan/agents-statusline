@@ -36,6 +36,11 @@ func TestDetectInstallKind(t *testing.T) {
 		{"usr-local", "/usr/local/bin/claude-statusline", "1.0.0", kindManual},
 		{"windows-path", `C:\Program Files\claude-statusline\claude-statusline.exe`, "1.0.0", kindManual},
 		{"mixed-case-cellar", "/opt/homebrew/CELLAR/Claude-Statusline/1.0.0/bin/x", "1.0.0", kindBrew},
+		{"npm-global-scoped", "/Users/me/.nvm/versions/node/v20.0.0/lib/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", "1.0.0", kindNpm},
+		{"npm-local-bin", "/home/me/project/node_modules/.bin/claude-statusline", "1.0.0", kindNpm},
+		{"npm-npx-cache", "/Users/me/.npm/_npx/abc123/node_modules/@morgan.rebrand/claude-statusline/bin/claude-statusline", "1.0.0", kindNpm},
+		{"node-modules-backup-not-npm", "/home/me/node_modules-backup/claude-statusline/bin/claude-statusline", "1.0.0", kindManual},
+		{"npm-under-homebrew-prefix", "/opt/homebrew/lib/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", "1.0.0", kindNpm},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -711,6 +716,53 @@ func TestBrewBranch(t *testing.T) {
 	}
 }
 
+func TestNpmWorkerNoSwap(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", dir)
+
+	// Isolate config so a user-side [update].mode = "auto" can't turn this test
+	// into a real download/swap against the test binary.
+	configDirOverride = dir
+	t.Cleanup(func() { configDirOverride = "" })
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(`[update]
+mode = "auto"
+`), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	// Make the running binary appear to live inside node_modules so the worker
+	// classifies the install as kindNpm.
+	oldExe := osExecutable
+	osExecutable = func() (string, error) {
+		return "/tmp/npm-test/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", nil
+	}
+	t.Cleanup(func() { osExecutable = oldExe })
+
+	oldResolve := resolveLatestTagFn
+	oldSwap := downloadAndSwapFn
+	t.Cleanup(func() {
+		resolveLatestTagFn = oldResolve
+		downloadAndSwapFn = oldSwap
+	})
+
+	swapCalls := 0
+	downloadAndSwapFn = func(latest, current string) error {
+		swapCalls++
+		return nil
+	}
+	resolveLatestTagFn = func() (string, error) { return "9.9.9", nil }
+
+	withTestVersion(t, "1.0.0")
+	runUpdateCheck()
+	if swapCalls != 0 {
+		t.Errorf("npm kind + auto + newer should never self-swap, got %d swap calls", swapCalls)
+	}
+	// Cache is still written so the notify segment can work.
+	if _, ok := loadUpdateCheck(); !ok {
+		t.Error("npm worker should still write the update check cache")
+	}
+}
+
 func TestRunUpdateCheckNonRelease(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", dir)
@@ -825,6 +877,22 @@ func TestRenderUpdate(t *testing.T) {
 		t.Errorf("empty palette should produce no ANSI, got %q", got)
 	}
 
+	// Expanded hint reflects the install kind: npm path → npm update command.
+	_ = saveUpdateCheck(updateCheck{CheckedAt: now.Unix() - 60, Latest: "1.2.0"})
+	oldExe := osExecutable
+	osExecutable = func() (string, error) {
+		return "/tmp/npm-test/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", nil
+	}
+	t.Cleanup(func() { osExecutable = oldExe })
+	got, show = renderUpdate(renderCtx{Now: now, C: palette{Dim: "", Rst: ""}})
+	if !show {
+		t.Fatal("expected npm expanded form to show")
+	}
+	if !strings.Contains(got, "npm update -g @morgan.rebrand/claude-statusline") {
+		t.Errorf("npm hint should contain npm update command, got %q", got)
+	}
+	osExecutable = oldExe
+
 	// Same cache, Now 10 min after check → compact.
 	got, show = renderUpdate(renderCtx{Now: now.Add(10 * time.Minute), C: palette{Dim: "", Rst: ""}})
 	if !show {
@@ -910,6 +978,17 @@ func TestUpdateSubcommand(t *testing.T) {
 	}
 	if len(brewCalls) != 0 {
 		t.Error("--check should not call brew upgrade")
+	}
+
+	// npm install: hint only, never calls swap or brew, even in auto mode.
+	swapCalls = nil
+	brewCalls = nil
+	runUpdateFor(nil, false, "1.0.0", kindNpm)
+	if len(swapCalls) != 0 {
+		t.Error("npm install should not call downloadAndSwap")
+	}
+	if len(brewCalls) != 0 {
+		t.Error("npm install should not call brew upgrade")
 	}
 
 	// Manual install: real call to downloadAndSwap.

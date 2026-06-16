@@ -148,6 +148,17 @@ func renderVersion(ctx renderCtx) (string, bool) {
 // +dirty, or Go pseudo-version). Two forms: expanded for ~5 min after each
 // check, compact the rest of the day. Before any of that, it shows a brief
 // "✓ updated to vX" confirmation right after a self-update lands.
+func updateHintFor(kind installKind) string {
+	switch kind {
+	case kindNpm:
+		return "npm update -g @morgan.rebrand/claude-statusline"
+	case kindBrew:
+		return "brew upgrade claude-statusline"
+	default:
+		return "claude-statusline update"
+	}
+}
+
 func renderUpdate(ctx renderCtx) (string, bool) {
 	cur, _, _ := versionString()
 	// Confirmation comes first, before the mode==off guard: a manual
@@ -189,7 +200,8 @@ func renderUpdate(ctx renderCtx) (string, bool) {
 	expanded := elapsed >= 0 && elapsed < int64(expandedWindow.Seconds())
 	body := "⬆ v" + cache.Latest
 	if expanded {
-		hint := ctx.C.Dim + " · run: claude-statusline update · disable: [update] in config.toml" + ctx.C.Rst
+		kind := detectInstallKind(currentExePath(), cur)
+		hint := ctx.C.Dim + " · run: " + updateHintFor(kind) + " · disable: [update] in config.toml" + ctx.C.Rst
 		return ctx.C.Dim + body + ctx.C.Rst + hint, true
 	}
 	return ctx.C.Dim + body + ctx.C.Rst, true

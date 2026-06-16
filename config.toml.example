@@ -144,8 +144,10 @@ timeout_ms = 200
 # duration_seconds = 25   # 0 disables the takeover entirely
 
 # Update checking: "notify" shows an ⬆ segment when a new release exists,
-# "auto" additionally installs it in the background (non-Homebrew installs),
-# "off" disables checks entirely (no network, ever).
+# "auto" additionally installs it in the background (non-Homebrew, non-npm
+# installs), "off" disables checks entirely (no network, ever).
+# npm installs are excluded from "auto" to avoid fighting the package manager;
+# update those with `npm update -g @morgan.rebrand/claude-statusline`.
 # [update]
 # mode = "notify"
 # check_hours = 24

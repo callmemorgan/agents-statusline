@@ -43,3 +43,65 @@ jobs:
           # COSIGN_PASSWORD decrypts it. The matching cosign.pub is committed.
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+
+      - name: Upload dist for npm packaging
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  npm-publish:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"               # current Node LTS; OIDC needs >= 22.14.0
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Upgrade npm for trusted publishing
+        # setup-node's bundled npm (10.x) predates OIDC trusted publishing;
+        # the tokenless `npm publish` below needs npm >= 11.5.1.
+        run: npm install -g npm@latest
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Build npm packages
+        run: node scripts/build-npm.mjs ${{ github.ref_name }} dist/
+
+      - name: Publish platform packages
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${VERSION#v}"
+          for pkg in npm/@morgan.rebrand/claude-statusline-*/; do
+            name="@morgan.rebrand/$(basename "$pkg")"
+            if npm view "$name@$VERSION" >/dev/null 2>&1; then
+              echo "Skipping $name@$VERSION (already published)"
+            else
+              npm publish --provenance --access public "$pkg"
+            fi
+          done
+
+      - name: Publish main package
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${VERSION#v}"
+          if npm view "@morgan.rebrand/claude-statusline@$VERSION" >/dev/null 2>&1; then
+            echo "Skipping @morgan.rebrand/claude-statusline@$VERSION (already published)"
+          else
+            npm publish --provenance --access public npm/@morgan.rebrand/claude-statusline
+          fi

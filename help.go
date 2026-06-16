@@ -62,7 +62,8 @@ Configuration:
   [release_notes]  post-upgrade announcement: announce (default true),
                duration_seconds (default 25, 0 = off)
   [update]     background update check + segment: mode (notify|auto|off,
-               default notify), check_hours (1-168, default 24)
+               default notify), check_hours (1-168, default 24);
+               auto is a no-op for npm installs
   [[plugins]]  custom executable segments — see README.md
 
 Line 1 segments — Session & workspace:

@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.3.0 — 2026-06-15
+- **Install via npm.** `npm i -g @morgan.rebrand/claude-statusline` now works on macOS, Linux, and Windows. The main package is a tiny Node shim that execs the correct prebuilt binary from a per-platform `optionalDependencies` package; every GitHub release publishes them automatically with npm trusted publishing (OIDC, no token) and provenance. Homebrew and manual installs remain the lowest-latency options since the npm shim pays one Node spawn per render.
+- `auto` update mode now recognizes npm installs and leaves them alone — npm owns the binary, so self-swap would fight the package manager. The `update` segment and `claude-statusline update` print `npm update -g @morgan.rebrand/claude-statusline` for npm installs instead.
+
 ## v1.2.4 — 2026-06-14
 - **Line wrapping is now opt-in.** The default `reflow` is `"off"`: a line wider than the terminal is left as-is for the terminal to soft-wrap, instead of reflowing segments across physical lines. Set `reflow = "cascade"` (greedy spill) or `reflow = "group"` (each logical line wraps independently) to opt back in. Only affects narrow terminals; output that already fit is unchanged.
 

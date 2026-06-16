@@ -1,0 +1,27 @@
+{
+  "name": "@morgan.rebrand/claude-statusline",
+  "version": "0.0.0",
+  "description": "Statusline renderer for Claude Code and Antigravity CLI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/callmemorgan/claude-statusline.git"
+  },
+  "homepage": "https://github.com/callmemorgan/claude-statusline",
+  "bin": {
+    "claude-statusline": "bin/claude-statusline.js"
+  },
+  "files": [
+    "bin/"
+  ],
+  "engines": {
+    "node": ">=14"
+  },
+  "optionalDependencies": {
+    "@morgan.rebrand/claude-statusline-darwin-arm64": "0.0.0",
+    "@morgan.rebrand/claude-statusline-darwin-x64": "0.0.0",
+    "@morgan.rebrand/claude-statusline-linux-arm64": "0.0.0",
+    "@morgan.rebrand/claude-statusline-linux-x64": "0.0.0",
+    "@morgan.rebrand/claude-statusline-win32-x64": "0.0.0"
+  }
+}

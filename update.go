@@ -39,6 +39,7 @@ const (
 	kindDev
 	kindBrew
 	kindManual
+	kindNpm
 )
 
 // updateRepoOwner / updateRepoName are compile-time constants; a
@@ -191,7 +192,24 @@ func detectInstallKind(exePath, version string) installKind {
 	// isn't on PATH). filepath.ToSlash normalizes Windows separators; brew is
 	// Unix-only, so a backslash Windows path simply has no matching component.
 	low := strings.ToLower(filepath.ToSlash(exePath))
-	for _, seg := range strings.Split(low, "/") {
+	segs := strings.Split(low, "/")
+	// npm is matched across the whole path *before* brew because a global npm
+	// prefix can live under a Homebrew-managed node — e.g.
+	// /opt/homebrew/lib/node_modules/..., where the "homebrew" component
+	// precedes "node_modules". The package manager that owns this binary is
+	// npm and brew can't upgrade it, so npm must win. Whole-component match
+	// (mirroring the brew heuristic) so a directory named node_modules-backup
+	// can't false-positive. npm's .bin symlinks resolve into the per-platform
+	// package, so this covers global prefixes, local node_modules/.bin, and npx
+	// caches. Residual non-coverage (out of scope): pnpm content store, Volta
+	// shims, asdf shims — these look like ordinary paths and are treated as
+	// manual installs.
+	for _, seg := range segs {
+		if seg == "node_modules" {
+			return kindNpm
+		}
+	}
+	for _, seg := range segs {
 		if seg == "cellar" || seg == "homebrew" {
 			return kindBrew
 		}
@@ -206,7 +224,7 @@ func detectInstallKind(exePath, version string) installKind {
 // symlink path still contains "/homebrew/") as a manual install — sending the
 // auto worker down the self-swap path instead of `brew upgrade`.
 func currentExePath() string {
-	exe, err := os.Executable()
+	exe, err := osExecutable()
 	if err != nil {
 		return ""
 	}
@@ -386,6 +404,12 @@ func runUpdate(args []string) {
 // so tests can drive each branch without the real os.Executable() coming
 // back as a Go test binary. Production callers go through runUpdate.
 func runUpdateFor(args []string, checkOnly bool, current string, kind installKind) {
+	// npm owns its installed binary; self-swap would fight the package manager.
+	// Print a hint and never touch the file.
+	if kind == kindNpm {
+		fmt.Println("claude-statusline was installed via npm; update with `" + updateHintFor(kindNpm) + "`.")
+		return
+	}
 	// kindDev only catches version == "dev"; a +dirty or Go pseudo-version
 	// build reports kindManual but is still a source build. Gate on the same
 	// isReleaseVersion check the worker and segment use, so `update` prints the
@@ -432,7 +456,7 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind installKin
 		brewPath := findBrewExe()
 		if brewPath == "" {
 			releaseLock()
-			fmt.Fprintln(os.Stderr, "claude-statusline update: brew not found; please run `brew upgrade claude-statusline` manually.")
+			fmt.Fprintln(os.Stderr, "claude-statusline update: brew not found; please run `"+updateHintFor(kindBrew)+"` manually.")
 			osExit(1)
 			return
 		}
@@ -1288,6 +1312,10 @@ func runUpdateCheck() {
 		return
 	}
 	switch kind {
+	case kindNpm:
+		// npm-owned binary: never self-swap. The notify segment still works
+		// because saveUpdateCheck ran above the switch.
+		return
 	case kindBrew:
 		brewPath := findBrewExe()
 		if brewPath == "" {
