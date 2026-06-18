@@ -10,3 +10,9 @@ npm/@morgan.rebrand/
 # cosign signing key — must never be committed (only cosign.pub is tracked).
 cosign.key
 *.pem
+
+# dev-only: local node_modules for lint tooling (biome) and the staged
+# platform package that lets the pi extension shim require.resolve the Go
+# binary during `pi install` of the source tree. Never published (npm
+# excludes node_modules; files whitelist is bin/ + extensions/).
+node_modules/
