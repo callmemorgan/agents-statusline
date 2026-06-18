@@ -78,13 +78,17 @@ Releases are cut by pushing a `vX.Y.Z` git tag — `.github/workflows/release.ym
 
 Before tagging, **update `CHANGELOG.md` (new `## vX.Y.Z` section at the top)** — the release-notes feature embeds it at build time, so anything you forget won't be reachable from `claude-statusline release-notes`. Keep the existing section format (`## vX.Y.Z — YYYY-MM-DD` header, `- ` bullets, newest first).
 
+Pushing a tag also triggers `.github/workflows/ci.yml`, which runs `go test ./...` and `golangci-lint`. Push the branch and tag separately to avoid double-triggering the workflows.
+
 ### npm distribution
 
 Every GitHub release is also published to npm as `@morgan.rebrand/claude-statusline` with per-platform optional dependencies (`@morgan.rebrand/claude-statusline-<os>-<cpu>`). The main package contains only the small Node shim in `npm/claude-statusline/bin/claude-statusline.js`; `scripts/build-npm.mjs` repacks the GoReleaser archives under `dist/` into the platform packages and the main package. The `npm-publish` job in `.github/workflows/release.yml` runs it automatically using npm OIDC trusted publishing (no long-lived token).
 
 To set it up:
 1. Create an npm account and the `@morgan.rebrand` organization.
-2. Bootstrap each package on npm once. npm (unlike PyPI) **requires a package to already exist before a trusted publisher can be configured for it**, so the first publish must be a manual, authenticated one — there is no "let the workflow create them" path. Log in (`npm login`), then `npm publish --access public` a placeholder `0.0.0` of the main package (its committed source under `npm/claude-statusline/` is publishable as-is) and of each `@morgan.rebrand/claude-statusline-<os>-<cpu>` package (a minimal `package.json` with `name`/`version: 0.0.0`/`os`/`cpu`/`repository` is enough). Publish the 5 platform packages first, the main package last. After the first tagged release, the `0.0.0` placeholders can be `npm unpublish`ed per-version (main first — it depends on the platform `0.0.0`s).
+2. Bootstrap each package on npm once. npm (unlike PyPI) **requires a package to already exist before a trusted publisher can be configured for it**, so the first publish must be a manual, authenticated one — there is no "let the workflow create them" path. Log in (`npm login`), then `npm publish --access public` a placeholder `0.0.0` of the main package (its committed source under `npm/claude-statusline/` is publishable as-is) and of each `@morgan.rebrand/claude-statusline-<os>-<cpu>` package (a minimal `package.json` with `name`/`version: 0.0.0`/`os`/`cpu`/`repository` is enough). Publish the 7 platform packages first, the main package last. After the first tagged release, the `0.0.0` placeholders can be `npm unpublish`ed per-version (main first — it depends on the platform `0.0.0`s).
+
+   Platform packages: `darwin-arm64`, `darwin-x64`, `linux-arm`, `linux-arm64`, `linux-x64`, `win32-arm64`, `win32-x64`.
 3. In each package's **Trusted Publisher** settings on npmjs.com, add a **GitHub Actions** publisher (this is why step 2 is mandatory — the form only appears once the package exists):
    - Organization or user: `callmemorgan`
    - Repository: `claude-statusline`
@@ -103,6 +107,14 @@ The publishes are idempotent: `npm view` checks skip any package/version already
 3. Add the segment ID to `defaultConfig()` if it should be on by default (fine when it self-hides without data).
 4. Update the segment table in `README.md` and the lists in `help.go`; extend `config.toml.example` if the config schema changed.
 5. Add a fixture/assertion: extend a `testdata/payloads/*.json` fixture (regenerate goldens with `-update`) or add a direct renderer test.
+
+## Adding a new built-in theme
+
+1. Add a theme to `builtinThemes` in `themes.go` with a unique id, description, and a colour for each of the 15 semantic roles (`model`, `dir`, `git`, `changes`, `duration`, `cost`, `dim`, `ok`, `warn`, `crit`, `agent`, `vim`, `accent`, `session`, `sep`). Use `themeColor{Hex: "#rrggbb"}` for truecolour/256/16 fallback, or `ansiRole("\x1b[…m")` for an explicit 16-colour-only theme like `classic`.
+2. If the theme should emit no colour at all (e.g. `monochrome`), set every role to `ansiRole("")`; `resolvePalette` treats an all-empty theme as disabled so no colour escapes are emitted.
+3. Update the theme list in `help.go`, `config.toml.example`, and `README.md`.
+4. Add the theme and a canonical background to `THEMES`/`BG` in `scripts/screenshots.py`, then regenerate screenshots with `python3 scripts/screenshots.py`.
+5. Run `go test ./...` and smoke-test the theme with a sample payload.
 
 ## Homebrew vs local binary
 
