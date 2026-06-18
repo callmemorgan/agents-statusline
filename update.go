@@ -626,6 +626,8 @@ func assetName(goos, goarch string) string {
 		arch = "x86_64"
 	case "386":
 		arch = "i386"
+	case "arm":
+		arch = "armv7"
 	}
 	ext := "tar.gz"
 	if goos == "windows" {

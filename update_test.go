@@ -318,6 +318,7 @@ func TestAssetName(t *testing.T) {
 		{"darwin", "arm64", "claude-statusline_Darwin_arm64.tar.gz"},
 		{"linux", "amd64", "claude-statusline_Linux_x86_64.tar.gz"},
 		{"linux", "arm64", "claude-statusline_Linux_arm64.tar.gz"},
+		{"linux", "arm", "claude-statusline_Linux_armv7.tar.gz"},
 		{"windows", "amd64", "claude-statusline_Windows_x86_64.zip"},
 		{"windows", "arm64", "claude-statusline_Windows_arm64.zip"},
 		{"linux", "386", "claude-statusline_Linux_i386.tar.gz"},
