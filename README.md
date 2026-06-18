@@ -524,17 +524,18 @@ Prints a field presence table comparing the received payload against the Claude 
 ## Release notes
 
 ```bash
-claude-statusline release-notes             # current version
-claude-statusline release-notes v1.0.2      # any past version
-claude-statusline release-notes --all       # every version, newest first
-claude-statusline --release-notes           # flag form also works
+claude-statusline release-notes                 # current version
+claude-statusline release-notes v1.0.2          # any past version
+claude-statusline release-notes v1.0.0..v1.2.0  # cross-version summary
+claude-statusline release-notes --all           # every version, newest first
+claude-statusline --release-notes               # flag form also works
 ```
 
-Prints notes sourced from the embedded `CHANGELOG.md` (no network). Each version's section is the same data that ships with the binary, so the on-disk content can't get out of sync with what you installed.
+Prints notes sourced from the embedded `CHANGELOG.md` (no network). Each version's section is the same data that ships with the binary, so the on-disk content can't get out of sync with what you installed. Bullets are sorted by importance: CHANGELOG.md entries can use a leading `[N]` marker (ordinary items 0–5, critical/pinned items can use e.g. 99999), and bullets without a marker default to importance 0.
 
 ### What's new announcement
 
-The first time the binary renders under a new version, the statusline briefly replaces itself with a short release-notes announcement, then goes back to normal on the next refresh. The window is 25 seconds by default and is configurable:
+The first time the binary renders under a new version, the statusline briefly replaces itself with a short release-notes announcement, then goes back to normal on the next refresh. If you jump across several versions (e.g. v1.0.0 → v1.5.0), the announcement surfaces the highest-importance bullets from the whole upgrade span, sorted so you see the biggest changes first. The window is 25 seconds by default and is configurable:
 
 ```toml
 [release_notes]

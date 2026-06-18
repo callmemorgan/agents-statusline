@@ -15,6 +15,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -22,16 +24,60 @@ import (
 //go:embed CHANGELOG.md
 var changelogRaw string
 
+// releaseBullet is one user-facing changelog bullet with an optional
+// importance weight. Higher values are more important; ordinary bullets live
+// in the 0–5 range and pinned/critical bullets can use much larger values
+// (e.g. 99999) to force top placement.
+type releaseBullet struct {
+	Text       string
+	Importance int32
+}
+
 // releaseNote is one version's section of CHANGELOG.md.
 type releaseNote struct {
-	Version string   // "1.0.2" (no leading v)
-	Date    string   // "2026-06-05", may be empty
-	Bullets []string // user-facing bullets, in order
+	Version string          // "1.0.2" (no leading v)
+	Date    string          // "2026-06-05", may be empty
+	Bullets []releaseBullet // user-facing bullets, sorted by importance
+}
+
+// reBulletImportance matches a leading importance marker like "[5]" or
+// "[99999]". The number is parsed as an unsigned 32-bit integer.
+var reBulletImportance = regexp.MustCompile(`^\[(\d+)\]\s*(.*)$`)
+
+// parseBullet extracts an optional `[N]` importance marker from the start of a
+// changelog bullet text. It returns the bullet and true if the input is
+// non-empty. Missing or invalid markers default to importance 0.
+func parseBullet(raw string) (releaseBullet, bool) {
+	text := strings.TrimSpace(raw)
+	if text == "" {
+		return releaseBullet{}, false
+	}
+	if m := reBulletImportance.FindStringSubmatch(text); m != nil {
+		if v, err := strconv.ParseUint(m[1], 10, 32); err == nil {
+			return releaseBullet{Text: m[2], Importance: int32(v)}, true
+		}
+	}
+	return releaseBullet{Text: text, Importance: 0}, true
+}
+
+// sortBulletsByImportance sorts bullets by descending importance, keeping the
+// original order for equal values.
+func sortBulletsByImportance(b []releaseBullet) {
+	slices.SortStableFunc(b, func(a, b releaseBullet) int {
+		if a.Importance > b.Importance {
+			return -1
+		}
+		if a.Importance < b.Importance {
+			return 1
+		}
+		return 0
+	})
 }
 
 // parseChangelog splits the embedded changelog into sections, newest first.
 // The format is intentionally strict: `## vX.Y.Z — YYYY-MM-DD` headers and
-// `- ` bullets, nothing else is significant. Malformed input never panics.
+// `- ` bullets, nothing else is significant. Bullets may carry a leading
+// `[N]` importance marker. Malformed input never panics.
 func parseChangelog(raw string) []releaseNote {
 	var out []releaseNote
 	var cur *releaseNote
@@ -39,6 +85,7 @@ func parseChangelog(raw string) []releaseNote {
 		trimmed := strings.TrimRight(line, " \t\r")
 		if strings.HasPrefix(trimmed, "## ") {
 			if cur != nil {
+				sortBulletsByImportance(cur.Bullets)
 				out = append(out, *cur)
 			}
 			header := strings.TrimPrefix(trimmed, "## ")
@@ -57,11 +104,14 @@ func parseChangelog(raw string) []releaseNote {
 		if cur == nil {
 			continue
 		}
-		if bullet, ok := strings.CutPrefix(trimmed, "- "); ok {
-			cur.Bullets = append(cur.Bullets, bullet)
+		if bulletText, ok := strings.CutPrefix(trimmed, "- "); ok {
+			if bullet, ok := parseBullet(bulletText); ok {
+				cur.Bullets = append(cur.Bullets, bullet)
+			}
 		}
 	}
 	if cur != nil {
+		sortBulletsByImportance(cur.Bullets)
 		out = append(out, *cur)
 	}
 	return out
@@ -189,6 +239,33 @@ func findNote(notes []releaseNote, v string) (releaseNote, bool) {
 	return releaseNote{}, false
 }
 
+// releaseNotesBetween collects the most important bullets from all versions
+// strictly after `from` up to and including `to`, sorted by descending
+// importance. If `from` or `to` are malformed, or `to` is not newer than
+// `from`, it falls back to `to`'s own bullets. The result is capped at
+// `limit` (≤ 0 means unlimited).
+func releaseNotesBetween(notes []releaseNote, from, to string, limit int) []releaseBullet {
+	target, ok := findNote(notes, to)
+	if !ok {
+		return nil
+	}
+	// Malformed versions or non-upgrades fall back to the target version only.
+	if compareVersions(to, from) <= 0 {
+		return target.Bullets
+	}
+	var collected []releaseBullet
+	for _, n := range notes {
+		if compareVersions(n.Version, from) > 0 && compareVersions(n.Version, to) <= 0 {
+			collected = append(collected, n.Bullets...)
+		}
+	}
+	sortBulletsByImportance(collected)
+	if limit > 0 && len(collected) > limit {
+		collected = collected[:limit]
+	}
+	return collected
+}
+
 // runReleaseNotes implements the `release-notes` subcommand.
 func runReleaseNotes(args []string) {
 	notes := parseChangelog(changelogRaw)
@@ -221,16 +298,35 @@ func runReleaseNotes(args []string) {
 		} else {
 			printReleaseNote(target, colors)
 		}
+	case "range":
+		printReleaseNote(target, colors)
 	}
 }
 
+// parseVersionRange parses arguments like "v1.0.0..v1.5.0" or "1.0.0..1.5.0".
+// It returns the two version strings with any leading "v" stripped.
+func parseVersionRange(arg string) (from, to string, ok bool) {
+	arg = strings.TrimPrefix(arg, "v")
+	parts := strings.Split(arg, "..")
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	from = strings.TrimPrefix(parts[0], "v")
+	to = strings.TrimPrefix(parts[1], "v")
+	if from == "" || to == "" {
+		return "", "", false
+	}
+	return from, to, true
+}
+
 // selectReleaseNote parses the subcommand args and returns what to print.
-// The returned mode is "one", "all", or "" (unknown / error). For "one" the
-// caller prints `target`; if `fallback` is non-nil the caller should print
-// `fallback` instead and surface `missing` to the user first. For mode ""
-// the caller exits 1 after printing `missing`. This function is pure with
-// respect to stdout/stderr — it returns everything the caller needs to
-// format and present, so the dispatch logic is testable without capture.
+// The returned mode is "one", "all", "range", or "" (unknown / error). For
+// "one" and "range" the caller prints `target`; if `fallback` is non-nil the
+// caller should print `fallback` instead and surface `missing` to the user
+// first. For mode "" the caller exits 1 after printing `missing`. This
+// function is pure with respect to stdout/stderr — it returns everything the
+// caller needs to format and present, so the dispatch logic is testable
+// without capture.
 func selectReleaseNote(notes []releaseNote, current string, args []string) (mode string, target releaseNote, fallback *releaseNote, missing []string) {
 	const emptyChangelog = "no release notes available (CHANGELOG.md is empty or malformed)"
 	switch {
@@ -251,6 +347,21 @@ func selectReleaseNote(notes []releaseNote, current string, args []string) (mode
 		return "all", releaseNote{}, nil, nil
 	default:
 		arg := strings.TrimPrefix(args[0], "v")
+		// Try a version range first.
+		if from, to, ok := parseVersionRange(arg); ok {
+			if len(notes) == 0 {
+				return "", releaseNote{}, nil, []string{emptyChangelog}
+			}
+			bullets := releaseNotesBetween(notes, from, to, 0)
+			if bullets == nil {
+				known := make([]string, len(notes))
+				for i, x := range notes {
+					known[i] = "v" + x.Version
+				}
+				return "", releaseNote{}, nil, []string{fmt.Sprintf("no release notes ending at \"v%s\" (known: %s)", to, strings.Join(known, ", "))}
+			}
+			return "range", releaseNote{Version: from + ".." + to, Bullets: bullets}, nil, nil
+		}
 		n, ok := findNote(notes, arg)
 		if !ok {
 			known := make([]string, len(notes))
@@ -261,6 +372,16 @@ func selectReleaseNote(notes []releaseNote, current string, args []string) (mode
 		}
 		return "one", n, nil, nil
 	}
+}
+
+// bulletDisplayText returns the text to show for a bullet. Bullets with an
+// importance well above the ordinary 0–5 range are prefixed so users notice
+// them even in a long list.
+func bulletDisplayText(b releaseBullet) string {
+	if b.Importance >= 100 {
+		return "[PINNED] " + b.Text
+	}
+	return b.Text
 }
 
 func printReleaseNote(n releaseNote, c palette) {
@@ -274,10 +395,11 @@ func printReleaseNote(n releaseNote, c palette) {
 		fmt.Println(header)
 	}
 	for _, b := range n.Bullets {
+		text := bulletDisplayText(b)
 		if c.Dim != "" {
-			fmt.Printf("%s  • %s%s\n", c.Dim, b, c.Rst)
+			fmt.Printf("%s  • %s%s\n", c.Dim, text, c.Rst)
 		} else {
-			fmt.Printf("  • %s\n", b)
+			fmt.Printf("  • %s\n", text)
 		}
 	}
 }
@@ -319,12 +441,21 @@ func maybeReleaseTakeover(cfg releaseNotesConfig, lines []string, c palette, wid
 	if len(notes) == 0 {
 		target = releaseNote{Version: current}
 	} else {
-		ok := false
-		target, ok = findNote(notes, current)
-		if !ok {
-			// Fall back to the newest section's bullets but keep the real version.
-			target = notes[0]
-			target.Version = current
+		// If we know the previous version, surface the highest-importance
+		// bullets across the whole upgrade span, not just the latest release.
+		if prevOK && isReleaseVersion(prev.Version) {
+			target = releaseNote{
+				Version: current,
+				Bullets: releaseNotesBetween(notes, prev.Version, current, n),
+			}
+		} else {
+			var ok bool
+			target, ok = findNote(notes, current)
+			if !ok {
+				// Fall back to the newest section's bullets but keep the real version.
+				target = notes[0]
+				target.Version = current
+			}
 		}
 	}
 	budgets := takeoverLineBudgets(width, n, padding)
@@ -357,6 +488,10 @@ func takeoverLineBudgets(width int, n int, padding int) []int {
 // I/O, easy to unit-test.
 func announceLines(note releaseNote, n int, budgets []int, c palette, padding int) []string {
 	n = max(n, 1)
+	// Present bullets in importance order regardless of how the caller built
+	// the note. The sort is stable, so equal-importance bullets keep their
+	// original order.
+	sortBulletsByImportance(note.Bullets)
 	accent := c.Purple
 	dim := c.Dim
 	rst := c.Rst
@@ -370,7 +505,7 @@ func announceLines(note releaseNote, n int, budgets []int, c palette, padding in
 	if n == 1 {
 		hdr := "✨ claude-statusline v" + note.Version
 		if len(note.Bullets) > 0 {
-			hdr += " — " + note.Bullets[0]
+			hdr += " — " + bulletDisplayText(note.Bullets[0])
 		}
 		hdr += " · claude-statusline release-notes"
 		out = []string{hdr}
@@ -381,7 +516,7 @@ func announceLines(note releaseNote, n int, budgets []int, c palette, padding in
 		out = make([]string, 0, n)
 		out = append(out, hdr)
 		for i := range bullets {
-			out = append(out, " • "+note.Bullets[i])
+			out = append(out, " • "+bulletDisplayText(note.Bullets[i]))
 		}
 		for len(out) < n-1 {
 			out = append(out, "")

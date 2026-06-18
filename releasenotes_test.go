@@ -6,12 +6,21 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
+
+// b makes a releaseBullet with default importance 0.
+func b(text string) releaseBullet { return releaseBullet{Text: text} }
+
+// ib makes a releaseBullet with the given importance.
+func ib(text string, importance int32) releaseBullet {
+	return releaseBullet{Text: text, Importance: importance}
+}
 
 // ─── parseChangelog ───────────────────────────────────────────────────
 
@@ -38,8 +47,8 @@ func TestParseChangelog(t *testing.T) {
 - only
 `,
 			want: []releaseNote{
-				{Version: "1.1.0", Date: "2026-06-12", Bullets: []string{"first", "second"}},
-				{Version: "1.0.0", Date: "2026-06-10", Bullets: []string{"only"}},
+				{Version: "1.1.0", Date: "2026-06-12", Bullets: []releaseBullet{b("first"), b("second")}},
+				{Version: "1.0.0", Date: "2026-06-10", Bullets: []releaseBullet{b("only")}},
 			},
 		},
 		{
@@ -47,7 +56,7 @@ func TestParseChangelog(t *testing.T) {
 			input: `## v1.0.0
 - x
 `,
-			want: []releaseNote{{Version: "1.0.0", Date: "", Bullets: []string{"x"}}},
+			want: []releaseNote{{Version: "1.0.0", Date: "", Bullets: []releaseBullet{b("x")}}},
 		},
 		{
 			name: "stray prose between sections is ignored",
@@ -66,8 +75,8 @@ in-between commentary
 - c
 `,
 			want: []releaseNote{
-				{Version: "0.1.0", Date: "2025-01-01", Bullets: []string{"a", "b"}},
-				{Version: "0.0.1", Date: "", Bullets: []string{"c"}},
+				{Version: "0.1.0", Date: "2025-01-01", Bullets: []releaseBullet{b("a"), b("b")}},
+				{Version: "0.0.1", Date: "", Bullets: []releaseBullet{b("c")}},
 			},
 		},
 		{
@@ -78,7 +87,7 @@ in-between commentary
 `,
 			want: []releaseNote{{
 				Version: "1.0.0", Date: "2025-01-01",
-				Bullets: []string{"feat: foo - bar", "plain bullet"},
+				Bullets: []releaseBullet{b("feat: foo - bar"), b("plain bullet")},
 			}},
 		},
 	}
@@ -95,9 +104,134 @@ in-between commentary
 				if got[i].Date != tc.want[i].Date {
 					t.Errorf("[%d] date = %q, want %q", i, got[i].Date, tc.want[i].Date)
 				}
-				if strings.Join(got[i].Bullets, "\n") != strings.Join(tc.want[i].Bullets, "\n") {
+				if !slices.Equal(got[i].Bullets, tc.want[i].Bullets) {
 					t.Errorf("[%d] bullets = %v, want %v", i, got[i].Bullets, tc.want[i].Bullets)
 				}
+			}
+		})
+	}
+}
+
+// ─── parseBullet ──────────────────────────────────────────────────────
+
+func TestParseBullet(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want releaseBullet
+		ok   bool
+	}{
+		{"plain", "plain bullet", b("plain bullet"), true},
+		{"importance 5", "[5] important fix", ib("important fix", 5), true},
+		{"pinned 99999", "[99999] app renamed", ib("app renamed", 99999), true},
+		{"whitespace after marker", "[3]   spaced", ib("spaced", 3), true},
+		{"missing marker", "ordinary", b("ordinary"), true},
+		{"invalid marker", "[abc] not numeric", b("[abc] not numeric"), true},
+		{"empty", "", releaseBullet{}, false},
+		{"whitespace only", "   ", releaseBullet{}, false},
+		{"zero marker", "[0] explicit zero", ib("explicit zero", 0), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := parseBullet(tc.raw)
+			if ok != tc.ok {
+				t.Fatalf("ok = %v, want %v", ok, tc.ok)
+			}
+			if got != tc.want {
+				t.Errorf("got %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// ─── sortBulletsByImportance ──────────────────────────────────────────
+
+func TestSortBulletsByImportance(t *testing.T) {
+	in := []releaseBullet{
+		b("low"),
+		ib("high", 5),
+		ib("medium", 3),
+		ib("highest", 10),
+		ib("also high", 5),
+	}
+	sortBulletsByImportance(in)
+	want := []releaseBullet{
+		ib("highest", 10),
+		ib("high", 5),
+		ib("also high", 5),
+		ib("medium", 3),
+		b("low"),
+	}
+	if !slices.Equal(in, want) {
+		t.Errorf("got %v, want %v", in, want)
+	}
+}
+
+// ─── releaseNotesBetween ──────────────────────────────────────────────
+
+func TestReleaseNotesBetween(t *testing.T) {
+	notes := []releaseNote{
+		{Version: "1.2.0", Bullets: []releaseBullet{ib("1.2 pinned", 99999), b("1.2 ordinary")}},
+		{Version: "1.1.0", Bullets: []releaseBullet{ib("1.1 high", 5), b("1.1 low")}},
+		{Version: "1.0.0", Bullets: []releaseBullet{b("1.0 only")}},
+	}
+	t.Run("single version returns its bullets sorted", func(t *testing.T) {
+		got := releaseNotesBetween(notes, "1.0.9", "1.1.0", 10)
+		want := []releaseBullet{ib("1.1 high", 5), b("1.1 low")}
+		if !slices.Equal(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+	t.Run("multi-version span collects and sorts", func(t *testing.T) {
+		got := releaseNotesBetween(notes, "1.0.0", "1.2.0", 10)
+		want := []releaseBullet{
+			ib("1.2 pinned", 99999),
+			ib("1.1 high", 5),
+			b("1.2 ordinary"),
+			b("1.1 low"),
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+	t.Run("limit caps result", func(t *testing.T) {
+		got := releaseNotesBetween(notes, "1.0.0", "1.2.0", 2)
+		if len(got) != 2 || got[0].Importance != 99999 || got[1].Importance != 5 {
+			t.Errorf("got %v, want top two", got)
+		}
+	})
+	t.Run("non-upgrade falls back to target", func(t *testing.T) {
+		got := releaseNotesBetween(notes, "1.2.0", "1.1.0", 10)
+		want := notes[1].Bullets // target version's own bullets
+		if !slices.Equal(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+	t.Run("unknown target returns nil", func(t *testing.T) {
+		if got := releaseNotesBetween(notes, "1.0.0", "9.9.9", 10); got != nil {
+			t.Errorf("got %v, want nil", got)
+		}
+	})
+}
+
+// ─── bulletDisplayText ────────────────────────────────────────────────
+
+func TestBulletDisplayText(t *testing.T) {
+	cases := []struct {
+		name string
+		b    releaseBullet
+		want string
+	}{
+		{"ordinary", b("ordinary"), "ordinary"},
+		{"importance 5", ib("five", 5), "five"},
+		{"high threshold", ib("high", 99), "high"},
+		{"pinned", ib("pinned", 100), "[PINNED] pinned"},
+		{"pinned 99999", ib("renamed", 99999), "[PINNED] renamed"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := bulletDisplayText(tc.b); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -111,7 +245,7 @@ func TestAnnounceLines(t *testing.T) {
 	note := releaseNote{
 		Version: "1.1.0",
 		Date:    "2026-06-12",
-		Bullets: []string{"first bullet", "second bullet", "third bullet"},
+		Bullets: []releaseBullet{b("first bullet"), b("second bullet"), b("third bullet")},
 	}
 	// noBudgets disables truncation; padding=1 matches the renderer's default.
 	noBudgets := func(n int) []int { return nil }
@@ -187,7 +321,7 @@ func TestAnnounceLines(t *testing.T) {
 	t.Run("long bullet truncated at budget", func(t *testing.T) {
 		wide := releaseNote{
 			Version: "1.1.0",
-			Bullets: []string{strings.Repeat("a", 200)},
+			Bullets: []releaseBullet{b(strings.Repeat("a", 200))},
 		}
 		// budgets[0] reserves timing suffix, budgets[1+] is safety-margin only.
 		budgets := takeoverLineBudgets(40, 3, 1)
@@ -247,6 +381,20 @@ func TestAnnounceLines(t *testing.T) {
 					t.Errorf("line %d has double leading space, got %q", i, l)
 				}
 			}
+		}
+	})
+	t.Run("pinned bullets sort to the front and show prefix", func(t *testing.T) {
+		pinnedFirst := releaseNote{
+			Version: "1.2.0",
+			Bullets: []releaseBullet{
+				b("ordinary"),
+				ib("pinned", 100),
+				ib("high", 5),
+			},
+		}
+		got := announceLines(pinnedFirst, 3, noBudgets(3), emptyPalette, 1)
+		if !strings.Contains(got[1], "[PINNED] pinned") {
+			t.Errorf("line 1 should show pinned bullet first: %q", got[1])
 		}
 	})
 }
@@ -414,8 +562,8 @@ func TestReleaseNotesConfigRoundTrip(t *testing.T) {
 
 func TestFindNote(t *testing.T) {
 	notes := []releaseNote{
-		{Version: "1.1.0", Bullets: []string{"a"}},
-		{Version: "1.0.2", Bullets: []string{"b"}},
+		{Version: "1.1.0", Bullets: []releaseBullet{b("a")}},
+		{Version: "1.0.2", Bullets: []releaseBullet{b("b")}},
 	}
 	if n, ok := findNote(notes, "1.0.2"); !ok || n.Version != "1.0.2" {
 		t.Errorf("expected to find 1.0.2, got %+v / %v", n, ok)
@@ -429,9 +577,9 @@ func TestFindNote(t *testing.T) {
 
 func TestSelectReleaseNote(t *testing.T) {
 	notes := []releaseNote{
-		{Version: "1.1.0", Bullets: []string{"a"}},
-		{Version: "1.0.2", Bullets: []string{"b"}},
-		{Version: "0.9.0", Bullets: []string{"c"}},
+		{Version: "1.1.0", Bullets: []releaseBullet{b("a")}},
+		{Version: "1.0.2", Bullets: []releaseBullet{b("b")}},
+		{Version: "0.9.0", Bullets: []releaseBullet{b("c")}},
 	}
 	t.Run("no args picks current", func(t *testing.T) {
 		mode, target, fallback, missing := selectReleaseNote(notes, "1.0.2", nil)
@@ -506,6 +654,33 @@ func TestSelectReleaseNote(t *testing.T) {
 		}
 		if len(missing) == 0 {
 			t.Error("expected missing message for --all on empty notes")
+		}
+	})
+	t.Run("range arg returns cross-version summary", func(t *testing.T) {
+		mode, target, fallback, missing := selectReleaseNote(notes, "9.9.9", []string{"v0.9.0..v1.1.0"})
+		if mode != "range" || fallback != nil || len(missing) > 0 {
+			t.Errorf("got mode=%q target=%+v fallback=%v missing=%v", mode, target, fallback, missing)
+		}
+		if target.Version != "0.9.0..1.1.0" {
+			t.Errorf("target.Version = %q, want 0.9.0..1.1.0", target.Version)
+		}
+		if len(target.Bullets) == 0 {
+			t.Error("expected bullets in range summary")
+		}
+	})
+	t.Run("range arg without v prefix works", func(t *testing.T) {
+		mode, target, _, _ := selectReleaseNote(notes, "9.9.9", []string{"1.0.2..1.1.0"})
+		if mode != "range" || target.Version != "1.0.2..1.1.0" {
+			t.Errorf("got mode=%q target=%+v", mode, target)
+		}
+	})
+	t.Run("range arg with unknown end signals error", func(t *testing.T) {
+		mode, _, _, missing := selectReleaseNote(notes, "9.9.9", []string{"v1.0.0..v9.9.9"})
+		if mode != "" {
+			t.Errorf("expected empty mode, got %q", mode)
+		}
+		if len(missing) == 0 || !strings.Contains(missing[0], "v9.9.9") {
+			t.Errorf("expected unknown-end message, got %v", missing)
 		}
 	})
 }

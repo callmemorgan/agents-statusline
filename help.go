@@ -26,7 +26,8 @@ Commands:
                segment shows the calling tool's version, not this binary's.)
   debug        Read JSON from stdin and print a schema-comparison table plus
                any config warnings.
-  release-notes  Show what changed in this version (also: vX.Y.Z, --all).
+  release-notes  Show what changed in this version (also: vX.Y.Z,
+                 vX.Y.Z..vA.B.C, --all).
   update       Check for a new release and install it. Foreground,
                honors the same safety rails as the background worker.
                Flags: --check (resolve + report only, never install).
