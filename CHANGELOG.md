@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.3.2 — 2026-06-18
+- **Three new themes.** `paper` and `solarized-light` are tuned for light terminal backgrounds with high-contrast, legible colours. `monochrome` is adaptive black-and-white: it emits no colour escapes at all and uses the terminal's configured foreground colour, so it works on both light and dark backgrounds.
+- Regenerated theme screenshots for the full palette gallery.
+- `.gitignore` local `node_modules/` used by dev tooling.
+
 ## v1.3.0 — 2026-06-15
 - **Install via npm.** `npm i -g @morgan.rebrand/claude-statusline` now works on macOS, Linux, and Windows. The main package is a tiny Node shim that execs the correct prebuilt binary from a per-platform `optionalDependencies` package; every GitHub release publishes them automatically with npm trusted publishing (OIDC, no token) and provenance. Homebrew and manual installs remain the lowest-latency options since the npm shim pays one Node spawn per render.
 - `auto` update mode now recognizes npm installs and leaves them alone — npm owns the binary, so self-swap would fight the package manager. The `update` segment and `claude-statusline update` print `npm update -g @morgan.rebrand/claude-statusline` for npm installs instead.
