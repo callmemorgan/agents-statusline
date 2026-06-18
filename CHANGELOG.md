@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.1 — 2026-06-18
+- **Fix npm publish.** Removed an accidental `pi` extension dependency from `scripts/build-npm.mjs` that caused the `v1.4.0` npm publish to fail because `npm/claude-statusline/extensions/pi-statusline.ts` did not exist.
+- Fixed a `gofmt` issue in `config_test.go` so the CI lint job passes.
+
 ## v1.4.0 — 2026-06-18
 - **Two new npm platform packages.** Added `windows/arm64` and `linux/arm` (armv7) binaries to the GoReleaser build matrix and npm optional-dependency set.
 - Added a CI lint/test workflow (triggered only on tag pushes) with a valid `golangci-lint` v2 config.
