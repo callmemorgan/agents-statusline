@@ -26,7 +26,10 @@ ASSETS = os.path.join(REPO, "assets")
 WORK = "/tmp/claude-statusline-screenshots"
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
-THEMES = ["classic", "catppuccin-mocha", "nord", "dracula", "gruvbox-dark", "tokyo-night", "newsprint"]
+THEMES = [
+    "classic", "catppuccin-mocha", "nord", "dracula", "gruvbox-dark",
+    "tokyo-night", "newsprint", "paper", "solarized-light", "monochrome",
+]
 
 # Canonical background for each theme (the statusline inherits the
 # terminal's background, so the screenshot supplies each palette's own).
@@ -38,6 +41,9 @@ BG = {
     "gruvbox-dark": "#282828",
     "tokyo-night": "#1a1b26",
     "newsprint": "#1a1815",
+    "paper": "#f5f0e6",
+    "solarized-light": "#fdf6e3",
+    "monochrome": "#ffffff",
 }
 
 # 16-color ANSI palette used for the classic theme's screenshot (classic

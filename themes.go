@@ -185,6 +185,72 @@ var builtinThemes = []theme{
 			"sep":      {Hex: "#585048"},
 		},
 	},
+	{
+		ID:   "paper",
+		Desc: "High-contrast ink colors for light terminal backgrounds",
+		Roles: map[string]themeColor{
+			"model":    {Hex: "#1a1a2e"}, // deep ink
+			"dir":      {Hex: "#16213e"}, // dark navy
+			"git":      {Hex: "#1f5e1f"}, // dark forest green
+			"changes":  {Hex: "#8b4513"}, // dark amber
+			"duration": {Hex: "#1e3a5f"}, // dark steel blue
+			"cost":     {Hex: "#5c4b1a"}, // dark olive
+			"dim":      {Hex: "#8a8a8a"}, // medium grey
+			"ok":       {Hex: "#1f5e1f"},
+			"warn":     {Hex: "#b36b00"},
+			"crit":     {Hex: "#b71c1c"}, // dark red
+			"agent":    {Hex: "#4a2c6a"}, // dark purple
+			"vim":      {Hex: "#1a1a1a"}, // near black
+			"accent":   {Hex: "#4a2c6a"},
+			"session":  {Hex: "#1f5e1f"},
+			"sep":      {Hex: "#c8c8c8"}, // light grey
+		},
+	},
+	{
+		ID:   "solarized-light",
+		Desc: "The classic Solarized light palette",
+		Roles: map[string]themeColor{
+			"model":    {Hex: "#6c71c4"}, // violet
+			"dir":      {Hex: "#268bd2"}, // blue
+			"git":      {Hex: "#859900"}, // green
+			"changes":  {Hex: "#b58900"}, // yellow
+			"duration": {Hex: "#268bd2"},
+			"cost":     {Hex: "#b58900"},
+			"dim":      {Hex: "#93a1a1"}, // base1
+			"ok":       {Hex: "#859900"},
+			"warn":     {Hex: "#b58900"},
+			"crit":     {Hex: "#dc322f"}, // red
+			"agent":    {Hex: "#d33682"}, // magenta
+			"vim":      {Hex: "#073642"}, // base02
+			"accent":   {Hex: "#2aa198"}, // cyan
+			"session":  {Hex: "#2aa198"},
+			"sep":      {Hex: "#eee8d5"}, // base2
+		},
+	},
+	{
+		ID:   "monochrome",
+		Desc: "Adaptive black-and-white: uses your terminal's foreground colour, no grey",
+		Roles: map[string]themeColor{
+			// Empty escapes mean "use the terminal's default foreground colour",
+			// so this theme adapts to both light and dark backgrounds and emits
+			// no colour at all — not even grey.
+			"model":    ansiRole(""),
+			"dir":      ansiRole(""),
+			"git":      ansiRole(""),
+			"changes":  ansiRole(""),
+			"duration": ansiRole(""),
+			"cost":     ansiRole(""),
+			"dim":      ansiRole(""),
+			"ok":       ansiRole(""),
+			"warn":     ansiRole(""),
+			"crit":     ansiRole(""),
+			"agent":    ansiRole(""),
+			"vim":      ansiRole(""),
+			"accent":   ansiRole(""),
+			"session":  ansiRole(""),
+			"sep":      ansiRole(""),
+		},
+	},
 }
 
 func themeIDs() []string {
@@ -284,7 +350,7 @@ func resolvePalette(t theme, d colorDepth) palette {
 		return palette{}
 	}
 	esc := func(role string) string { return roleEscape(t.Roles[role], d) }
-	return palette{
+	p := palette{
 		Model:   esc("model"),
 		Dir:     esc("dir"),
 		Git:     esc("git"),
@@ -304,6 +370,16 @@ func resolvePalette(t theme, d colorDepth) palette {
 		theme:   &t,
 		depth:   d,
 	}
+	// When every role resolves to the empty escape, the theme is effectively
+	// colourless (e.g. the adaptive monochrome theme). Treat it as disabled so
+	// no resets or fallback bar colours leak through.
+	if p.Model == "" && p.Dir == "" && p.Git == "" && p.Chg == "" &&
+		p.Dur == "" && p.Cost == "" && p.Dim == "" && p.ROK == "" &&
+		p.RWarn == "" && p.RCrit == "" && p.Agent == "" && p.Vim == "" &&
+		p.Purple == "" && p.Session == "" && p.Sep == "" {
+		p.Rst = ""
+	}
+	return p
 }
 
 // validColorSpec reports whether a user-supplied color spec is syntactically
