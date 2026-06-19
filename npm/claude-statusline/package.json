@@ -1,37 +1,45 @@
 {
-  "name": "@morgan.rebrand/claude-statusline",
-  "version": "0.0.0",
-  "description": "Statusline renderer for Claude Code, Antigravity CLI, and pi",
-  "license": "MIT",
-  "keywords": ["pi-package", "pi", "pi-coding-agent", "extension", "statusline"],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/callmemorgan/claude-statusline.git"
-  },
-  "homepage": "https://github.com/callmemorgan/claude-statusline",
-  "bin": {
-    "claude-statusline": "bin/claude-statusline.js"
-  },
-  "files": [
-    "bin/",
-    "extensions/"
-  ],
-  "engines": {
-    "node": ">=14"
-  },
-  "pi": {
-    "extensions": ["./extensions/pi-statusline.ts"]
-  },
-  "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
-  },
-  "optionalDependencies": {
-    "@morgan.rebrand/claude-statusline-darwin-arm64": "0.0.0",
-    "@morgan.rebrand/claude-statusline-darwin-x64": "0.0.0",
-    "@morgan.rebrand/claude-statusline-linux-arm": "0.0.0",
-    "@morgan.rebrand/claude-statusline-linux-arm64": "0.0.0",
-    "@morgan.rebrand/claude-statusline-linux-x64": "0.0.0",
-    "@morgan.rebrand/claude-statusline-win32-arm64": "0.0.0",
-    "@morgan.rebrand/claude-statusline-win32-x64": "0.0.0"
-  }
+	"name": "@morgan.rebrand/claude-statusline",
+	"version": "0.0.0",
+	"description": "Statusline renderer for Claude Code, Antigravity CLI, and pi",
+	"license": "MIT",
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-coding-agent",
+		"extension",
+		"statusline"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/callmemorgan/claude-statusline.git"
+	},
+	"homepage": "https://github.com/callmemorgan/claude-statusline",
+	"bin": {
+		"claude-statusline": "bin/claude-statusline.js"
+	},
+	"files": [
+		"bin/",
+		"extensions/"
+	],
+	"engines": {
+		"node": ">=14"
+	},
+	"pi": {
+		"extensions": [
+			"./extensions/pi-statusline.ts"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"optionalDependencies": {
+		"@morgan.rebrand/claude-statusline-darwin-arm64": "0.0.0",
+		"@morgan.rebrand/claude-statusline-darwin-x64": "0.0.0",
+		"@morgan.rebrand/claude-statusline-linux-arm": "0.0.0",
+		"@morgan.rebrand/claude-statusline-linux-arm64": "0.0.0",
+		"@morgan.rebrand/claude-statusline-linux-x64": "0.0.0",
+		"@morgan.rebrand/claude-statusline-win32-arm64": "0.0.0",
+		"@morgan.rebrand/claude-statusline-win32-x64": "0.0.0"
+	}
 }

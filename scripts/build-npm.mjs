@@ -143,8 +143,7 @@ function main() {
 		const pkgJson = {
 			name,
 			version,
-			description:
-				"Prebuilt claude-statusline binary for " + `${t.os}/${t.cpu}`,
+			description: `Prebuilt claude-statusline binary for ${t.os}/${t.cpu}`,
 			license: "MIT",
 			// `npm publish --provenance` cross-checks repository.url against the repo
 			// the workflow runs in; every package (main + platform) must name the same
@@ -159,7 +158,7 @@ function main() {
 		};
 		writeFileSync(
 			join(pkgDir, "package.json"),
-			JSON.stringify(pkgJson, null, 2) + "\n",
+			`${JSON.stringify(pkgJson, null, 2)}\n`,
 		);
 
 		optionalDependencies[name] = version;
@@ -204,7 +203,7 @@ function main() {
 
 	writeFileSync(
 		join(mainDir, "package.json"),
-		JSON.stringify(mainPkg, null, 2) + "\n",
+		`${JSON.stringify(mainPkg, null, 2)}\n`,
 	);
 
 	console.log(`Built npm packages for v${version} in ${outRoot}/`);
