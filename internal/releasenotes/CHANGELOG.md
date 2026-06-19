@@ -7,6 +7,15 @@ much larger values (e.g. 99999) to force top placement. Bullets without a
 marker default to importance 0.
 -->
 
+## v1.6.1 — 2026-06-18
+- [5] **Revert Homebrew distribution to a Formula.** The v1.6.0 cask collided with the existing `claude-statusline` formula in the tap, which broke `brew upgrade` and auto-update for existing installs. We're going back to the `brews` formula in GoReleaser; install and upgrade with `brew install claude-statusline` and `brew upgrade claude-statusline` as before. A cask under a different token (`agents-statusline`) will be introduced separately later.
+- [2] Fixed remaining Biome lint/format errors in the npm shim and `scripts/build-npm.mjs` so `make lint-js` is green.
+
+## v1.6.0 — 2026-06-18
+- [1] **Repo reorganization.** The source tree is now laid out as a conventional Go multi-package project: a thin `cmd/claude-statusline` entry point plus focused `internal/` packages (`config`, `segments`, `render`, `tui`, `update`, `plugins`, etc.). No behavior changes — the stdin→stdout render path, all tests, golden files, and the release pipeline remain intact.
+- [0] **Homebrew distribution is now a Cask.** Migrated `.goreleaser.yaml` from the deprecated `brews` config to `homebrew_casks` for precompiled binaries, matching GoReleaser's current recommendation. macOS installs now strip the Gatekeeper quarantine bit in a post-install hook. Update with `brew upgrade --cask claude-statusline`.
+- [0] Fixed remaining Biome lint/format errors in the npm shim and `scripts/build-npm.mjs` so `make lint-js` is green.
+
 ## v1.5.2 — 2026-06-18
 - [5] **pi extension.** `pi install npm:@morgan.rebrand/claude-statusline` now wires the renderer into pi's footer as a first-class extension. The TypeScript extension refreshes on session/turn/model events, requires no separate `claude-statusline install` step inside pi, and resolves the Go binary from the same per-platform npm optional dependencies. Update it with `pi update --extension npm:@morgan.rebrand/claude-statusline` or alongside pi with `pi update`.
 - [2] Added a CI smoke test for the pi TypeScript extension.

@@ -13,7 +13,7 @@ already locked in the spec are not re-litigated here; this document is about
 - **`version == "dev"` short-circuits the whole feature.** Same carve-out
   `release-notes` uses. This is what keeps goldens inert without `-update`.
 - **Homebrew installs never have their binary swapped by us** — package-manager
-  bookkeeping fights that. `auto` mode on brew runs `brew upgrade --cask` instead.
+  bookkeeping fights that. `auto` mode on brew runs `brew upgrade claude-statusline` instead.
 - **Auto means auto** — it crosses MAJOR versions, never downgrades.
 - **No new dependencies.** `crypto/sha256`, `archive/tar`, `archive/zip`,
   `compress/gzip`, `net/http` are all stdlib.
@@ -282,7 +282,7 @@ non-representative).
   smoke-test).
 - `kindDev` → print "source build — update with `go install …@latest`",
   exit 0.
-- `kindBrew` → run `brew upgrade --cask claude-statusline` in the foreground
+- `kindBrew` → run `brew upgrade claude-statusline` in the foreground
   (same env as the worker, but with live stdout/stderr). Missing brew →
   print the manual command, exit 1.
 - Already current → "claude-statusline vX.Y.Z is up to date", exit 0.
@@ -420,7 +420,7 @@ Every box in the spec's "Acceptance criteria" maps to a specific check:
   announces via release-notes takeover; checksum/smoke failure leaves
   the old binary. Tests 6 + 7 + manual smoke.
 - [x] Auto on brew: never touches the binary directly; runs
-  `brew upgrade --cask claude-statusline` with `HOMEBREW_NO_AUTO_UPDATE=1`;
+  `brew upgrade claude-statusline` with `HOMEBREW_NO_AUTO_UPDATE=1`;
   silent when brew absent. Test 9.
 - [x] `install` output mentions the default. One-line `install.go`
   change in step 6.

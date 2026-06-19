@@ -54,9 +54,9 @@ const (
 	updateRepoName  = "claude-statusline"
 )
 
-// updateBrewTap is the Homebrew tap hosting the cask (the "homebrew-"
+// updateBrewTap is the Homebrew tap hosting the formula (the "homebrew-"
 // prefix is implicit in tap names). The brew upgrade path refreshes this tap
-// before upgrading so brew sees newly-published cask versions even with
+// before upgrading so brew sees newly-published formula versions even with
 // HOMEBREW_NO_AUTO_UPDATE set.
 const updateBrewTap = updateRepoOwner + "/tap"
 
@@ -186,7 +186,7 @@ func recordUpdateResult(from, to, method string, verified bool) {
 func UpdateHintFor(kind InstallKind) string {
 	switch kind {
 	case KindBrew:
-		return "brew upgrade --cask claude-statusline"
+		return "brew upgrade claude-statusline"
 	case KindNpm:
 		return "npm update -g @morgan.rebrand/claude-statusline"
 	default:
@@ -1051,7 +1051,7 @@ var findBrewExe = resolveBrew
 // updateBrewTapTimeout bounds the pre-upgrade tap refresh.
 const updateBrewTapTimeout = 30 * time.Second
 
-// refreshBrewTap pulls the latest cask for our tap before `brew upgrade --cask`.
+// refreshBrewTap pulls the latest formula for our tap before `brew upgrade`.
 // Because the upgrade runs with HOMEBREW_NO_AUTO_UPDATE=1 (so brew doesn't
 // refresh every tap on the system), a stale local tap would make `brew upgrade`
 // report "already installed" against an outdated cask — exactly what hides a
@@ -1082,7 +1082,7 @@ func refreshBrewTap(brewPath string) {
 // shelling out to brew/git.
 var refreshBrewTapFn = refreshBrewTap
 
-// brewRunner runs `brew upgrade --cask claude-statusline` with rails that keep
+// brewRunner runs `brew upgrade claude-statusline` with rails that keep
 // the worker polite to the user's system. live=true streams output to the
 // caller's terminal; live=false discards it. timeout=0 means no timeout
 // (used by the foreground subcommand); otherwise a context with that timeout
@@ -1100,7 +1100,7 @@ var brewRunner = func(brewPath string, live bool, timeout time.Duration) ([]stri
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	c := exec.CommandContext(ctx, brewPath, "upgrade", "--cask", "claude-statusline")
+	c := exec.CommandContext(ctx, brewPath, "upgrade", "claude-statusline")
 	c.Env = append(os.Environ(),
 		"HOMEBREW_NO_AUTO_UPDATE=1",
 		"HOMEBREW_NO_INSTALL_CLEANUP=1",

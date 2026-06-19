@@ -58,7 +58,7 @@ signs:
       - "${signature}"
     artifacts: checksum
 
-homebrew_casks:
+brews:
   - name: claude-statusline
     repository:
       owner: callmemorgan
@@ -67,27 +67,23 @@ homebrew_casks:
     homepage: "https://github.com/callmemorgan/claude-statusline"
     description: "Statusline renderer for Claude Code, Antigravity CLI, and pi"
     license: "MIT"
-    binaries:
-      - claude-statusline
+    test: |
+      system "#{bin}/claude-statusline", "--help"
+    install: |
+      bin.install "claude-statusline"
     caveats: |
       To wire claude-statusline into Claude Code, run:
         claude-statusline install
       Customize anytime with:
         claude-statusline configure
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/claude-statusline"]
-          end
+    post_install: |
+      gopath = ENV["GOPATH"] || "#{ENV["HOME"]}/go"
+      go_bin = "#{gopath}/bin/claude-statusline"
+      if File.exist?(go_bin)
+        opoo "Detected another claude-statusline installation at #{go_bin}. Consider removing it to avoid PATH conflicts."
+      end
 
-          gopath = ENV["GOPATH"] || "#{ENV["HOME"]}/go"
-          go_bin = "#{gopath}/bin/claude-statusline"
-          if File.exist?(go_bin)
-            opoo "Detected another claude-statusline installation at #{go_bin}. Consider removing it to avoid PATH conflicts."
-          end
-
-          local_bin = "#{ENV["HOME"]}/.local/bin/claude-statusline"
-          if File.exist?(local_bin)
-            opoo "Detected another claude-statusline installation at #{local_bin}. Consider removing it to avoid PATH conflicts."
-          end
+      local_bin = "#{ENV["HOME"]}/.local/bin/claude-statusline"
+      if File.exist?(local_bin)
+        opoo "Detected another claude-statusline installation at #{local_bin}. Consider removing it to avoid PATH conflicts."
+      end
