@@ -1,7 +1,7 @@
 {
 	"name": "@morgan.rebrand/claude-statusline",
 	"version": "0.0.0",
-	"description": "Statusline renderer for Claude Code, Antigravity CLI, and pi",
+	"description": "Statusline renderer for Claude Code, Antigravity CLI, and Pi",
 	"license": "MIT",
 	"keywords": [
 		"pi-package",

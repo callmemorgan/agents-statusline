@@ -65,7 +65,7 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/callmemorgan/claude-statusline"
-    description: "Statusline renderer for Claude Code, Antigravity CLI, and pi"
+    description: "Statusline renderer for Claude Code, Antigravity CLI, and Pi"
     license: "MIT"
     test: |
       system "#{bin}/claude-statusline", "--help"

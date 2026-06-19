@@ -1,10 +1,10 @@
 # claude-statusline
 
-A fast statusline renderer for [Claude Code](https://claude.ai/code), [Antigravity CLI](https://antigravity.dev) (`agy`), and [pi](https://pi.dev).
+A fast statusline renderer for [Claude Code](https://claude.ai/code), [Antigravity](https://antigravity.dev) (`agy`), and [Pi](https://pi.dev).
 
 ![claude-statusline rendering a live session with the Tokyo Night theme — git branch, lines changed, cost, burn rate, context-window trend, and rate-limit projections](assets/claude-tokyo-night.png)
 
-Both tools pipe a JSON payload to this binary on every turn. It renders a colored, multi-line summary in your terminal:
+Each supported tool pipes a JSON payload to this binary on every turn. The renderer turns it into a colored, multi-line summary in your terminal:
 
 - **Ten built-in themes** — classic, Catppuccin Mocha, Nord, Dracula, Gruvbox Dark, Tokyo Night, Newsprint, Paper, Solarized Light, and Monochrome — in truecolor with automatic 256/16-color fallback. Paper, Solarized Light, and Monochrome are tuned for light terminal backgrounds.
 - **Burn-rate intelligence** — rate-limit projections (`→58%` at reset), cost per hour (`$1.84/h`), and time-to-compact estimates (`↗ ~35m`), computed from your session's own history.
@@ -48,22 +48,22 @@ Requires Node 14+. npm installs a small JS shim that `spawnSync`s the correct pe
 
 > npm packages are built and published automatically with each GitHub release.
 
-**pi:**
+**Pi:**
 
 ```bash
 pi install npm:@morgan.rebrand/claude-statusline
 ```
 
-This installs the package as a pi extension. The extension wires the renderer into pi's footer and refreshes on session/turn/model events. No separate `claude-statusline install` step is needed inside pi.
+This installs the package as a Pi extension. The extension wires the renderer into Pi's footer and refreshes on session/turn/model events. No separate `claude-statusline install` step is needed inside Pi.
 
-> The pi extension resolves the Go binary from the same `@morgan.rebrand/claude-statusline` npm package (via its per-platform `optionalDependencies`). Because pi owns the files, the binary's own self-swapper leaves pi installs alone and points you at `pi update` instead. If you want to use a local build while developing, set `CLAUDE_STATUSLINE_BIN` to the absolute path of a `claude-statusline` binary before launching pi.
+> The Pi extension resolves the Go binary from the same `@morgan.rebrand/claude-statusline` npm package (via its per-platform `optionalDependencies`). Because Pi owns the files, the binary's own self-swapper leaves Pi installs alone and points you at `pi update` instead. If you want to use a local build while developing, set `CLAUDE_STATUSLINE_BIN` to the absolute path of a `claude-statusline` binary before launching Pi.
 
-Upgrade later with pi's own package manager:
+Upgrade later with Pi's own package manager:
 
 ```bash
 # update this package only
 pi update --extension npm:@morgan.rebrand/claude-statusline
-# update pi and all packages (skips pinned specs)
+# update Pi and all packages (skips pinned specs)
 pi update
 # update packages only, without touching pi itself
 pi update --extensions
@@ -118,7 +118,7 @@ Claude Code — add to `~/.claude/settings.json`:
 }
 ```
 
-Antigravity CLI — add to your agy config:
+Antigravity — add to your `agy` config:
 
 ```json
 {
@@ -129,9 +129,9 @@ Antigravity CLI — add to your agy config:
 If the binary isn't on your `$PATH`, use the full path instead.
 </details>
 
-The binary auto-detects which tool is calling it via the `product` field in the payload and hides segments that aren't applicable (e.g. rate limits are hidden under agy, plan tier is hidden under Claude Code).
+The binary auto-detects which tool is calling it via the `product` field in the payload and hides segments that aren't applicable (e.g. rate limits are hidden under Antigravity, plan tier is hidden under Claude Code).
 
-### pi configuration
+### Pi configuration
 
 After `pi install npm:@morgan.rebrand/claude-statusline`, the extension is active immediately. It uses the same config file as the other tools:
 
@@ -139,9 +139,9 @@ After `pi install npm:@morgan.rebrand/claude-statusline`, the extension is activ
 claude-statusline configure   # edit themes, segments, and settings
 ```
 
-Changes are picked up on the next pi render. The extension builds a Claude-compatible payload from pi's live context (cwd, model, context usage) and passes it to the binary, so segments that depend on Claude Code-only fields — `rate-limit-5h`, `rate-limit-7d`, `cost`, `lines-changed`, `api-efficiency`, `cost-rate`, and the context-window trend — stay hidden because pi does not expose those values. Everything else (model, directory, git, context bar, tokens, duration, vim mode, etc.) renders normally.
+Changes are picked up on the next Pi render. The extension builds a Claude-compatible payload from Pi's live context (cwd, model, context usage) and passes it to the binary, so segments that depend on Claude Code-only fields — `rate-limit-5h`, `rate-limit-7d`, `cost`, `lines-changed`, `api-efficiency`, `cost-rate`, and the context-window trend — stay hidden because Pi does not expose those values. Everything else (model, directory, git, context bar, tokens, duration, vim mode, etc.) renders normally.
 
-To remove the statusline from pi:
+To remove the statusline from Pi:
 
 ```bash
 pi remove npm:@morgan.rebrand/claude-statusline
@@ -155,13 +155,13 @@ pi remove npm:@morgan.rebrand/claude-statusline
 
 ![Claude Code statusline with the classic theme: session name, directory, git branch, lines changed, cache percentage, cost, model with effort badge, output style, duration, cost burn rate, API efficiency, tokens, context-window bar with trend, and both rate-limit bars with projections](assets/claude-classic.png)
 
-**agy (default config):**
+**Antigravity (`agy`) — default config:**
 
-![agy statusline: conversation ID, agent state, directory, artifact count, plan tier, model, version, tokens, and context-window bar](assets/agy-classic.png)
+![Antigravity statusline: conversation ID, agent state, directory, artifact count, plan tier, model, version, tokens, and context-window bar](assets/agy-classic.png)
 
-**pi (Tokyo Night):**
+**Pi (Tokyo Night):**
 
-![pi statusline with the Tokyo Night theme: session name, project directory, git branch, cache percentage, model, output style, duration, tokens, and context-window bar](assets/pi-tokyo-night.png)
+![Pi statusline with the Tokyo Night theme: session name, project directory, git branch, cache percentage, model, output style, duration, tokens, and context-window bar](assets/pi-tokyo-night.png)
 
 Segments that receive no data from the active tool hide themselves automatically — no configuration needed. The burn rate (`$1.44/h`), context trend (`↗ ~13m`), and rate-limit projections (`→79%`, `→125%`) above are computed from the session's own history — see [Burn rates, projections, and trends](#burn-rates-projections-and-trends).
 
@@ -174,29 +174,29 @@ Segments that receive no data from the active tool hide themselves automatically
 | Segment | Default line | Source | Description |
 |---------|-------------|--------|-------------|
 | `vim-mode` | 1 | Claude Code | Vim mode indicator, e.g. `[normal]` or `[INSERT]` |
-| `sandbox` | 1 | agy | `[SANDBOX]` indicator when sandbox mode is enabled |
-| `session-name` | 1 | both | Session name (Claude Code) or conversation ID (agy). UUIDs are truncated to 8 chars |
-| `agent-state` | 1 | agy | Agent working status, e.g. `[working]` — green when active |
+| `sandbox` | 1 | Antigravity | `[SANDBOX]` indicator when sandbox mode is enabled |
+| `session-name` | 1 | all three | Session name (Claude Code) or conversation ID (Antigravity). UUIDs are truncated to 8 chars |
+| `agent-state` | 1 | Antigravity | Agent working status, e.g. `[working]` — green when active |
 | `agent-name` | 1 | Claude Code | Agent name when running with `--agent` |
-| `directory` | 1 | both | Current / project directory. Shows `project→subdir` when inside a project subdirectory |
+| `directory` | 1 | all three | Current / project directory. Shows `project→subdir` when inside a project subdirectory |
 | `added-dirs` | 1 | Claude Code | Count of extra directories added with `/add-dir`, e.g. `+2 dirs` |
-| `git-branch` | 1 | both | Git branch and worktree name. Optional rich status (settings): dirty marker and ahead/behind counts, e.g. `main* ↑1↓2` |
-| `git-stash` | 1 | both | Git stash count (`⚑N`), hidden when there are no stashes. Off by default (runs a cached, bounded `git`); add it in `configure` |
-| `artifact-count` | 1 | agy | Number of generated artifacts |
+| `git-branch` | 1 | all three | Git branch and worktree name. Optional rich status (settings): dirty marker and ahead/behind counts, e.g. `main* ↑1↓2` |
+| `git-stash` | 1 | all three | Git stash count (`⚑N`), hidden when there are no stashes. Off by default (runs a cached, bounded `git`); add it in `configure` |
+| `artifact-count` | 1 | Antigravity | Number of generated artifacts |
 | `lines-changed` | 1 | Claude Code | Session cumulative lines added/removed, e.g. `+128/-45` |
 | `cache-percent` | 1 | Claude Code | Cache read percentage from `context_window.current_usage` |
-| `plan-tier` | 1 | agy | Subscription plan tier |
+| `plan-tier` | 1 | Antigravity | Subscription plan tier |
 | `cost` | 1 | Claude Code | Estimated session cost in USD, e.g. `$1.23` |
-| `model` | 2 | both | Model name with effort badge (⬇ → ⬆ ⬆⬆ ⬆⬆⬆) |
+| `model` | 2 | all three | Model name with effort badge (⬇ → ⬆ ⬆⬆ ⬆⬆⬆) |
 | `output-style` | 2 | Claude Code | Output style, e.g. `✎ Explanatory` — hidden when default |
-| `email` | 2 | agy | Account email, user part only (`morgan@…`) — **off by default** |
+| `email` | 2 | Antigravity | Account email, user part only (`morgan@…`) — **off by default** |
 | `version` | 2 | both | Tool version |
-| `update` | 1 | both | `⬆ vX.Y.Z` when behind, hides when current. Self-hides on dev builds. |
+| `update` | 1 | all three | `⬆ vX.Y.Z` when behind, hides when current. Self-hides on dev builds. |
 | `duration` | 2 | Claude Code | Elapsed session wall-clock time in `HH:MM:SS` |
 | `cost-rate` | 2 | Claude Code | Cost burn rate over recent history, e.g. `$1.84/h` |
 | `api-efficiency` | 2 | Claude Code | Percentage of time spent in API calls vs. total elapsed |
-| `tokens` | 2 | both | Input/output token counts in compact notation (`↑1.2M ↓89k`) |
-| `context-window` | 3 | both | Usage bar with color-coded %, growth trend arrow, and time-to-compact estimate (`↗ ~35m`) |
+| `tokens` | 2 | all three | Input/output token counts in compact notation (`↑1.2M ↓89k`) |
+| `context-window` | 3 | all three | Usage bar with color-coded %, growth trend arrow, and time-to-compact estimate (`↗ ~35m`) |
 | `rate-limit-5h` | 3 | Claude Code | 5-hour rate limit bar with countdown and burn-rate projection (`→58%`) (Pro/Max only) |
 | `rate-limit-7d` | 3 | Claude Code | 7-day rate limit bar with countdown and burn-rate projection (Pro/Max only) |
 
@@ -532,9 +532,9 @@ Claude Code sends this JSON structure via stdin:
 - `context_window.current_usage` — before the first API call and after `/compact`
 - `context_window.used_percentage` / `context_window.remaining_percentage` — early in the session
 
-### agy fields
+### Antigravity fields
 
-agy sends a similar payload with these additional fields:
+Antigravity sends a similar payload with these additional fields:
 
 ```json
 {
@@ -548,7 +548,7 @@ agy sends a similar payload with these additional fields:
 }
 ```
 
-The binary detects agy by the `product: "antigravity"` field and automatically hides Claude Code-specific segments.
+The binary detects Antigravity by the `product: "antigravity"` field and automatically hides Claude Code-specific segments.
 
 ---
 
@@ -558,7 +558,7 @@ The binary detects agy by the `product: "antigravity"` field and automatically h
 echo '{"product":"antigravity",...}' | claude-statusline debug
 ```
 
-Prints a field presence table comparing the received payload against the Claude Code and agy schemas, all parsed values, and any config validation warnings. Useful for diagnosing missing segments or unexpected payload shapes. Set `STATUSLINE_VERBOSE=1` to also print config warnings to stderr during normal renders.
+Prints a field presence table comparing the received payload against the Claude Code and Antigravity schemas, all parsed values, and any config validation warnings. Useful for diagnosing missing segments or unexpected payload shapes. Set `STATUSLINE_VERBOSE=1` to also print config warnings to stderr during normal renders.
 
 ---
 
@@ -620,7 +620,7 @@ mode = "notify"   # default: show segment only
 check_hours = 24  # 1..168, default 24
 ```
 
-`auto` mode **crosses MAJOR versions** — it's a one-way door that downloads, verifies the cosign signature on `checksums.txt` against the embedded public key, sha256-verifies the asset against it, smoke-tests the staged binary, and atomically swaps the on-disk exe. Homebrew installs run `brew upgrade claude-statusline` instead of touching the binary directly (package-manager bookkeeping fights self-swap); npm installs are ignored entirely by `auto` because npm owns the file (update with `npm update -g @morgan.rebrand/claude-statusline` instead). pi installs are also ignored by the binary's self-swapper because pi's package manager owns the files — update them with `pi update --extension npm:@morgan.rebrand/claude-statusline` or `pi update`. The tap's git checkout is refreshed first (a targeted `git pull`, not a global `brew update`) so brew sees the newly-published cask despite `HOMEBREW_NO_AUTO_UPDATE`. Failures are silent on the next interval retries; an invalid signature, a checksum mismatch, or a failed smoke-test leaves the old binary in place (it fails closed).
+`auto` mode **crosses MAJOR versions** — it's a one-way door that downloads, verifies the cosign signature on `checksums.txt` against the embedded public key, sha256-verifies the asset against it, smoke-tests the staged binary, and atomically swaps the on-disk exe. Homebrew installs run `brew upgrade claude-statusline` instead of touching the binary directly (package-manager bookkeeping fights self-swap); npm installs are ignored entirely by `auto` because npm owns the file (update with `npm update -g @morgan.rebrand/claude-statusline` instead). Pi installs are also ignored by the binary's self-swapper because Pi's package manager owns the files — update them with `pi update --extension npm:@morgan.rebrand/claude-statusline` or `pi update`. The tap's git checkout is refreshed first (a targeted `git pull`, not a global `brew update`) so brew sees the newly-published formula despite `HOMEBREW_NO_AUTO_UPDATE`. Failures are silent on the next interval retries; an invalid signature, a checksum mismatch, or a failed smoke-test leaves the old binary in place (it fails closed).
 
 `mode = "off"` is the right choice for air-gapped or centrally-managed deployments — it produces zero spawns and zero reads beyond the config.
 
