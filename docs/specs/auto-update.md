@@ -397,7 +397,7 @@ manual smoke below, not unit tests — do not mock HTTP for coverage theater.
    the binary** — never point the swap at the repo build you're editing):
 
    ```bash
-   go build -ldflags "-X main.version=1.0.0" -o /tmp/upd-test/bin/claude-statusline .
+   go build -ldflags "-X github.com/callmemorgan/claude-statusline/internal/version.Version=1.0.0" -o /tmp/upd-test/bin/claude-statusline ./cmd/claude-statusline
    export HOME=/tmp/upd-test XDG_STATE_HOME=/tmp/upd-test/state XDG_CONFIG_HOME=/tmp/upd-test/config
    printf '[update]\nmode = "auto"\n' > …/config/claude-statusline/config.toml
    echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | /tmp/upd-test/bin/claude-statusline

@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build and test
 
 ```bash
-go build -o claude-statusline .
+go build -o claude-statusline ./cmd/claude-statusline
 go test ./...                      # full suite (golden, migration, state, install splicer…)
 go test -run Golden -update ./internal/render  # regenerate golden files after intentional render changes
 go test -run TestSessionStateRecordSaveLoad ./internal/state  # single test
@@ -26,7 +26,7 @@ Golden tests render `testdata/payloads/* × configs` with an empty palette (colo
 
 ## Architecture
 
-One Go module, `package main`, split by concern. The binary's subcommands (`cmd.go` dispatch): bare stdin→stdout rendering (how Claude Code invokes it — must never change behavior), `install`/`uninstall`, `configure` (tview TUI), `version`, `debug`, `help`.
+One Go module, `package main` entry point in `cmd/claude-statusline/`, split by concern under `internal/`. The binary's subcommands (`cmd/claude-statusline/cmd.go` dispatch): bare stdin→stdout rendering (how Claude Code invokes it — must never change behavior), `install`/`uninstall`, `configure` (tview TUI), `version`, `debug`, `help`.
 
 ### Data flow
 
@@ -74,7 +74,7 @@ state file  → loadState()/Record() ───────┘            └→ 
 
 ## Releases
 
-Releases are cut by pushing a `vX.Y.Z` git tag — `.github/workflows/release.yml` runs GoReleaser (`.goreleaser.yaml`) to build darwin/linux/windows binaries, inject the version via ldflags (`-X main.version=…`), and sign with cosign. The `version` *segment* displays the calling tool's version from the payload; `claude-statusline version` shows this binary's.
+Releases are cut by pushing a `vX.Y.Z` git tag — `.github/workflows/release.yml` runs GoReleaser (`.goreleaser.yaml`) to build darwin/linux/windows binaries, inject the version via ldflags (`-X github.com/callmemorgan/claude-statusline/internal/version.Version=…`), and sign with cosign. The `version` *segment* displays the calling tool's version from the payload; `claude-statusline version` shows this binary's.
 
 Before tagging, **update `CHANGELOG.md` (new `## vX.Y.Z` section at the top)** — the release-notes feature embeds it at build time, so anything you forget won't be reachable from `claude-statusline release-notes`. Keep the existing section format (`## vX.Y.Z — YYYY-MM-DD` header, `- ` bullets, newest first). Bullets may carry a leading `[N]` importance marker: ordinary items use 0–5, critical/pinned items can use much larger values (e.g. 99999) to force top placement. Bullets without a marker default to importance 0.
 

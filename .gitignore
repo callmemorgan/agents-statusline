@@ -1,7 +1,7 @@
-claude-statusline
+/claude-statusline
 !npm/claude-statusline
 !npm/claude-statusline/**
-claude-statusline.exe
+/claude-statusline.exe
 .worktrees/
 .claude/
 

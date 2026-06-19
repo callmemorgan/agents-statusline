@@ -1188,14 +1188,15 @@ func TestExtractRejectsDecompressionBomb(t *testing.T) {
 
 // TestGoreleaserInjectsBareVersion guards the smokeTest invariant: smokeTest
 // requires the staged binary's `version` output to contain the bare tag, which
-// only holds if GoReleaser injects {{.Version}} (no leading v) into main.version.
+// only holds if GoReleaser injects {{.Version}} (no leading v) into
+// internal/version.Version.
 func TestGoreleaserInjectsBareVersion(t *testing.T) {
 	data, err := os.ReadFile("../../.goreleaser.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "main.version={{.Version}}") {
-		t.Error(".goreleaser.yaml must inject the bare {{.Version}} into main.version (smokeTest depends on it)")
+	if !strings.Contains(string(data), "internal/version.Version={{.Version}}") {
+		t.Error(".goreleaser.yaml must inject the bare {{.Version}} into internal/version.Version (smokeTest depends on it)")
 	}
 }
 

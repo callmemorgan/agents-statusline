@@ -19,6 +19,9 @@ jobs:
         with:
           go-version: stable
 
+      - name: Build
+        run: go build ./cmd/claude-statusline
+
       - name: Test
         run: go test ./...
 
@@ -60,7 +63,7 @@ jobs:
           node --check scripts/build-npm.mjs
 
       - name: Build Go binary for shim test
-        run: go build -o /tmp/claude-statusline .
+        run: go build -o /tmp/claude-statusline ./cmd/claude-statusline
 
       - name: Test npm shim
         run: |

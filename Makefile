@@ -4,7 +4,7 @@
 GO_LINT      := golangci-lint
 BIOME        := ./node_modules/.bin/biome
 
-.PHONY: lint lint-go lint-js fmt fmt-go fmt-js vet test check clean install-tools
+.PHONY: lint lint-go lint-js fmt fmt-go fmt-js vet test build check clean install-tools
 
 ## Install dev tooling (golangci-lint via brew, biome via npm).
 install-tools:
@@ -17,7 +17,7 @@ lint-go:
 	$(GO_LINT) run ./...
 lint-js:
 	@[ -x $(BIOME) ] || $(MAKE) install-tools
-	$(BIOME) check
+	$(BIOME) check npm/ scripts/
 
 ## Format.
 fmt: fmt-go fmt-js
@@ -26,13 +26,17 @@ fmt-go:
 	goimports -w -local github.com/callmemorgan/claude-statusline . 2>/dev/null || true
 fmt-js:
 	@[ -x $(BIOME) ] || $(MAKE) install-tools
-	$(BIOME) format --write
+	$(BIOME) format --write npm/ scripts/
 
 ## Go vet + tests.
 vet:
 	go vet ./...
 test:
 	go test ./...
+
+## Build the binary.
+build:
+	go build -o claude-statusline ./cmd/claude-statusline
 
 ## Full pre-commit gate: lint + vet + test.
 check: lint vet test

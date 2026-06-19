@@ -341,14 +341,14 @@ dirs via `t.TempDir()` + `XDG_STATE_HOME`. New file `releasenotes_test.go`.
    config/state):
 
    ```bash
-   go build -o claude-statusline .
+   go build -o claude-statusline ./cmd/claude-statusline
    mkdir -p /tmp/fake-home
    alias sl='HOME=/tmp/fake-home XDG_STATE_HOME=/tmp/fake-home/state XDG_CONFIG_HOME=/tmp/fake-home/config ./claude-statusline'
    # dev build: takeover must never fire
    echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | sl
    # simulate a release build + upgrade:
-   go build -ldflags "-X main.version=1.0.9" -o claude-statusline . && echo '…payload…' | sl   # records silently (fresh install)
-   go build -ldflags "-X main.version=1.1.0" -o claude-statusline . && echo '…payload…' | sl   # takeover appears
+   go build -ldflags "-X github.com/callmemorgan/claude-statusline/internal/version.Version=1.0.9" -o claude-statusline ./cmd/claude-statusline && echo '…payload…' | sl   # records silently (fresh install)
+   go build -ldflags "-X github.com/callmemorgan/claude-statusline/internal/version.Version=1.1.0" -o claude-statusline ./cmd/claude-statusline && echo '…payload…' | sl   # takeover appears
    sleep 26 && echo '…payload…' | sl                                                           # normal statusline again
    sl release-notes && sl release-notes v1.0.2 && sl release-notes --all
    ```

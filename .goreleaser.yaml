@@ -5,7 +5,8 @@ before:
     - go mod tidy
 
 builds:
-  - env:
+  - dir: cmd/claude-statusline
+    env:
       - CGO_ENABLED=0
     goos:
       - darwin
@@ -18,7 +19,7 @@ builds:
     goarm:
       - "7"
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
+      - -s -w -X github.com/callmemorgan/claude-statusline/internal/version.Version={{.Version}} -X github.com/callmemorgan/claude-statusline/internal/version.Commit={{.ShortCommit}} -X github.com/callmemorgan/claude-statusline/internal/version.Date={{.Date}}
 
 archives:
   - formats: [tar.gz]
