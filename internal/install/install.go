@@ -1,4 +1,4 @@
-package main
+package install
 
 // ─── Install / Uninstall ─────────────────────────────────────────────
 //
@@ -268,7 +268,7 @@ func manualSnippet(t installTarget) string {
 	return fmt.Sprintf("add this to %s manually:\n\n  %q: %s\n", t.path, t.key, t.value)
 }
 
-func runInstall(args []string) {
+func Run(args []string) {
 	fs := flag.NewFlagSet("install", flag.ExitOnError)
 	targetName := fs.String("target", "claude", "which tool to wire up: claude or agy")
 	settingsPath := fs.String("settings-path", "", "explicit settings file path")
@@ -413,7 +413,7 @@ func verifyInstall(t installTarget) {
 	fmt.Println("Update checks:      notify (configure via [update] in config.toml)")
 }
 
-func runUninstall(args []string) {
+func Uninstall(args []string) {
 	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
 	targetName := fs.String("target", "claude", "which tool to unwire: claude or agy")
 	settingsPath := fs.String("settings-path", "", "explicit settings file path")

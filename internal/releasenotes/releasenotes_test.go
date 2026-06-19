@@ -1,4 +1,4 @@
-package main
+package releasenotes
 
 // ─── Release Notes Tests ──────────────────────────────────────────────
 
@@ -668,7 +668,7 @@ func TestFindNote(t *testing.T) {
 	}
 }
 
-// ─── runReleaseNotes selection ───────────────────────────────────────
+// ─── Run selection ───────────────────────────────────────────────────
 
 func TestSelectReleaseNote(t *testing.T) {
 	notes := []releaseNote{
@@ -778,39 +778,6 @@ func TestSelectReleaseNote(t *testing.T) {
 			t.Errorf("expected unknown-end message, got %v", missing)
 		}
 	})
-}
-
-// ─── isReleaseVersion (strict gate) ───────────────────────────────────
-
-func TestIsReleaseVersion(t *testing.T) {
-	cases := []struct {
-		v    string
-		want bool
-	}{
-		{"1.1.0", true},
-		{"0.0.0", true},
-		{"10.20.30", true},
-		{"dev", false},
-		{"", false},
-		{"1.0.2+dirty", false},
-		{"1.0.2+unknown", false},
-		// Go pseudo-versions from `go install @commit`:
-		{"0.1.0-0.20260612120000-abc123abc123", false},
-		{"v0.0.0-20240101120000-abc123abc123", false},
-		// 4-part not allowed:
-		{"1.2.3.4", false},
-		// 2-part not allowed:
-		{"1.2", false},
-		// Leading v not allowed (we strip it earlier in the pipeline):
-		{"v1.1.0", false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.v, func(t *testing.T) {
-			if got := isReleaseVersion(tc.v); got != tc.want {
-				t.Errorf("isReleaseVersion(%q) = %v, want %v", tc.v, got, tc.want)
-			}
-		})
-	}
 }
 
 func TestAnnounceDecision(t *testing.T) {
@@ -974,7 +941,7 @@ func TestAnnounceDecision(t *testing.T) {
 	}
 }
 
-// ─── maybeReleaseTakeover ─────────────────────────────────────────────
+// ─── MaybeTakeover ─────────────────────────────────────────────
 
 // TestMaybeReleaseTakeoverSaveFailure locks the degrade path: when the new
 // version state can't be persisted, the takeover is suppressed (otherwise an
@@ -1006,7 +973,7 @@ func TestMaybeReleaseTakeoverSaveFailure(t *testing.T) {
 		setupPrev(t)
 		// Pin to the statusline line count so the save-failure assertion stays
 		// focused on whether the takeover fires at all.
-		got := maybeReleaseTakeover(config.ReleaseNotesConfig{MaxLines: "status-line"}, lines, palette.Palette{}, 80, 1, now)
+		got := MaybeTakeover(config.ReleaseNotesConfig{MaxLines: "status-line"}, lines, palette.Palette{}, 80, 1, now)
 		if len(got) != len(lines) || got[0] == lines[0] {
 			t.Fatalf("takeover did not fire: %q", got)
 		}
@@ -1021,7 +988,7 @@ func TestMaybeReleaseTakeoverSaveFailure(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { os.Chmod(dir, 0o755) })
-		got := maybeReleaseTakeover(config.ReleaseNotesConfig{}, lines, palette.Palette{}, 80, 1, now)
+		got := MaybeTakeover(config.ReleaseNotesConfig{}, lines, palette.Palette{}, 80, 1, now)
 		if len(got) != 1 || got[0] != lines[0] {
 			t.Fatalf("takeover not suppressed on save failure: %q", got)
 		}
@@ -1054,35 +1021,35 @@ func TestMaybeReleaseTakeoverMaxLines(t *testing.T) {
 
 	t.Run("default expands to 10 lines", func(t *testing.T) {
 		setupPrev(t)
-		got := maybeReleaseTakeover(config.ReleaseNotesConfig{}, lines, palette.Palette{}, 80, 1, now)
+		got := MaybeTakeover(config.ReleaseNotesConfig{}, lines, palette.Palette{}, 80, 1, now)
 		if len(got) != 10 {
 			t.Errorf("len = %d, want 10", len(got))
 		}
 	})
 	t.Run("numeric max_lines honored", func(t *testing.T) {
 		setupPrev(t)
-		got := maybeReleaseTakeover(config.ReleaseNotesConfig{MaxLines: int64(5)}, lines, palette.Palette{}, 80, 1, now)
+		got := MaybeTakeover(config.ReleaseNotesConfig{MaxLines: int64(5)}, lines, palette.Palette{}, 80, 1, now)
 		if len(got) != 5 {
 			t.Errorf("len = %d, want 5", len(got))
 		}
 	})
 	t.Run("status-line keeps statusline line count", func(t *testing.T) {
 		setupPrev(t)
-		got := maybeReleaseTakeover(config.ReleaseNotesConfig{MaxLines: "status-line"}, lines, palette.Palette{}, 80, 1, now)
+		got := MaybeTakeover(config.ReleaseNotesConfig{MaxLines: "status-line"}, lines, palette.Palette{}, 80, 1, now)
 		if len(got) != len(lines) {
 			t.Errorf("len = %d, want %d", len(got), len(lines))
 		}
 	})
 	t.Run("max_lines 0 means same as statusline", func(t *testing.T) {
 		setupPrev(t)
-		got := maybeReleaseTakeover(config.ReleaseNotesConfig{MaxLines: int64(0)}, lines, palette.Palette{}, 80, 1, now)
+		got := MaybeTakeover(config.ReleaseNotesConfig{MaxLines: int64(0)}, lines, palette.Palette{}, 80, 1, now)
 		if len(got) != len(lines) {
 			t.Errorf("len = %d, want %d", len(got), len(lines))
 		}
 	})
 	t.Run("max_lines never shrinks below statusline", func(t *testing.T) {
 		setupPrev(t)
-		got := maybeReleaseTakeover(config.ReleaseNotesConfig{MaxLines: int64(1)}, lines, palette.Palette{}, 80, 1, now)
+		got := MaybeTakeover(config.ReleaseNotesConfig{MaxLines: int64(1)}, lines, palette.Palette{}, 80, 1, now)
 		if len(got) != len(lines) {
 			t.Errorf("len = %d, want %d (should not shrink)", len(got), len(lines))
 		}

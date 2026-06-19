@@ -1,4 +1,4 @@
-package main
+package update
 
 // ─── Update checking + self-swap ──────────────────────────────────────
 
@@ -23,7 +23,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -34,18 +33,18 @@ import (
 	"github.com/callmemorgan/claude-statusline/internal/version"
 )
 
-// installKind classifies the running binary so the worker can choose between
-// self-swap and `brew upgrade`. kindDev is the dev/source-build short-circuit
+// InstallKind classifies the running binary so the worker can choose between
+// self-swap and `brew upgrade`. KindDev is the dev/source-build short-circuit
 // — it disables the whole feature and matches the release-notes carve-out so
 // tests and goldens stay inert.
-type installKind int
+type InstallKind int
 
 const (
-	kindUnknown installKind = iota
-	kindDev
-	kindBrew
-	kindManual
-	kindNpm
+	KindUnknown InstallKind = iota
+	KindDev
+	KindBrew
+	KindManual
+	KindNpm
 )
 
 // updateRepoOwner / updateRepoName are compile-time constants; a
@@ -133,7 +132,7 @@ func saveUpdateCheck(c updateCheck) error {
 // updateResult records the outcome of the last completed update so the next
 // invocation (the freshly-installed binary) can show a brief confirmation. The
 // running binary that performed the update writes this; the new binary reads it
-// and confirms only when its own version matches To (see renderUpdate).
+// and confirms only when its own version matches To (see RenderSegment).
 type updateResult struct {
 	From     string `json:"from"`
 	To       string `json:"to"`
@@ -183,22 +182,22 @@ func recordUpdateResult(from, to, method string, verified bool) {
 	})
 }
 
-// updateHintFor returns the user-facing update command for an install kind.
-func updateHintFor(kind installKind) string {
+// UpdateHintFor returns the user-facing update command for an install kind.
+func UpdateHintFor(kind InstallKind) string {
 	switch kind {
-	case kindBrew:
+	case KindBrew:
 		return "brew upgrade --cask claude-statusline"
-	case kindNpm:
+	case KindNpm:
 		return "npm update -g @morgan.rebrand/claude-statusline"
 	default:
 		return "claude-statusline update"
 	}
 }
 
-// renderUpdate renders the update-available segment. It lives in the root
-// package because it depends on the update-check state machinery, and is
-// injected into internal/segments via segments.UpdateRenderer.
-func renderUpdate(ctx segments.RenderCtx) (string, bool) {
+// RenderSegment renders the update-available segment. It depends on the
+// update-check state machinery and is injected into internal/segments via
+// segments.UpdateRenderer.
+func RenderSegment(ctx segments.RenderCtx) (string, bool) {
 	current, _, _ := version.VersionString()
 	now := ctx.Now
 
@@ -213,19 +212,19 @@ func renderUpdate(ctx segments.RenderCtx) (string, bool) {
 	if ctx.Cfg.Update.ModeOrDefault() == "off" {
 		return "", false
 	}
-	if !isReleaseVersion(current) {
+	if !version.IsReleaseVersion(current) {
 		return "", false
 	}
 	cache, ok := loadUpdateCheck()
 	if !ok || cache.Latest == "" {
 		return "", false
 	}
-	if compareVersions(cache.Latest, current) <= 0 {
+	if version.CompareVersions(cache.Latest, current) <= 0 {
 		return "", false
 	}
 
-	kind := detectInstallKind(currentExePath(), current)
-	hint := updateHintFor(kind)
+	kind := DetectInstallKind(currentExePath(), current)
+	hint := UpdateHintFor(kind)
 
 	// Recent check (within the expanded window): show the full hint.
 	if d := now.Unix() - cache.CheckedAt; d >= 0 && d < int64(expandedWindow/time.Second) {
@@ -235,15 +234,15 @@ func renderUpdate(ctx segments.RenderCtx) (string, bool) {
 	return fmt.Sprintf("%s⬆ v%s%s", ctx.C.Dim, cache.Latest, ctx.C.Rst), true
 }
 
-// detectInstallKind classifies the running binary. Pure on its inputs
-// (exePath is the resolved path; "" + version "dev" → kindDev without any
+// DetectInstallKind classifies the running binary. Pure on its inputs
+// (exePath is the resolved path; "" + version "dev" → KindDev without any
 // filesystem call) so the table test needs no real symlinks. The caller
 // resolves the path via os.Executable() + filepath.EvalSymlinks — brew's
 // bin symlink points into the Cellar (formula) or Caskroom (cask), which is
 // the reliable signal.
-func detectInstallKind(exePath, version string) installKind {
+func DetectInstallKind(exePath, version string) InstallKind {
 	if version == "dev" {
-		return kindDev
+		return KindDev
 	}
 	// Match "cellar"/"homebrew" as whole slash-delimited path components, not
 	// free substrings, so a manual install under e.g. ~/homebrew-fan/ isn't
@@ -265,15 +264,15 @@ func detectInstallKind(exePath, version string) installKind {
 	// manual installs.
 	for _, seg := range segs {
 		if seg == "node_modules" {
-			return kindNpm
+			return KindNpm
 		}
 	}
 	for _, seg := range segs {
 		if seg == "cellar" || seg == "caskroom" || seg == "homebrew" {
-			return kindBrew
+			return KindBrew
 		}
 	}
-	return kindManual
+	return KindManual
 }
 
 // currentExePath resolves the running binary's path, following symlinks when
@@ -291,51 +290,6 @@ func currentExePath() string {
 		return resolved
 	}
 	return exe
-}
-
-// compareVersions returns -1/0/+1 for MAJOR.MINOR.REVISION strings (leading
-// "v" tolerated). Malformed input compares as equal-to-everything (0) so
-// garbage from the network can never trigger a swap.
-func compareVersions(a, b string) int {
-	pa, oka := parseVersion(a)
-	pb, okb := parseVersion(b)
-	if !oka || !okb {
-		return 0
-	}
-	for i := 0; i < 3; i++ {
-		if pa[i] < pb[i] {
-			return -1
-		}
-		if pa[i] > pb[i] {
-			return 1
-		}
-	}
-	return 0
-}
-
-func parseVersion(v string) ([3]int, bool) {
-	v = strings.TrimSpace(v)
-	v = strings.TrimPrefix(v, "v")
-	if v == "" {
-		return [3]int{}, false
-	}
-	parts := strings.Split(v, ".")
-	if len(parts) != 3 {
-		return [3]int{}, false
-	}
-	var out [3]int
-	for i, p := range parts {
-		// strconv.ParseUint rejects empty strings, signs, and non-digits, and
-		// — unlike a hand-rolled n=n*10+digit loop — overflow. So an oversized
-		// tag from the network parses as malformed (compareVersions → 0) rather
-		// than silently wrapping to a value that could look "newer".
-		n, err := strconv.ParseUint(p, 10, 32)
-		if err != nil {
-			return [3]int{}, false
-		}
-		out[i] = int(n)
-	}
-	return out, true
 }
 
 // ─── Update check (render path + worker) ──────────────────────────────
@@ -366,16 +320,16 @@ func spawnUpdateCheckReal() error {
 	return nil
 }
 
-// maybeSpawnUpdateCheck reads the cache and, if it's stale, spawns a
+// MaybeSpawnUpdateCheck reads the cache and, if it's stale, spawns a
 // detached `update-check` worker. Returns immediately under all conditions:
 // no network I/O, no blocking, no stdout/stderr output. Called from runRender
 // after the print loop, next to st.Save().
-func maybeSpawnUpdateCheck(cfg config.UpdateConfig, now time.Time) {
+func MaybeSpawnUpdateCheck(cfg config.UpdateConfig, now time.Time) {
 	if cfg.ModeOrDefault() == "off" {
 		return
 	}
 	current, _, _ := version.VersionString()
-	if !isReleaseVersion(current) {
+	if !version.IsReleaseVersion(current) {
 		return
 	}
 	// Cheap freshness gate first: if the cache is fresh we're done, and we skip
@@ -387,17 +341,17 @@ func maybeSpawnUpdateCheck(cfg config.UpdateConfig, now time.Time) {
 		}
 	}
 	exe := currentExePath()
-	maybeSpawnUpdateCheckFor(cfg, now, detectInstallKind(exe, current))
+	MaybeSpawnUpdateCheckFor(cfg, now, DetectInstallKind(exe, current))
 }
 
-// maybeSpawnUpdateCheckFor is the kind-aware helper; tests drive it directly
+// MaybeSpawnUpdateCheckFor is the kind-aware helper; tests drive it directly
 // with a known kind to exercise each branch. Production callers go through
-// maybeSpawnUpdateCheck.
-func maybeSpawnUpdateCheckFor(cfg config.UpdateConfig, now time.Time, kind installKind) {
+// MaybeSpawnUpdateCheck.
+func MaybeSpawnUpdateCheckFor(cfg config.UpdateConfig, now time.Time, kind InstallKind) {
 	if cfg.ModeOrDefault() == "off" {
 		return
 	}
-	if kind == kindDev {
+	if kind == KindDev {
 		return
 	}
 	if cache, ok := loadUpdateCheck(); ok {
@@ -432,49 +386,49 @@ const updateBrewTimeout = 5 * time.Minute
 // isn't mistaken for a dead worker and reaped while still running.
 const updateStaleLockTolerance = updateBrewTimeout + 2*time.Minute
 
-// runUpdate is the foreground, explicit subcommand. It ignores [update].mode
+// Run is the foreground, explicit subcommand. It ignores [update].mode
 // (explicit intent) but not the safety rails (kind, version compare, checksum,
 // smoke-test). Behavior:
 //
-//	kindDev        → hint to go install; exit 0.
-//	kindBrew       → brew upgrade (live output); missing brew → exit 1.
+//	KindDev        → hint to go install; exit 0.
+//	KindBrew       → brew upgrade (live output); missing brew → exit 1.
 //	newer exists   → download + swap, share the worker's pipeline.
 //	already current → "up to date"; exit 0.
 //	--check        → resolve + report; never install.
-func runUpdate(args []string) {
+func Run(args []string) {
 	checkOnly := false
 	for _, a := range args {
 		switch a {
 		case "--check":
 			checkOnly = true
 		case "verify", "--verify":
-			runUpdateVerify()
+			Verify()
 			return
 		}
 	}
 
 	current, _, _ := version.VersionString()
 	exe := currentExePath()
-	kind := detectInstallKind(exe, current)
+	kind := DetectInstallKind(exe, current)
 	runUpdateFor(args, checkOnly, current, kind)
 }
 
 // runUpdateFor is the testable inner path: takes the kind as a parameter
 // so tests can drive each branch without the real os.Executable() coming
-// back as a Go test binary. Production callers go through runUpdate.
-func runUpdateFor(args []string, checkOnly bool, current string, kind installKind) {
+// back as a Go test binary. Production callers go through Run.
+func runUpdateFor(args []string, checkOnly bool, current string, kind InstallKind) {
 	// npm owns its installed binary; self-swap would fight the package manager.
 	// Print a hint and never touch the file.
-	if kind == kindNpm {
-		fmt.Println("claude-statusline was installed via npm; update with `" + updateHintFor(kindNpm) + "`.")
+	if kind == KindNpm {
+		fmt.Println("claude-statusline was installed via npm; update with `" + UpdateHintFor(KindNpm) + "`.")
 		return
 	}
-	// kindDev only catches version == "dev"; a +dirty or Go pseudo-version
-	// build reports kindManual but is still a source build. Gate on the same
-	// isReleaseVersion check the worker and segment use, so `update` prints the
-	// source-build hint instead of "up to date" (compareVersions treats the
+	// KindDev only catches version == "dev"; a +dirty or Go pseudo-version
+	// build reports KindManual but is still a source build. Gate on the same
+	// version.IsReleaseVersion check the worker and segment use, so `update` prints the
+	// source-build hint instead of "up to date" (version.CompareVersions treats the
 	// non-release current version as malformed and would otherwise report 0).
-	if kind == kindDev || !isReleaseVersion(current) {
+	if kind == KindDev || !version.IsReleaseVersion(current) {
 		fmt.Println("claude-statusline is a source build; update with `go install github.com/" + updateRepoOwner + "/" + updateRepoName + "@latest`.")
 		return
 	}
@@ -487,7 +441,7 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind installKin
 	}
 	_ = saveUpdateCheck(updateCheck{CheckedAt: time.Now().Unix(), Latest: latest})
 
-	cmp := compareVersions(latest, current)
+	cmp := version.CompareVersions(latest, current)
 	if cmp <= 0 {
 		fmt.Printf("claude-statusline v%s is up to date.\n", current)
 		return
@@ -511,11 +465,11 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind installKin
 	defer releaseLock()
 
 	switch kind {
-	case kindBrew:
+	case KindBrew:
 		brewPath := findBrewExe()
 		if brewPath == "" {
 			releaseLock()
-			fmt.Fprintln(os.Stderr, "claude-statusline update: brew not found; please run `"+updateHintFor(kindBrew)+"` manually.")
+			fmt.Fprintln(os.Stderr, "claude-statusline update: brew not found; please run `"+UpdateHintFor(KindBrew)+"` manually.")
 			osExit(1)
 			return
 		}
@@ -534,7 +488,7 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind installKin
 		// Verified=false: Homebrew runs its own bottle integrity check; our
 		// embedded-key cosign verifier doesn't gate this path.
 		recordUpdateResult(current, latest, "brew", false)
-	case kindManual:
+	case KindManual:
 		if err := downloadAndSwapFn(latest, current); err != nil {
 			releaseLock()
 			fmt.Fprintf(os.Stderr, "claude-statusline update: %v\n", err)
@@ -545,12 +499,12 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind installKin
 	}
 }
 
-// runUpdateVerify fetches the latest release's checksums.txt and its cosign
-// bundle and checks the signature against the embedded public key — the same
-// in-process verification the self-swap path runs, exposed on demand. Installs
-// nothing and reads nothing local; fails closed (exit 1) on any error, matching
-// the install path.
-func runUpdateVerify() {
+// Verify fetches the latest release's checksums.txt and its cosign bundle and
+// checks the signature against the embedded public key — the same in-process
+// verification the self-swap path runs, exposed on demand. Installs nothing and
+// reads nothing local; fails closed (exit 1) on any error, matching the install
+// path.
+func Verify() {
 	tag, err := resolveLatestTagFn()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "claude-statusline update verify: could not resolve latest release: %v\n", err)
@@ -668,7 +622,7 @@ func resolveLatestTag() (string, error) {
 	tag := strings.TrimPrefix(loc[idx+len(marker):], "v")
 	tag = strings.TrimRight(tag, "/")
 	tag = strings.TrimSpace(tag)
-	if _, ok := parseVersion(tag); !ok {
+	if _, ok := version.ParseVersion(tag); !ok {
 		return "", fmt.Errorf("invalid tag in Location: %q", loc)
 	}
 	return tag, nil
@@ -1335,16 +1289,16 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	return os.Rename(tmp.Name(), dst)
 }
 
-// runUpdateCheck is the worker's entrypoint. The render path never invokes
-// this directly — it's the value of the `update-check` dispatch case. All
-// worker errors are silent: this is detached, there's nowhere to print.
-func runUpdateCheck() {
+// Check is the worker's entrypoint. The render path never invokes this
+// directly — it's the value of the `update-check` dispatch case. All worker
+// errors are silent: this is detached, there's nowhere to print.
+func Check() {
 	defer func() { _ = os.Remove(updateLockPath()) }()
 
 	current, _, _ := version.VersionString()
 	exe := currentExePath()
-	kind := detectInstallKind(exe, current)
-	if kind == kindDev || !isReleaseVersion(current) {
+	kind := DetectInstallKind(exe, current)
+	if kind == KindDev || !version.IsReleaseVersion(current) {
 		return
 	}
 	cfg, _ := config.LoadConfigWarn()
@@ -1369,15 +1323,15 @@ func runUpdateCheck() {
 	if cfg.Update.ModeOrDefault() != "auto" {
 		return
 	}
-	if compareVersions(latest, current) <= 0 {
+	if version.CompareVersions(latest, current) <= 0 {
 		return
 	}
 	switch kind {
-	case kindNpm:
+	case KindNpm:
 		// npm-owned binary: never self-swap. The notify segment still works
 		// because saveUpdateCheck ran above the switch.
 		return
-	case kindBrew:
+	case KindBrew:
 		brewPath := findBrewExe()
 		if brewPath == "" {
 			return
@@ -1391,7 +1345,7 @@ func runUpdateCheck() {
 			// Verified=false: Homebrew does its own integrity check.
 			recordUpdateResult(current, latest, "brew", false)
 		}
-	case kindManual:
+	case KindManual:
 		_ = downloadAndSwapFn(latest, current)
 	}
 }

@@ -1,4 +1,4 @@
-package main
+package releasenotes
 
 // ─── Release Notes ───────────────────────────────────────────────────
 //
@@ -163,18 +163,6 @@ func saveVersionSeen(v versionSeen) error {
 	return sys.WriteFileAtomic(versionSeenPath(), data)
 }
 
-// reReleaseVersion matches a clean release-shaped version: MAJOR.MINOR.REVISION
-// with no suffix. This rejects Go pseudo-versions ("0.1.0-0.20260612-abc"),
-// "+dirty" / "+unknown" dev markers, and any other non-release build.
-var reReleaseVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
-
-// isReleaseVersion reports whether v is a clean MAJOR.MINOR.REVISION — the
-// only form the takeover feature should fire on. Anything else (dev, dirty
-// pseudo-versions, go-install @commit) is treated as a source build.
-func isReleaseVersion(v string) bool {
-	return reReleaseVersion.MatchString(v)
-}
-
 // announceDecision decides whether this render should be replaced by the
 // release-notes announcement. Returns show (replace output) and next (state
 // to persist; a zero versionSeen means "don't write").
@@ -182,9 +170,9 @@ func announceDecision(prev versionSeen, prevOK bool, current string,
 	cfg config.ReleaseNotesConfig, now time.Time) (show bool, next versionSeen) {
 	// Source builds / non-release versions (dev, "+dirty", Go pseudo-versions
 	// from `go install @commit`) never trigger and never write.
-	// isReleaseVersion is the single gate; anything not matching
+	// version.IsReleaseVersion is the single gate; anything not matching
 	// MAJOR.MINOR.REVISION is treated as a dev build.
-	if !isReleaseVersion(current) {
+	if !version.IsReleaseVersion(current) {
 		return false, versionSeen{}
 	}
 	// Disabled: still advance the version field (so re-enabling later
@@ -237,12 +225,12 @@ func releaseNotesBetween(notes []releaseNote, from, to string, limit int) []rele
 		return nil
 	}
 	// Malformed versions or non-upgrades fall back to the target version only.
-	if compareVersions(to, from) <= 0 {
+	if version.CompareVersions(to, from) <= 0 {
 		return target.Bullets
 	}
 	var collected []releaseBullet
 	for _, n := range notes {
-		if compareVersions(n.Version, from) > 0 && compareVersions(n.Version, to) <= 0 {
+		if version.CompareVersions(n.Version, from) > 0 && version.CompareVersions(n.Version, to) <= 0 {
 			collected = append(collected, n.Bullets...)
 		}
 	}
@@ -253,8 +241,8 @@ func releaseNotesBetween(notes []releaseNote, from, to string, limit int) []rele
 	return collected
 }
 
-// runReleaseNotes implements the `release-notes` subcommand.
-func runReleaseNotes(args []string) {
+// Run implements the `release-notes` subcommand.
+func Run(args []string) {
 	notes := parseChangelog(changelogRaw)
 	current, _, _ := version.VersionString()
 
@@ -393,20 +381,19 @@ func printReleaseNote(n releaseNote, c palette.Palette) {
 
 // ─── Render-path takeover ────────────────────────────────────────────
 
-// maybeReleaseTakeover runs the decision machinery and, if the current
-// render should be replaced by the announcement, returns the takeover lines
-// matching `lines` in count (minimum 1, so the announcement still shows
-// when every segment hid). State-file errors degrade silently to the
-// normal statusline: an unreadable file reads as a fresh install (no
-// takeover), and a failed save suppresses the takeover rather than replay
-// it on every render.
+// MaybeTakeover runs the decision machinery and, if the current render should
+// be replaced by the announcement, returns the takeover lines matching `lines`
+// in count (minimum 1, so the announcement still shows when every segment hid).
+// State-file errors degrade silently to the normal statusline: an unreadable
+// file reads as a fresh install (no takeover), and a failed save suppresses the
+// takeover rather than replay it on every render.
 //
 // The padding argument is the user's [style].padding (default 1) so the
 // takeover lines indent identically to the renderer's lines. The per-line
 // truncation budget mirrors the renderer's width reserves: line 0 reserves
 // columns for the trailing " │ X.Xms" timing suffix, every line keeps the
 // safety margin.
-func maybeReleaseTakeover(cfg config.ReleaseNotesConfig, lines []string, c palette.Palette, width int, padding int, now time.Time) []string {
+func MaybeTakeover(cfg config.ReleaseNotesConfig, lines []string, c palette.Palette, width int, padding int, now time.Time) []string {
 	prev, prevOK := loadVersionSeen()
 	current, _, _ := version.VersionString()
 	show, next := announceDecision(prev, prevOK, current, cfg, now)
@@ -435,7 +422,7 @@ func maybeReleaseTakeover(cfg config.ReleaseNotesConfig, lines []string, c palet
 	} else {
 		// If we know the previous version, surface the highest-importance
 		// bullets across the whole upgrade span, not just the latest release.
-		if prevOK && isReleaseVersion(prev.Version) {
+		if prevOK && version.IsReleaseVersion(prev.Version) {
 			target = releaseNote{
 				Version: current,
 				Bullets: releaseNotesBetween(notes, prev.Version, current, n),

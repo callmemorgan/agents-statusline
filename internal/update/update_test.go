@@ -1,4 +1,4 @@
-package main
+package update
 
 import (
 	"archive/tar"
@@ -26,76 +26,36 @@ import (
 	"github.com/callmemorgan/claude-statusline/internal/state"
 )
 
-// ─── step 2: detectInstallKind, compareVersions, cache ─────────────────
+// ─── step 2: DetectInstallKind, version.CompareVersions, cache ───────
 
 func TestDetectInstallKind(t *testing.T) {
 	cases := []struct {
 		name string
 		path string
 		ver  string
-		want installKind
+		want InstallKind
 	}{
-		{"dev-version", "/usr/local/bin/claude-statusline", "dev", kindDev},
-		{"dev-on-cellar-path", "/opt/homebrew/Cellar/cs/1.0.0/bin/cs", "dev", kindDev},
-		{"cellar-apple-silicon", "/opt/homebrew/Cellar/claude-statusline/1.0.0/bin/claude-statusline", "1.0.0", kindBrew},
-		{"cellar-intel", "/usr/local/Cellar/claude-statusline/1.0.0/bin/claude-statusline", "1.0.0", kindBrew},
-		{"homebrew-prefix", "/home/me/.linuxbrew/Cellar/claude-statusline/1.0.0/bin/claude-statusline", "1.0.0", kindBrew},
-		{"local-bin", "/home/me/.local/bin/claude-statusline", "1.0.0", kindManual},
-		{"usr-local", "/usr/local/bin/claude-statusline", "1.0.0", kindManual},
-		{"windows-path", `C:\Program Files\claude-statusline\claude-statusline.exe`, "1.0.0", kindManual},
-		{"mixed-case-cellar", "/opt/homebrew/CELLAR/Claude-Statusline/1.0.0/bin/x", "1.0.0", kindBrew},
-		{"npm-global-scoped", "/Users/me/.nvm/versions/node/v20.0.0/lib/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", "1.0.0", kindNpm},
-		{"npm-local-bin", "/home/me/project/node_modules/.bin/claude-statusline", "1.0.0", kindNpm},
-		{"npm-npx-cache", "/Users/me/.npm/_npx/abc123/node_modules/@morgan.rebrand/claude-statusline/bin/claude-statusline", "1.0.0", kindNpm},
-		{"node-modules-backup-not-npm", "/home/me/node_modules-backup/claude-statusline/bin/claude-statusline", "1.0.0", kindManual},
-		{"npm-under-homebrew-prefix", "/opt/homebrew/lib/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", "1.0.0", kindNpm},
+		{"dev-version", "/usr/local/bin/claude-statusline", "dev", KindDev},
+		{"dev-on-cellar-path", "/opt/homebrew/Cellar/cs/1.0.0/bin/cs", "dev", KindDev},
+		{"cellar-apple-silicon", "/opt/homebrew/Cellar/claude-statusline/1.0.0/bin/claude-statusline", "1.0.0", KindBrew},
+		{"cellar-intel", "/usr/local/Cellar/claude-statusline/1.0.0/bin/claude-statusline", "1.0.0", KindBrew},
+		{"homebrew-prefix", "/home/me/.linuxbrew/Cellar/claude-statusline/1.0.0/bin/claude-statusline", "1.0.0", KindBrew},
+		{"local-bin", "/home/me/.local/bin/claude-statusline", "1.0.0", KindManual},
+		{"usr-local", "/usr/local/bin/claude-statusline", "1.0.0", KindManual},
+		{"windows-path", `C:\Program Files\claude-statusline\claude-statusline.exe`, "1.0.0", KindManual},
+		{"mixed-case-cellar", "/opt/homebrew/CELLAR/Claude-Statusline/1.0.0/bin/x", "1.0.0", KindBrew},
+		{"npm-global-scoped", "/Users/me/.nvm/versions/node/v20.0.0/lib/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", "1.0.0", KindNpm},
+		{"npm-local-bin", "/home/me/project/node_modules/.bin/claude-statusline", "1.0.0", KindNpm},
+		{"npm-npx-cache", "/Users/me/.npm/_npx/abc123/node_modules/@morgan.rebrand/claude-statusline/bin/claude-statusline", "1.0.0", KindNpm},
+		{"node-modules-backup-not-npm", "/home/me/node_modules-backup/claude-statusline/bin/claude-statusline", "1.0.0", KindManual},
+		{"npm-under-homebrew-prefix", "/opt/homebrew/lib/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", "1.0.0", KindNpm},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := detectInstallKind(tc.path, tc.ver); got != tc.want {
-				t.Errorf("detectInstallKind(%q, %q) = %v, want %v", tc.path, tc.ver, got, tc.want)
+			if got := DetectInstallKind(tc.path, tc.ver); got != tc.want {
+				t.Errorf("DetectInstallKind(%q, %q) = %v, want %v", tc.path, tc.ver, got, tc.want)
 			}
 		})
-	}
-}
-
-func TestCompareVersions(t *testing.T) {
-	cases := []struct {
-		a, b string
-		want int
-	}{
-		{"1.0.0", "1.0.0", 0},
-		{"1.0.0", "1.0.1", -1},
-		{"1.0.1", "1.0.0", 1},
-		{"1.0.0", "2.0.0", -1},
-		{"2.0.0", "1.99.99", 1},
-		{"v1.2.0", "1.1.9", 1},
-		{"1.2.0", "v1.2.0", 0},
-		{"1.10.0", "1.9.99", 1},
-		{"malformed", "1.0.0", 0},
-		{"1.0.0", "garbage", 0},
-		{"", "1.0.0", 0},
-		{"v", "1.0.0", 0},
-		{"1.0", "1.0.0", 0},
-		{"1.0.0.0", "1.0.0", 0},
-		{"1.-1.0", "1.0.0", 0},
-		{"1.0.0+meta", "1.0.0", 0}, // strict: +meta is treated as malformed
-	}
-	for _, tc := range cases {
-		got := compareVersions(tc.a, tc.b)
-		if got != tc.want {
-			t.Errorf("compareVersions(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
-		}
-	}
-	// Property: malformed never compares greater.
-	bad := []string{"", "v", "1", "1.0", "1.0.0.0", "1.x.0", "1.-1.0", "1.0.0+meta", "  ", "abc"}
-	for _, b := range bad {
-		if compareVersions(b, "1.0.0") > 0 {
-			t.Errorf("malformed %q compared greater than 1.0.0", b)
-		}
-		if compareVersions("1.0.0", b) < 0 {
-			t.Errorf("1.0.0 compared less than malformed %q", b)
-		}
 	}
 }
 
@@ -152,7 +112,7 @@ func TestUpdateCheckCacheRoundTrip(t *testing.T) {
 	}
 }
 
-// ─── step 3: maybeSpawnUpdateCheck ───────────────────────────────────
+// ─── step 3: MaybeSpawnUpdateCheck ───────────────────────────────────
 
 type updateSpawnCall struct{}
 
@@ -178,7 +138,7 @@ func TestMaybeSpawnUpdateCheck(t *testing.T) {
 	if err := saveUpdateCheck(updateCheck{CheckedAt: now.Unix() - 60, Latest: "1.0.0"}); err != nil {
 		t.Fatal(err)
 	}
-	maybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, kindManual)
+	MaybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, KindManual)
 	if len(*calls) != 0 {
 		t.Errorf("fresh cache should not spawn, got %d calls", len(*calls))
 	}
@@ -194,14 +154,14 @@ func TestMaybeSpawnUpdateCheck(t *testing.T) {
 	if err := os.WriteFile(updateLockPath(), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	maybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, kindManual)
+	MaybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, KindManual)
 	if len(*calls) != 0 {
 		t.Errorf("active lock should block spawn, got %d calls", len(*calls))
 	}
 
 	// Stale cache + no lock → spawns once.
 	_ = os.Remove(updateLockPath())
-	maybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, kindManual)
+	MaybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, KindManual)
 	if len(*calls) != 1 {
 		t.Errorf("stale cache should spawn, got %d calls", len(*calls))
 	}
@@ -211,7 +171,7 @@ func TestMaybeSpawnUpdateCheck(t *testing.T) {
 		t.Errorf("spawn should leave a fresh lock; got %v", err)
 	}
 	_ = os.Chtimes(updateLockPath(), time.Now(), time.Now())
-	maybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, kindManual)
+	MaybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, KindManual)
 	if len(*calls) != 1 {
 		t.Errorf("fresh lock should block second spawn, got %d calls", len(*calls))
 	}
@@ -222,14 +182,14 @@ func TestMaybeSpawnUpdateCheck(t *testing.T) {
 	if err := saveUpdateCheck(stale); err != nil {
 		t.Fatal(err)
 	}
-	maybeSpawnUpdateCheckFor(config.UpdateConfig{Mode: "off", CheckHours: &h24}, now, kindManual)
+	MaybeSpawnUpdateCheckFor(config.UpdateConfig{Mode: "off", CheckHours: &h24}, now, KindManual)
 	if len(*calls) != 0 {
 		t.Errorf("off mode should never spawn, got %d calls", len(*calls))
 	}
 
 	// dev kind → never spawns.
 	*calls = nil
-	maybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, kindDev)
+	MaybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, KindDev)
 	if len(*calls) != 0 {
 		t.Errorf("dev kind should never spawn, got %d calls", len(*calls))
 	}
@@ -240,7 +200,7 @@ func TestMaybeSpawnUpdateCheck(t *testing.T) {
 	if err := saveUpdateCheck(updateCheck{CheckedAt: now.Unix() - 60, Latest: ""}); err != nil {
 		t.Fatal(err)
 	}
-	maybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, kindManual)
+	MaybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, KindManual)
 	if len(*calls) != 0 {
 		t.Errorf("recent failed-check should not respawn, got %d calls", len(*calls))
 	}
@@ -256,7 +216,7 @@ func TestMaybeSpawnUpdateCheck(t *testing.T) {
 	if err := saveUpdateCheck(stale); err != nil {
 		t.Fatal(err)
 	}
-	maybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, kindManual)
+	MaybeSpawnUpdateCheckFor(config.UpdateConfig{CheckHours: &h12}, now, KindManual)
 	if failCalls != 1 {
 		t.Errorf("expected one failed spawn attempt, got %d", failCalls)
 	}
@@ -272,7 +232,7 @@ func TestMaybeSpawnUpdateCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = os.Remove(updateLockPath())
-	maybeSpawnUpdateCheck(config.UpdateConfig{CheckHours: &h12}, now)
+	MaybeSpawnUpdateCheck(config.UpdateConfig{CheckHours: &h12}, now)
 	if len(*calls) != 0 {
 		t.Errorf("dev test build should not spawn via the public path, got %d calls", len(*calls))
 	}
@@ -297,12 +257,12 @@ func TestMaybeSpawnUpdateCheckNonRelease(t *testing.T) {
 
 	// Non-release version shapes (source builds, go install @commit,
 	// dirty builds) must never spawn a worker, because the segment already
-	// hides on !isReleaseVersion and the worker could never install them.
+	// hides on !version.IsReleaseVersion and the worker could never install them.
 	for _, v := range []string{"1.0.0+dirty", "0.0.0-20260612-abc123"} {
 		*calls = nil
 		_ = os.Remove(updateLockPath())
 		withTestVersion(t, v)
-		maybeSpawnUpdateCheck(config.UpdateConfig{CheckHours: &h12}, now)
+		MaybeSpawnUpdateCheck(config.UpdateConfig{CheckHours: &h12}, now)
 		if len(*calls) != 0 {
 			t.Errorf("non-release version %q should never spawn, got %d calls", v, len(*calls))
 		}
@@ -668,7 +628,7 @@ func TestBrewBranch(t *testing.T) {
 
 	// Auto + brew → runs upgrade, no live output, with the right env.
 	calls = nil
-	env := driveWorkerBrew(t, kindBrew, "9.9.9", "1.0.0", config.UpdateConfig{Mode: "auto"})
+	env := driveWorkerBrew(t, KindBrew, "9.9.9", "1.0.0", config.UpdateConfig{Mode: "auto"})
 	if len(calls) != 1 {
 		t.Fatalf("auto+brew should run upgrade, got %d calls", len(calls))
 	}
@@ -697,7 +657,7 @@ func TestBrewBranch(t *testing.T) {
 	// Missing brew → silent fallback, no exec.
 	findBrewExe = func() string { return "" }
 	calls = nil
-	driveWorkerBrew(t, kindBrew, "9.9.9", "1.0.0", config.UpdateConfig{Mode: "auto"})
+	driveWorkerBrew(t, KindBrew, "9.9.9", "1.0.0", config.UpdateConfig{Mode: "auto"})
 	if len(calls) != 0 {
 		t.Error("missing brew should not exec")
 	}
@@ -705,21 +665,21 @@ func TestBrewBranch(t *testing.T) {
 	// Notify + brew → never execs.
 	findBrewExe = func() string { return "/opt/homebrew/bin/brew" }
 	calls = nil
-	driveWorkerBrew(t, kindBrew, "9.9.9", "1.0.0", config.UpdateConfig{Mode: "notify"})
+	driveWorkerBrew(t, KindBrew, "9.9.9", "1.0.0", config.UpdateConfig{Mode: "notify"})
 	if len(calls) != 0 {
 		t.Error("notify mode should never run brew upgrade")
 	}
 
 	// Older latest → no install.
 	calls = nil
-	driveWorkerBrew(t, kindBrew, "1.0.0", "2.0.0", config.UpdateConfig{Mode: "auto"})
+	driveWorkerBrew(t, KindBrew, "1.0.0", "2.0.0", config.UpdateConfig{Mode: "auto"})
 	if len(calls) != 0 {
 		t.Error("older/latest-equal should not run upgrade")
 	}
 
 	// Dev → never runs.
 	calls = nil
-	driveWorkerBrew(t, kindDev, "9.9.9", "1.0.0", config.UpdateConfig{Mode: "auto"})
+	driveWorkerBrew(t, KindDev, "9.9.9", "1.0.0", config.UpdateConfig{Mode: "auto"})
 	if len(calls) != 0 {
 		t.Error("dev build should not run brew upgrade")
 	}
@@ -740,7 +700,7 @@ mode = "auto"
 	}
 
 	// Make the running binary appear to live inside node_modules so the worker
-	// classifies the install as kindNpm.
+	// classifies the install as KindNpm.
 	oldExe := osExecutable
 	osExecutable = func() (string, error) {
 		return "/tmp/npm-test/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", nil
@@ -762,7 +722,7 @@ mode = "auto"
 	resolveLatestTagFn = func() (string, error) { return "9.9.9", nil }
 
 	withTestVersion(t, "1.0.0")
-	runUpdateCheck()
+	Check()
 	if swapCalls != 0 {
 		t.Errorf("npm kind + auto + newer should never self-swap, got %d swap calls", swapCalls)
 	}
@@ -787,12 +747,12 @@ func TestRunUpdateCheckNonRelease(t *testing.T) {
 	t.Cleanup(func() { resolveLatestTagFn = old })
 
 	// Non-release version shapes must short-circuit the worker before any
-	// network I/O, because compareVersions would treat them as malformed
+	// network I/O, because version.CompareVersions would treat them as malformed
 	// and the segment already hides them.
 	for _, v := range []string{"1.0.0+dirty", "0.0.0-20260612-abc123"} {
 		resolveCalls = 0
 		withTestVersion(t, v)
-		runUpdateCheck()
+		Check()
 		if resolveCalls != 0 {
 			t.Errorf("non-release version %q should not resolve latest, got %d calls", v, resolveCalls)
 		}
@@ -800,13 +760,13 @@ func TestRunUpdateCheckNonRelease(t *testing.T) {
 
 	// A clean release version still reaches the network (and writes a cache).
 	withTestVersion(t, "1.0.0")
-	runUpdateCheck()
+	Check()
 	if resolveCalls != 1 {
 		t.Errorf("release version should resolve latest once, got %d calls", resolveCalls)
 	}
 }
 
-// ─── step 5: renderUpdate segment ────────────────────────────────────
+// ─── step 5: RenderSegment segment ────────────────────────────────────
 
 // withTestVersion sets a fake "current version" for the test by overriding
 // the package-level `version` variable. Returns a cleanup that restores it.
@@ -817,17 +777,9 @@ func withTestVersion(t *testing.T, v string) {
 	t.Cleanup(func() { version.Version = old })
 }
 
-// initUpdateSegment registers the update segment with the registry. Tests
-// for renderUpdate call this so segmentByID("update") resolves.
-func initUpdateSegment() {
-	// Re-init the registry to include the new segment.
-	initSegments(nil)
-}
-
 func TestRenderUpdate(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", dir)
-	initUpdateSegment()
 
 	now := time.Unix(1750000000, 0)
 	h12 := 12
@@ -835,44 +787,44 @@ func TestRenderUpdate(t *testing.T) {
 	// dev → always hidden, even with a cache that says we're behind.
 	withTestVersion(t, "dev")
 	_ = saveUpdateCheck(updateCheck{CheckedAt: now.Unix(), Latest: "9.9.9"})
-	if got, show := renderUpdate(segments.RenderCtx{Now: now}); show {
+	if got, show := RenderSegment(segments.RenderCtx{Now: now}); show {
 		t.Errorf("dev should hide, got %q", got)
 	}
 
 	// Non-release-shaped version (e.g. +dirty) → also hidden.
 	withTestVersion(t, "1.2.0+dirty")
-	if got, show := renderUpdate(segments.RenderCtx{Now: now}); show {
+	if got, show := RenderSegment(segments.RenderCtx{Now: now}); show {
 		t.Errorf("non-release version should hide, got %q", got)
 	}
 
 	// Release version, no cache → hidden.
 	withTestVersion(t, "1.0.0")
 	_ = os.Remove(updateCheckPath())
-	if got, show := renderUpdate(segments.RenderCtx{Now: now}); show {
+	if got, show := RenderSegment(segments.RenderCtx{Now: now}); show {
 		t.Errorf("no cache should hide, got %q", got)
 	}
 
 	// Cache with empty Latest (last check failed) → hidden.
 	_ = saveUpdateCheck(updateCheck{CheckedAt: now.Unix(), Latest: ""})
-	if got, show := renderUpdate(segments.RenderCtx{Now: now}); show {
+	if got, show := RenderSegment(segments.RenderCtx{Now: now}); show {
 		t.Errorf("empty-latest cache should hide, got %q", got)
 	}
 
 	// Cache with latest == current → hidden (not behind).
 	_ = saveUpdateCheck(updateCheck{CheckedAt: now.Unix(), Latest: "1.0.0"})
-	if got, show := renderUpdate(segments.RenderCtx{Now: now}); show {
+	if got, show := RenderSegment(segments.RenderCtx{Now: now}); show {
 		t.Errorf("equal version should hide, got %q", got)
 	}
 
 	// Cache with latest < current (downgrade) → hidden.
 	_ = saveUpdateCheck(updateCheck{CheckedAt: now.Unix(), Latest: "0.9.0"})
-	if got, show := renderUpdate(segments.RenderCtx{Now: now}); show {
+	if got, show := RenderSegment(segments.RenderCtx{Now: now}); show {
 		t.Errorf("older latest should hide, got %q", got)
 	}
 
 	// Cache with latest > current, recent check (within 5 min) → expanded.
 	_ = saveUpdateCheck(updateCheck{CheckedAt: now.Unix() - 60, Latest: "1.2.0"})
-	got, show := renderUpdate(segments.RenderCtx{Now: now, C: palette.Palette{Dim: "", Rst: ""}})
+	got, show := RenderSegment(segments.RenderCtx{Now: now, C: palette.Palette{Dim: "", Rst: ""}})
 	if !show {
 		t.Fatal("expected expanded form to show")
 	}
@@ -893,7 +845,7 @@ func TestRenderUpdate(t *testing.T) {
 		return "/tmp/npm-test/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", nil
 	}
 	t.Cleanup(func() { osExecutable = oldExe })
-	got, show = renderUpdate(segments.RenderCtx{Now: now, C: palette.Palette{Dim: "", Rst: ""}})
+	got, show = RenderSegment(segments.RenderCtx{Now: now, C: palette.Palette{Dim: "", Rst: ""}})
 	if !show {
 		t.Fatal("expected npm expanded form to show")
 	}
@@ -903,7 +855,7 @@ func TestRenderUpdate(t *testing.T) {
 	osExecutable = oldExe
 
 	// Same cache, Now 10 min after check → compact.
-	got, show = renderUpdate(segments.RenderCtx{Now: now.Add(10 * time.Minute), C: palette.Palette{Dim: "", Rst: ""}})
+	got, show = RenderSegment(segments.RenderCtx{Now: now.Add(10 * time.Minute), C: palette.Palette{Dim: "", Rst: ""}})
 	if !show {
 		t.Fatal("expected compact form to show")
 	}
@@ -915,14 +867,14 @@ func TestRenderUpdate(t *testing.T) {
 	}
 
 	// Real palette → ANSI codes appear.
-	got, show = renderUpdate(segments.RenderCtx{Now: now.Add(10 * time.Minute), C: palette.Palette{Dim: "\x1b[2m", Rst: "\x1b[0m"}})
+	got, show = RenderSegment(segments.RenderCtx{Now: now.Add(10 * time.Minute), C: palette.Palette{Dim: "\x1b[2m", Rst: "\x1b[0m"}})
 	if !show || !strings.Contains(got, "\x1b[2m") || !strings.Contains(got, "\x1b[0m") {
 		t.Errorf("real palette should render ANSI: %q", got)
 	}
 
 	// mode = off hides even when the cache says we're behind.
 	_ = saveUpdateCheck(updateCheck{CheckedAt: now.Unix() - 60, Latest: "1.2.0"})
-	if got, show := renderUpdate(segments.RenderCtx{
+	if got, show := RenderSegment(segments.RenderCtx{
 		Now: now,
 		Cfg: config.Config{Update: config.UpdateConfig{Mode: "off"}},
 		C:   palette.Palette{Dim: "", Rst: ""},
@@ -981,7 +933,7 @@ func TestUpdateSubcommand(t *testing.T) {
 	// --check on a newer release: report, never install.
 	swapCalls = nil
 	brewCalls = nil
-	runUpdateFor(nil, true, "1.0.0", kindManual)
+	runUpdateFor(nil, true, "1.0.0", KindManual)
 	if len(swapCalls) != 0 {
 		t.Error("--check should not call downloadAndSwap")
 	}
@@ -992,7 +944,7 @@ func TestUpdateSubcommand(t *testing.T) {
 	// npm install: hint only, never calls swap or brew, even in auto mode.
 	swapCalls = nil
 	brewCalls = nil
-	runUpdateFor(nil, false, "1.0.0", kindNpm)
+	runUpdateFor(nil, false, "1.0.0", KindNpm)
 	if len(swapCalls) != 0 {
 		t.Error("npm install should not call downloadAndSwap")
 	}
@@ -1002,7 +954,7 @@ func TestUpdateSubcommand(t *testing.T) {
 
 	// Manual install: real call to downloadAndSwap.
 	swapCalls = nil
-	runUpdateFor(nil, false, "1.0.0", kindManual)
+	runUpdateFor(nil, false, "1.0.0", KindManual)
 	if len(swapCalls) != 1 || swapCalls[0].latest != "1.2.0" || swapCalls[0].current != "1.0.0" {
 		t.Errorf("manual install should call downloadAndSwap(1.2.0, 1.0.0), got %+v", swapCalls)
 	}
@@ -1012,7 +964,7 @@ func TestUpdateSubcommand(t *testing.T) {
 	brewCalls = nil
 	findBrewExe = func() string { return "/opt/homebrew/bin/brew" }
 	refreshed = 0
-	runUpdateFor(nil, false, "1.0.0", kindBrew)
+	runUpdateFor(nil, false, "1.0.0", KindBrew)
 	if len(swapCalls) != 0 {
 		t.Error("brew install should not call downloadAndSwap")
 	}
@@ -1030,7 +982,7 @@ func TestUpdateSubcommand(t *testing.T) {
 	swapCalls = nil
 	brewCalls = nil
 	resolveLatestTagFn = func() (string, error) { return "1.0.0", nil }
-	runUpdateFor(nil, false, "1.0.0", kindManual)
+	runUpdateFor(nil, false, "1.0.0", KindManual)
 	if len(swapCalls) != 0 || len(brewCalls) != 0 {
 		t.Error("current version should not install")
 	}
@@ -1038,7 +990,7 @@ func TestUpdateSubcommand(t *testing.T) {
 	// Older latest (downgrade): no install.
 	swapCalls = nil
 	resolveLatestTagFn = func() (string, error) { return "0.9.0", nil }
-	runUpdateFor(nil, false, "1.0.0", kindManual)
+	runUpdateFor(nil, false, "1.0.0", KindManual)
 	if len(swapCalls) != 0 {
 		t.Error("older/latest-equal should not install")
 	}
@@ -1046,18 +998,18 @@ func TestUpdateSubcommand(t *testing.T) {
 	// dev → hint, never install.
 	swapCalls = nil
 	resolveLatestTagFn = func() (string, error) { return "9.9.9", nil }
-	runUpdateFor(nil, false, "dev", kindDev)
+	runUpdateFor(nil, false, "dev", KindDev)
 	if len(swapCalls) != 0 {
 		t.Error("dev should not install")
 	}
 
-	// Non-release build (+dirty / pseudo-version) reports kindManual but must
+	// Non-release build (+dirty / pseudo-version) reports KindManual but must
 	// still be treated as a source build: source-build hint, never install
-	// (compareVersions would otherwise call it "up to date").
+	// (version.CompareVersions would otherwise call it "up to date").
 	for _, v := range []string{"1.0.0+dirty", "0.0.0-20260612-abc123"} {
 		swapCalls = nil
 		brewCalls = nil
-		runUpdateFor(nil, false, v, kindManual)
+		runUpdateFor(nil, false, v, KindManual)
 		if len(swapCalls) != 0 || len(brewCalls) != 0 {
 			t.Errorf("non-release build %q should not install", v)
 		}
@@ -1065,14 +1017,14 @@ func TestUpdateSubcommand(t *testing.T) {
 
 	// Resolve failure: exits 1 (and the subcommand writes to stderr).
 	resolveLatestTagFn = func() (string, error) { return "", errors.New("net down") }
-	if code := callRunUpdateFor(t, false, "1.0.0", kindManual); code == 0 {
+	if code := callRunUpdateFor(t, false, "1.0.0", KindManual); code == 0 {
 		t.Error("resolve failure should exit non-zero")
 	}
 }
 
 // callRunUpdateFor runs the subcommand and recovers from osExit so tests
 // can assert on the exit code.
-func callRunUpdateFor(t *testing.T, checkOnly bool, current string, kind installKind) int {
+func callRunUpdateFor(t *testing.T, checkOnly bool, current string, kind InstallKind) int {
 	t.Helper()
 	code := 0
 	oldExit := osExit
@@ -1089,23 +1041,23 @@ func callRunUpdateFor(t *testing.T, checkOnly bool, current string, kind install
 // can call without touching the network. Returns the env the brew branch
 // would have used (for assertions on HOMEBREW_NO_AUTO_UPDATE), or nil when
 // the branch did not run.
-func driveWorkerBrew(t *testing.T, kind installKind, latest, current string, cfg config.UpdateConfig) []string {
+func driveWorkerBrew(t *testing.T, kind InstallKind, latest, current string, cfg config.UpdateConfig) []string {
 	t.Helper()
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	dir := state.StateBaseDir()
 	_ = os.MkdirAll(dir, 0o755)
 	_ = saveUpdateCheck(updateCheck{CheckedAt: time.Now().Unix(), Latest: latest})
 
-	if kind == kindDev {
+	if kind == KindDev {
 		return nil
 	}
 	if cfg.ModeOrDefault() != "auto" {
 		return nil
 	}
-	if compareVersions(latest, current) <= 0 {
+	if version.CompareVersions(latest, current) <= 0 {
 		return nil
 	}
-	if kind != kindBrew {
+	if kind != KindBrew {
 		return nil
 	}
 	brewPath := findBrewExe()
@@ -1238,7 +1190,7 @@ func TestExtractRejectsDecompressionBomb(t *testing.T) {
 // requires the staged binary's `version` output to contain the bare tag, which
 // only holds if GoReleaser injects {{.Version}} (no leading v) into main.version.
 func TestGoreleaserInjectsBareVersion(t *testing.T) {
-	data, err := os.ReadFile(".goreleaser.yaml")
+	data, err := os.ReadFile("../../.goreleaser.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1302,36 +1254,35 @@ func TestUpdateResultRoundTrip(t *testing.T) {
 // before the available-notice logic.
 func TestRenderUpdateConfirmation(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	initUpdateSegment()
 	withTestVersion(t, "1.2.1")
 	now := time.Unix(1750000000, 0)
 	c := palette.Palette{ROK: "", Rst: ""}
 
 	// Result targets the running version, recorded just now → confirmation shows.
 	_ = saveUpdateResult(updateResult{From: "1.2.0", To: "1.2.1", Method: "swap", Verified: true, At: now.Unix()})
-	got, show := renderUpdate(segments.RenderCtx{Now: now, C: c})
+	got, show := RenderSegment(segments.RenderCtx{Now: now, C: c})
 	if !show || !strings.Contains(got, "✓ updated to v1.2.1") {
 		t.Errorf("fresh matching result should confirm, got %q show=%v", got, show)
 	}
 	// Confirmation precedes the mode==off guard (a manual update still confirms).
-	if _, show := renderUpdate(segments.RenderCtx{Now: now, C: c, Cfg: config.Config{Update: config.UpdateConfig{Mode: "off"}}}); !show {
+	if _, show := RenderSegment(segments.RenderCtx{Now: now, C: c, Cfg: config.Config{Update: config.UpdateConfig{Mode: "off"}}}); !show {
 		t.Error("confirmation should show even with mode=off")
 	}
 
 	// Expired window → falls through (no update.json cache → hidden).
-	if got, show := renderUpdate(segments.RenderCtx{Now: now.Add(10 * time.Minute), C: c}); show {
+	if got, show := RenderSegment(segments.RenderCtx{Now: now.Add(10 * time.Minute), C: c}); show {
 		t.Errorf("expired confirmation should not show, got %q", got)
 	}
 
 	// Result targets a different version (e.g. brew no-op / stale) → no confirm.
 	_ = saveUpdateResult(updateResult{From: "1.2.0", To: "9.9.9", Method: "brew", At: now.Unix()})
-	if got, show := renderUpdate(segments.RenderCtx{Now: now, C: c}); show {
+	if got, show := RenderSegment(segments.RenderCtx{Now: now, C: c}); show {
 		t.Errorf("non-matching To should not confirm, got %q", got)
 	}
 
 	// Future At (clock skew) → guarded, no confirm.
 	_ = saveUpdateResult(updateResult{From: "1.2.0", To: "1.2.1", Method: "swap", At: now.Add(time.Hour).Unix()})
-	if got, show := renderUpdate(segments.RenderCtx{Now: now, C: c}); show {
+	if got, show := RenderSegment(segments.RenderCtx{Now: now, C: c}); show {
 		t.Errorf("future At should be guarded, got %q", got)
 	}
 }
@@ -1376,7 +1327,7 @@ func TestRunUpdateVerify(t *testing.T) {
 	osExit = func(c int) { exitCode = c; panic("exit") }
 	run := func() {
 		defer func() { recover() }()
-		runUpdateVerify()
+		Verify()
 	}
 
 	// Valid signature → no exit.

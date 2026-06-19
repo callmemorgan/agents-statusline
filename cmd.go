@@ -9,12 +9,15 @@ import (
 	"time"
 
 	"github.com/callmemorgan/claude-statusline/internal/config"
+	"github.com/callmemorgan/claude-statusline/internal/install"
 	"github.com/callmemorgan/claude-statusline/internal/palette"
 	"github.com/callmemorgan/claude-statusline/internal/payload"
 	"github.com/callmemorgan/claude-statusline/internal/plugins"
+	"github.com/callmemorgan/claude-statusline/internal/releasenotes"
 	"github.com/callmemorgan/claude-statusline/internal/render"
 	"github.com/callmemorgan/claude-statusline/internal/segments"
 	"github.com/callmemorgan/claude-statusline/internal/state"
+	"github.com/callmemorgan/claude-statusline/internal/update"
 	"github.com/callmemorgan/claude-statusline/internal/version"
 )
 
@@ -34,10 +37,10 @@ func dispatch() {
 			runConfigure()
 			return
 		case "install":
-			runInstall(os.Args[2:])
+			install.Run(os.Args[2:])
 			return
 		case "uninstall":
-			runUninstall(os.Args[2:])
+			install.Uninstall(os.Args[2:])
 			return
 		case "debug":
 			runRender(true)
@@ -48,13 +51,13 @@ func dispatch() {
 			}
 			return
 		case "release-notes":
-			runReleaseNotes(os.Args[2:])
+			releasenotes.Run(os.Args[2:])
 			return
 		case "update":
-			runUpdate(os.Args[2:])
+			update.Run(os.Args[2:])
 			return
 		case "update-check":
-			runUpdateCheck()
+			update.Check()
 			return
 		default:
 			fmt.Fprintf(os.Stderr, "unknown command %q (try: claude-statusline --help)\n", os.Args[1])
@@ -97,7 +100,7 @@ func runRender(debug bool) {
 	style := render.StyleFor(cfg, colors)
 	lines := render.Statusline(render.Input{P: p, C: colors, Cfg: cfg, State: st, Width: width, Now: start})
 
-	lines = maybeReleaseTakeover(cfg.ReleaseNotes, lines, colors, width, style.Padding, start)
+	lines = releasenotes.MaybeTakeover(cfg.ReleaseNotes, lines, colors, width, style.Padding, start)
 
 	elapsedMS := float64(time.Since(start).Microseconds()) / 1000.0
 	if len(lines) > 0 {
@@ -115,16 +118,16 @@ func runRender(debug bool) {
 	// Spawn the update-check worker after output. This is the only
 	// post-render side effect, and it never blocks: the worker is
 	// detached, returns immediately, and respects `mode = "off"`.
-	maybeSpawnUpdateCheck(cfg.Update, start)
+	update.MaybeSpawnUpdateCheck(cfg.Update, start)
 }
 
 // initSegments initializes the segment registry and registers plugin segments.
-// It also wires the update segment renderer, which lives in the root package to
+// It also wires the update segment renderer, which lives in internal/update to
 // avoid an import cycle with the update-check machinery.
 func initSegments(pluginDefs []config.PluginDef) {
 	segments.Init()
 	plugins.Load(pluginDefs)
-	segments.UpdateRenderer = renderUpdate
+	segments.UpdateRenderer = update.RenderSegment
 }
 
 // validateSegmentRefs reports config references to segments or setting keys
