@@ -1,14 +1,13 @@
-package main
+package tui
 
 import (
-	_ "embed"
 	"regexp"
 	"strings"
 
 	"github.com/rivo/tview"
 )
 
-//go:embed README.md
+// readmeContent is populated by Run from the root package's embedded README.md.
 var readmeContent string
 
 // ─── Markdown → tview renderer ───────────────────────────────────────

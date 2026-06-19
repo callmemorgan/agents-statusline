@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"regexp"
@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"github.com/callmemorgan/claude-statusline/internal/config"
-
 	"github.com/callmemorgan/claude-statusline/internal/payload"
+	"github.com/callmemorgan/claude-statusline/internal/plugins"
 	"github.com/callmemorgan/claude-statusline/internal/segments"
 	"github.com/callmemorgan/claude-statusline/internal/state"
+	"github.com/callmemorgan/claude-statusline/internal/update"
 )
 
 // The TUI preview must demonstrate every feature, including ones whose real
@@ -70,7 +71,10 @@ func TestPreviewStateRendersStateFeatures(t *testing.T) {
 }
 
 func TestSamplePayloadShowsNewSegments(t *testing.T) {
-	initSegments(nil)
+	segments.Init()
+	plugins.Load(nil)
+	segments.UpdateRenderer = update.RenderSegment
+
 	p := payload.SamplePayload()
 	for _, tc := range []struct{ id, want string }{
 		{"output-style", "Explanatory"},

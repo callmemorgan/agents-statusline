@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"bufio"
@@ -15,9 +15,11 @@ import (
 	"github.com/callmemorgan/claude-statusline/internal/config"
 	"github.com/callmemorgan/claude-statusline/internal/palette"
 	"github.com/callmemorgan/claude-statusline/internal/payload"
+	"github.com/callmemorgan/claude-statusline/internal/plugins"
 	"github.com/callmemorgan/claude-statusline/internal/render"
 	"github.com/callmemorgan/claude-statusline/internal/segments"
 	"github.com/callmemorgan/claude-statusline/internal/state"
+	"github.com/callmemorgan/claude-statusline/internal/update"
 )
 
 // ─── Configure Mode ──────────────────────────────────────────────────
@@ -74,7 +76,12 @@ func previewState(now time.Time) *state.SessionState {
 	return st
 }
 
-func runConfigure() {
+// Run launches the interactive configuration TUI. It loads the config,
+// initializes the segment registry and plugins, and blocks until the user quits.
+// The readme string is the full README.md content for the in-TUI help overlay.
+func Run(readme string) {
+	readmeContent = readme
+
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		fmt.Fprintln(os.Stderr, "claude-statusline configure requires an interactive terminal.")
 		fmt.Fprintf(os.Stderr, "Edit %s directly, or run from a terminal.\n", config.ConfigPath())
@@ -82,7 +89,9 @@ func runConfigure() {
 	}
 
 	cfg, cfgWarns := config.LoadConfigWarn()
-	initSegments(cfg.Plugins)
+	segments.Init()
+	plugins.Load(cfg.Plugins)
+	segments.UpdateRenderer = update.RenderSegment
 
 	// Synthetic data so every feature previews: an hour of session history
 	// for the state-derived segments, and a fake rich-git result (the sample

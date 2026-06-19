@@ -1,4 +1,4 @@
-package main
+package tui
 
 // ─── Theme & Preset Pickers ──────────────────────────────────────────
 //

@@ -3,6 +3,7 @@ package main
 // ─── Command Dispatch ────────────────────────────────────────────────
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"strings"
@@ -17,9 +18,13 @@ import (
 	"github.com/callmemorgan/claude-statusline/internal/render"
 	"github.com/callmemorgan/claude-statusline/internal/segments"
 	"github.com/callmemorgan/claude-statusline/internal/state"
+	"github.com/callmemorgan/claude-statusline/internal/tui"
 	"github.com/callmemorgan/claude-statusline/internal/update"
 	"github.com/callmemorgan/claude-statusline/internal/version"
 )
+
+//go:embed README.md
+var readmeContent string
 
 // dispatch routes subcommands. The bare no-args invocation is the renderer —
 // that is how Claude Code calls the binary, so it must stay untouched.
@@ -34,7 +39,7 @@ func dispatch() {
 			version.RunVersion()
 			return
 		case "configure":
-			runConfigure()
+			tui.Run(readmeContent)
 			return
 		case "install":
 			install.Run(os.Args[2:])
