@@ -63,7 +63,7 @@ const updateBrewTap = updateRepoOwner + "/tap"
 // Embedding (rather than shelling out to `cosign`) means no runtime dependency:
 // verification is pure crypto/ecdsa and works on every install target.
 //
-//go:embed cosign.pub
+//go:embed release/cosign.pub
 var cosignPubPEM []byte
 
 // checksumsVerifyKey is parsed once from cosignPubPEM. It is a package var (not

@@ -71,11 +71,11 @@ pi update --extensions
 
 **Prebuilt binaries:**
 
-Download a binary from the [releases page](https://github.com/callmemorgan/claude-statusline/releases). Each release ships a `checksums.txt` signed with a key-based cosign bundle (`checksums.txt.bundle`); the public key is [`cosign.pub`](cosign.pub) in this repo. Verify the signature, then the asset's checksum:
+Download a binary from the [releases page](https://github.com/callmemorgan/claude-statusline/releases). Each release ships a `checksums.txt` signed with a key-based cosign bundle (`checksums.txt.bundle`); the public key is [`release/cosign.pub`](release/cosign.pub) in this repo. Verify the signature, then the asset's checksum:
 
 ```bash
 cosign verify-blob \
-  --key cosign.pub \
+  --key release/cosign.pub \
   --bundle checksums.txt.bundle \
   --insecure-ignore-tlog \
   checksums.txt
@@ -318,7 +318,7 @@ preset = "cost-tracker"   # used when `segments` is absent; your lines/settings/
 
 ### Manual config
 
-Config lives at `~/.config/claude-statusline/config.toml` — a pre-1.0 `config.json` is **migrated automatically** on first run (the original is kept as `config.json.bak`). An annotated example is at [`config.toml.example`](config.toml.example).
+Config lives at `~/.config/claude-statusline/config.toml` — a pre-1.0 `config.json` is **migrated automatically** on first run (the original is kept as `config.json.bak`). An annotated example is at [`configs/config.toml.example`](configs/config.toml.example).
 
 ```toml
 theme = "nord"
