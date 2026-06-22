@@ -7,6 +7,9 @@ much larger values (e.g. 99999) to force top placement. Bullets without a
 marker default to importance 0.
 -->
 
+## v1.7.1 — 2026-06-22
+- [4] **Plugins are now visible in the TUI assembler.** Plugin segments are marked with a 📌 indicator, and the footer shows a matching legend. Plugins can also declare a `preview` value that is rendered in the assembler, flyout preview, demo mode, and terminal view instead of running the real command against synthetic data.
+
 ## v1.7.0 — 2026-06-21
 - [3] **Dedicated npm READMEs.** Every published npm package — the main `@morgan.rebrand/claude-statusline` package and all seven per-platform optional dependencies — now ships with its own README. The build script verifies each README exists before packing, so the matrix can't drift.
 
