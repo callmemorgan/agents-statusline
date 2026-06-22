@@ -9,6 +9,7 @@ marker default to importance 0.
 
 ## v1.7.2 — 2026-06-22
 - [5] **Post-upgrade takeover now shows actual release notes.** The announcement no longer wastes lines on a configuration hint; every available line is used for the version header and CHANGELOG bullets.
+- [4] **Plugin `preview` values are now prominent in the TUI assembler.** Custom plugin segments display their configured `preview` sample in the assembler, flyout, demo mode, and terminal view, so you can see exactly how a plugin will look before it runs a real command.
 
 ## v1.7.1 — 2026-06-22
 - [4] **Plugins are now visible in the TUI assembler.** Plugin segments are marked with a 📌 indicator, and the footer shows a matching legend. Plugins can also declare a `preview` value that is rendered in the assembler, flyout preview, demo mode, and terminal view instead of running the real command against synthetic data.
