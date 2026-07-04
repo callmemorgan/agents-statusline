@@ -168,6 +168,27 @@ func GitBranchSettingSpecs() []SettingSpec {
 		{Key: "git_status", Name: "Rich status", Desc: "Run git status (cached, bounded) to show a dirty marker and ahead/behind counts, e.g. main* ↑1↓2", Kind: KindBool, Default: false},
 		{Key: "git_status_ttl_sec", Name: "Cache TTL (s)", Desc: "Seconds a git status result is reused before running git again", Kind: KindInt, Default: 10, Min: 1, Max: 300, Step: 5},
 		{Key: "git_timeout_ms", Name: "Timeout (ms)", Desc: "Hard limit on a single git status run; on timeout the last cached value is shown", Kind: KindInt, Default: 150, Min: 50, Max: 2000, Step: 50},
+		{Key: "show_worktree_path", Name: "Show worktree path", Desc: "Append the worktree path in dim parens after the branch", Kind: KindBool, Default: false},
+		{Key: "show_original_branch", Name: "Show original branch", Desc: "Append the original branch (←original-branch) in dim when in a linked worktree", Kind: KindBool, Default: false},
+	}
+}
+
+func PRSettingSpecs() []SettingSpec {
+	return []SettingSpec{
+		{Key: "show_url", Name: "Show URL", Desc: "Render the full PR URL (or synthesized repo URL) instead of #N", Kind: KindBool, Default: false},
+		{Key: "show_review_state", Name: "Show review state", Desc: "Append the review state in dim parens when present", Kind: KindBool, Default: true},
+	}
+}
+
+func RepoSettingSpecs() []SettingSpec {
+	return []SettingSpec{
+		{Key: "show_host", Name: "Show host", Desc: "Prefix the repo with the host, e.g. github.com:owner/name", Kind: KindBool, Default: false},
+	}
+}
+
+func ThinkingSettingSpecs() []SettingSpec {
+	return []SettingSpec{
+		{Key: "icon", Name: "Icon style", Desc: "Visual style of the thinking indicator", Kind: KindEnum, Default: "emoji", Options: []string{"emoji", "text"}},
 	}
 }
 

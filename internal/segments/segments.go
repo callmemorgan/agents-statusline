@@ -38,6 +38,17 @@ func renderSessionName(ctx RenderCtx) (string, bool) {
 	return ctx.C.Session + name + ctx.C.Rst, true
 }
 
+func renderPromptID(ctx RenderCtx) (string, bool) {
+	id := ctx.P.PromptID
+	if id == "" {
+		return "", false
+	}
+	if len(id) == 36 && strings.Count(id, "-") == 4 {
+		id = id[:8]
+	}
+	return ctx.C.Dim + "prompt:" + id + ctx.C.Rst, true
+}
+
 func renderAgentName(ctx RenderCtx) (string, bool) {
 	if ctx.P.Agent.Name == "" {
 		return "", false
@@ -86,6 +97,12 @@ func renderGitBranch(ctx RenderCtx) (string, bool) {
 	}
 	if worktreeName != "" && worktreeName != branch {
 		display += " " + ctx.C.Dim + "(" + worktreeName + ")" + ctx.C.Rst
+	}
+	if ctx.S.Bool("show_worktree_path") && ctx.P.Worktree.Path != "" {
+		display += " " + ctx.C.Dim + "(" + ctx.P.Worktree.Path + ")" + ctx.C.Rst
+	}
+	if ctx.S.Bool("show_original_branch") && ctx.P.Worktree.OriginalBranch != "" {
+		display += " " + ctx.C.Dim + "←" + ctx.P.Worktree.OriginalBranch + ctx.C.Rst
 	}
 	return ctx.C.Git + display + ctx.C.Rst, true
 }
@@ -336,6 +353,52 @@ func renderOutputStyle(ctx RenderCtx) (string, bool) {
 	return ctx.C.Purple + "✎ " + name + ctx.C.Rst, true
 }
 
+func renderPR(ctx RenderCtx) (string, bool) {
+	pr := ctx.P.PR
+	if pr.Number <= 0 {
+		return "", false
+	}
+	if ctx.S.Bool("show_url") {
+		url := pr.URL
+		if url == "" && ctx.P.Workspace.Repo.Name != "" {
+			repo := ctx.P.Workspace.Repo
+			url = fmt.Sprintf("https://%s/%s/%s/pull/%d", repo.Host, repo.Owner, repo.Name, pr.Number)
+		}
+		if url == "" {
+			url = fmt.Sprintf("#%d", pr.Number)
+		}
+		return ctx.C.Git + url + ctx.C.Rst, true
+	}
+	out := "#" + strconv.Itoa(pr.Number)
+	if ctx.S.Bool("show_review_state") && pr.ReviewState != "" {
+		out += " " + ctx.C.Dim + "(" + pr.ReviewState + ")" + ctx.C.Rst
+	}
+	return ctx.C.Git + out + ctx.C.Rst, true
+}
+
+func renderRepo(ctx RenderCtx) (string, bool) {
+	repo := ctx.P.Workspace.Repo
+	if repo.Name == "" {
+		return "", false
+	}
+	out := repo.Owner + "/" + repo.Name
+	if ctx.S.Bool("show_host") && repo.Host != "" {
+		out = repo.Host + ":" + out
+	}
+	return ctx.C.Dim + out + ctx.C.Rst, true
+}
+
+func renderThinking(ctx RenderCtx) (string, bool) {
+	if ctx.P.Thinking.Enabled == nil || !*ctx.P.Thinking.Enabled {
+		return "", false
+	}
+	icon := "🗘 thinking"
+	if ctx.S.Str("icon") == "text" {
+		icon = "[thinking]"
+	}
+	return ctx.C.Model + icon + ctx.C.Rst, true
+}
+
 func renderAddedDirs(ctx RenderCtx) (string, bool) {
 	n := len(ctx.P.Workspace.AddedDirs)
 	if n == 0 {
@@ -382,11 +445,14 @@ func allSegmentInfos() []Info {
 		{ID: "vim-mode", Line: 1, Desc: "Vim mode indicator (e.g. [normal])", PrimaryColor: "Vim", Render: renderVimMode},
 		{ID: "sandbox", Line: 1, Desc: "Sandbox status indicator", PrimaryColor: "RCrit", Render: renderSandbox},
 		{ID: "session-name", Line: 1, Desc: "Session name label", PrimaryColor: "Session", Render: renderSessionName},
+		{ID: "prompt-id", Line: 2, Desc: "Prompt ID, truncated to 8 chars when it looks like a UUID", PrimaryColor: "Dim", Render: renderPromptID},
 		{ID: "agent-state", Line: 1, Desc: "Agent working status", PrimaryColor: "Git", Render: renderAgentState},
 		{ID: "agent-name", Line: 1, Desc: "Agent name", PrimaryColor: "Agent", Render: renderAgentName},
 		{ID: "directory", Line: 1, Desc: "Current / project directory", PrimaryColor: "Dir", Render: renderDirectory},
 		{ID: "added-dirs", Line: 1, Desc: "Number of extra directories added with /add-dir", PrimaryColor: "Dim", Render: renderAddedDirs},
-		{ID: "git-branch", Line: 1, Desc: "Git branch and worktree name, with optional dirty marker and ahead/behind counts", PrimaryColor: "Git", Settings: config.GitBranchSettingSpecs(), Render: renderGitBranch},
+		{ID: "repo", Line: 1, Desc: "Repository owner/name from the payload", PrimaryColor: "Dim", Settings: config.RepoSettingSpecs(), Render: renderRepo},
+		{ID: "pr", Line: 1, Desc: "Pull request number and optional review state or URL", PrimaryColor: "Git", Settings: config.PRSettingSpecs(), Render: renderPR},
+		{ID: "git-branch", Line: 1, Desc: "Git branch and worktree name, with optional dirty marker, ahead/behind counts, worktree path, and original branch", PrimaryColor: "Git", Settings: config.GitBranchSettingSpecs(), Render: renderGitBranch},
 		{ID: "git-stash", Line: 1, Desc: "Git stash count (⚑N), hidden when there are no stashes", PrimaryColor: "Git", Settings: config.GitStashSettingSpecs(), Render: renderGitStash},
 		{ID: "artifact-count", Line: 1, Desc: "Artifact count", PrimaryColor: "Chg", Render: renderArtifactCount},
 		{ID: "lines-changed", Line: 1, Desc: "All lines added / removed by the agent in the session", PrimaryColor: "Chg", Render: renderLinesChanged},
@@ -395,6 +461,7 @@ func allSegmentInfos() []Info {
 		{ID: "cost", Line: 1, Desc: "Total session cost", PrimaryColor: "Cost", Render: renderCost},
 		{ID: "model", Line: 2, Desc: "Model name and effort badge", PrimaryColor: "Model", Render: renderModel},
 		{ID: "output-style", Line: 2, Desc: "Output style name (hidden when default)", PrimaryColor: "Purple", Render: renderOutputStyle},
+		{ID: "thinking", Line: 2, Desc: "Thinking indicator when reasoning is enabled", PrimaryColor: "Model", Settings: config.ThinkingSettingSpecs(), Render: renderThinking},
 		{ID: "email", Line: 2, Desc: "Account email, user part only (off by default)", PrimaryColor: "Dim", Render: renderEmail},
 		{ID: "version", Line: 2, Desc: "Claude Code version", PrimaryColor: "Dim", Render: renderVersion},
 		{ID: "update", Line: 1, Desc: "Update available notice (self-hides when current, dev, or [update].mode = off)", PrimaryColor: "Dim", Render: renderUpdatePlaceholder},
