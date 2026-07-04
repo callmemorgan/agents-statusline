@@ -1,0 +1,45 @@
+{
+  "cwd": "/Users/me/code/my-project",
+  "session_id": "session-abc123",
+  "session_name": "my-project",
+  "version": "2.1.90",
+  "columns": 120,
+  "tasks": [
+    {
+      "id": "task-research",
+      "name": "Research",
+      "type": "tool",
+      "status": "running",
+      "description": "Searching the web",
+      "label": "web",
+      "startTime": 1719878400,
+      "tokenCount": 15400,
+      "tokenSamples": [12000, 3400],
+      "cwd": "/Users/me/code/my-project"
+    },
+    {
+      "id": "task-review",
+      "name": "Code review",
+      "type": "subagent",
+      "status": "done",
+      "description": "Reviewed the changes",
+      "label": "review",
+      "startTime": 1719878300,
+      "tokenCount": 0,
+      "tokenSamples": [],
+      "cwd": "/Users/me/code/my-project"
+    },
+    {
+      "id": "task-pending",
+      "name": "Plan",
+      "type": "subagent",
+      "status": "pending",
+      "description": "",
+      "label": "plan",
+      "startTime": 1719878500,
+      "tokenCount": 0,
+      "tokenSamples": [],
+      "cwd": "/Users/me/code/my-project"
+    }
+  ]
+}

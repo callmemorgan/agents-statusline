@@ -167,6 +167,59 @@ type installTarget struct {
 	value string // JSON value to splice in
 }
 
+// StatusLineOptions carries the optional Claude Code statusLine fields.
+// A nil pointer means "not set by the user"; the install path omits the field.
+type StatusLineOptions struct {
+	RefreshInterval      *int
+	HideVimModeIndicator *bool
+	Padding              *int
+}
+
+func (o StatusLineOptions) validate() error {
+	if o.RefreshInterval != nil && *o.RefreshInterval < 1 {
+		return errors.New("refresh-interval must be >= 1")
+	}
+	if o.Padding != nil && *o.Padding < 0 {
+		return errors.New("statusline-padding must be >= 0")
+	}
+	return nil
+}
+
+// buildClaudeStatusLineValue returns the JSON value for Claude Code's
+// statusLine setting. With no options set it keeps the pre-1.0 spaced format;
+// with options it emits compact JSON so the added fields are explicit.
+func buildClaudeStatusLineValue(cmd string, opts StatusLineOptions) (string, error) {
+	if opts.RefreshInterval == nil && opts.HideVimModeIndicator == nil && opts.Padding == nil {
+		return fmt.Sprintf(`{"type": "command", "command": %q}`, cmd), nil
+	}
+	v := claudeStatusLine{
+		Type:    "command",
+		Command: cmd,
+	}
+	if opts.RefreshInterval != nil {
+		v.RefreshInterval = opts.RefreshInterval
+	}
+	if opts.HideVimModeIndicator != nil {
+		v.HideVimModeIndicator = opts.HideVimModeIndicator
+	}
+	if opts.Padding != nil {
+		v.Padding = opts.Padding
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+type claudeStatusLine struct {
+	Type                 string `json:"type"`
+	Command              string `json:"command"`
+	RefreshInterval      *int   `json:"refreshInterval,omitempty"`
+	HideVimModeIndicator *bool  `json:"hideVimModeIndicator,omitempty"`
+	Padding              *int   `json:"padding,omitempty"`
+}
+
 // resolveCommand returns "claude-statusline" when PATH resolves to this very
 // binary, otherwise the absolute path of the running executable (covering
 // built-from-source and hand-downloaded installs).
@@ -186,7 +239,7 @@ func resolveCommand() string {
 	return exe
 }
 
-func resolveTarget(name, explicitPath string) (installTarget, error) {
+func resolveTarget(name, explicitPath string, opts StatusLineOptions) (installTarget, error) {
 	cmd := resolveCommand()
 	switch name {
 	case "claude":
@@ -198,11 +251,15 @@ func resolveTarget(name, explicitPath string) (installTarget, error) {
 			}
 			path = filepath.Join(dir, "settings.json")
 		}
+		value, err := buildClaudeStatusLineValue(cmd, opts)
+		if err != nil {
+			return installTarget{}, err
+		}
 		return installTarget{
 			name:  "claude",
 			path:  path,
 			key:   "statusLine",
-			value: fmt.Sprintf(`{"type": "command", "command": %q}`, cmd),
+			value: value,
 		}, nil
 	case "agy":
 		path := explicitPath
@@ -275,9 +332,33 @@ func Run(args []string) {
 	force := fs.Bool("force", false, "overwrite an existing statusline entry without prompting")
 	dryRun := fs.Bool("dry-run", false, "print what would change without writing")
 	yes := fs.Bool("yes", false, "answer yes to all prompts")
+	subagentStatusLine := fs.Bool("subagent-statusline", false, "also wire the subagentStatusLine hook")
+	refreshInterval := fs.Int("refresh-interval", 0, "statusline refresh interval in seconds (Claude Code only, >= 1)")
+	hideVimModeIndicator := fs.Bool("hide-vim-mode-indicator", false, "hide Claude Code's built-in -- INSERT -- indicator")
+	padding := fs.Int("statusline-padding", 0, "extra horizontal padding for the statusline (Claude Code only, >= 0)")
 	_ = fs.Parse(args)
 
-	t, err := resolveTarget(*targetName, *settingsPath)
+	var opts StatusLineOptions
+	seen := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { seen[f.Name] = true })
+	if seen["refresh-interval"] {
+		v := *refreshInterval
+		opts.RefreshInterval = &v
+	}
+	if seen["hide-vim-mode-indicator"] {
+		v := *hideVimModeIndicator
+		opts.HideVimModeIndicator = &v
+	}
+	if seen["statusline-padding"] {
+		v := *padding
+		opts.Padding = &v
+	}
+	if err := opts.validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
+		os.Exit(1)
+	}
+
+	t, err := resolveTarget(*targetName, *settingsPath, opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 		os.Exit(1)
@@ -324,44 +405,120 @@ func Run(args []string) {
 	case found && compactJSON(raw[valStart:valEnd]) == compactJSON([]byte(t.value)):
 		fmt.Printf("✓ Already installed in %s — nothing to do.\n", t.path)
 		verifyInstall(t)
-		return
-	case found:
-		fmt.Printf("Existing %s entry in %s:\n  %s\n", t.key, t.path, string(raw[valStart:valEnd]))
-		if !*force && !confirm("Overwrite it?", *yes) {
+	default:
+		if found {
+			fmt.Printf("Existing %s entry in %s:\n  %s\n", t.key, t.path, string(raw[valStart:valEnd]))
+			if !*force && !confirm("Overwrite it?", *yes) {
+				os.Exit(1)
+			}
+			updated = replaceKeyValue(raw, valStart, valEnd, t.value)
+		} else {
+			updated, err = insertTopLevelKey(raw, t.key, t.value)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "✗ %v\n\n%s", err, manualSnippet(t))
+				os.Exit(1)
+			}
+		}
+
+		// The result must itself parse — belt and braces before touching disk.
+		var check map[string]json.RawMessage
+		if err := json.Unmarshal(updated, &check); err != nil {
+			fmt.Fprintf(os.Stderr, "✗ internal error: spliced JSON does not parse (%v)\n\n%s", err, manualSnippet(t))
 			os.Exit(1)
 		}
-		updated = replaceKeyValue(raw, valStart, valEnd, t.value)
-	default:
-		updated, err = insertTopLevelKey(raw, t.key, t.value)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "✗ %v\n\n%s", err, manualSnippet(t))
-			os.Exit(1)
+
+		if *dryRun {
+			fmt.Printf("dry run — would write %s with:\n  %q: %s\n", t.path, t.key, t.value)
+		} else {
+			if !created {
+				if bak, err := backupFile(t.path); err == nil {
+					fmt.Printf("✓ Backed up %s → %s\n", t.path, filepath.Base(bak))
+				}
+			}
+			if err := sys.WriteFileAtomic(t.path, updated); err != nil {
+				fmt.Fprintf(os.Stderr, "✗ cannot write %s: %v\n", t.path, err)
+				os.Exit(1)
+			}
+			fmt.Printf("✓ Added %s to %s\n", t.key, t.path)
+			verifyInstall(t)
 		}
 	}
 
-	// The result must itself parse — belt and braces before touching disk.
+	if *subagentStatusLine {
+		if *targetName != "claude" {
+			fmt.Fprintln(os.Stderr, "✗ --subagent-statusline is only valid with --target claude")
+			os.Exit(1)
+		}
+		if err := installSubagentStatusLine(t.path, created, *force, *dryRun, *yes); err != nil {
+			fmt.Fprintf(os.Stderr, "✗ %v\n", err)
+			os.Exit(1)
+		}
+	}
+}
+
+// installSubagentStatusLine splices the subagentStatusLine key into the same
+// settings file used by the main statusLine hook. It honours --force, --dry-run
+// and --yes.
+func installSubagentStatusLine(path string, mainCreated, force, dryRun, yes bool) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("cannot read %s: %w", path, err)
+		}
+		raw = []byte("{}\n")
+	}
+
+	var gate map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &gate); err != nil {
+		return fmt.Errorf("%s is not plain JSON (%w)", path, err)
+	}
+
+	key := "subagentStatusLine"
+	value := fmt.Sprintf(`{"type": "command", "command": %q}`, resolveCommand()+" subagent-statusline")
+
+	_, valStart, valEnd, found, err := findTopLevelKeySpan(raw, key)
+	if err != nil {
+		return err
+	}
+
+	var updated []byte
+	switch {
+	case found && compactJSON(raw[valStart:valEnd]) == compactJSON([]byte(value)):
+		fmt.Printf("✓ Already installed %s in %s — nothing to do.\n", key, path)
+		return nil
+	case found:
+		fmt.Printf("Existing %s entry in %s:\n  %s\n", key, path, string(raw[valStart:valEnd]))
+		if !force && !confirm("Overwrite it?", yes) {
+			return errors.New("aborted")
+		}
+		updated = replaceKeyValue(raw, valStart, valEnd, value)
+	default:
+		updated, err = insertTopLevelKey(raw, key, value)
+		if err != nil {
+			return err
+		}
+	}
+
 	var check map[string]json.RawMessage
 	if err := json.Unmarshal(updated, &check); err != nil {
-		fmt.Fprintf(os.Stderr, "✗ internal error: spliced JSON does not parse (%v)\n\n%s", err, manualSnippet(t))
-		os.Exit(1)
+		return fmt.Errorf("spliced JSON does not parse (%w)", err)
 	}
 
-	if *dryRun {
-		fmt.Printf("dry run — would write %s with:\n  %q: %s\n", t.path, t.key, t.value)
-		return
+	if dryRun {
+		fmt.Printf("dry run — would write %s with:\n  %q: %s\n", path, key, value)
+		return nil
 	}
 
-	if !created {
-		if bak, err := backupFile(t.path); err == nil {
-			fmt.Printf("✓ Backed up %s → %s\n", t.path, filepath.Base(bak))
+	if !mainCreated && !dryRun {
+		if bak, err := backupFile(path); err == nil {
+			fmt.Printf("✓ Backed up %s → %s\n", path, filepath.Base(bak))
 		}
 	}
-	if err := sys.WriteFileAtomic(t.path, updated); err != nil {
-		fmt.Fprintf(os.Stderr, "✗ cannot write %s: %v\n", t.path, err)
-		os.Exit(1)
+	if err := sys.WriteFileAtomic(path, updated); err != nil {
+		return fmt.Errorf("cannot write %s: %w", path, err)
 	}
-	fmt.Printf("✓ Added %s to %s\n", t.key, t.path)
-	verifyInstall(t)
+	fmt.Printf("✓ Added %s to %s\n", key, path)
+	return nil
 }
 
 func compactJSON(b []byte) string {
@@ -421,7 +578,7 @@ func Uninstall(args []string) {
 	yes := fs.Bool("yes", false, "answer yes to all prompts")
 	_ = fs.Parse(args)
 
-	t, err := resolveTarget(*targetName, *settingsPath)
+	t, err := resolveTarget(*targetName, *settingsPath, StatusLineOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 		os.Exit(1)

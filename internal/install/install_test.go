@@ -173,14 +173,15 @@ func TestResolveTargetAgyProbe(t *testing.T) {
 	homeDirOverride = dir
 	t.Cleanup(func() { homeDirOverride = "" })
 
-	if _, err := resolveTarget("agy", ""); err == nil {
+	zeroOpts := StatusLineOptions{}
+	if _, err := resolveTarget("agy", "", zeroOpts); err == nil {
 		t.Error("agy with no settings file should require --settings-path")
 	}
-	if _, err := resolveTarget("bogus", ""); err == nil {
+	if _, err := resolveTarget("bogus", "", zeroOpts); err == nil {
 		t.Error("unknown target should error")
 	}
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	tgt, err := resolveTarget("claude", "")
+	tgt, err := resolveTarget("claude", "", zeroOpts)
 	if err != nil || !strings.HasSuffix(tgt.path, "/.claude/settings.json") {
 		t.Errorf("claude target: %+v err=%v", tgt, err)
 	}
@@ -189,11 +190,104 @@ func TestResolveTargetAgyProbe(t *testing.T) {
 	}
 
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(dir, "profile"))
-	tgt, err = resolveTarget("claude", "")
+	tgt, err = resolveTarget("claude", "", zeroOpts)
 	if err != nil || tgt.path != filepath.Join(dir, "profile", "settings.json") {
 		t.Errorf("claude target with CLAUDE_CONFIG_DIR: %+v err=%v", tgt, err)
 	}
-	if tgt2, err := resolveTarget("claude", "/explicit/settings.json"); err != nil || tgt2.path != "/explicit/settings.json" {
+	if tgt2, err := resolveTarget("claude", "/explicit/settings.json", zeroOpts); err != nil || tgt2.path != "/explicit/settings.json" {
 		t.Errorf("explicit path should win over CLAUDE_CONFIG_DIR: %+v err=%v", tgt2, err)
+	}
+}
+
+func TestBuildClaudeStatusLineValue(t *testing.T) {
+	cmd := "claude-statusline"
+
+	// No options → legacy spaced format with only type and command.
+	got, err := buildClaudeStatusLineValue(cmd, StatusLineOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"type": "command", "command": "claude-statusline"}`
+	if got != want {
+		t.Errorf("no flags: got %q, want %q", got, want)
+	}
+
+	// All options present.
+	ri := 30
+	hvi := true
+	pad := 2
+	opts := StatusLineOptions{
+		RefreshInterval:      &ri,
+		HideVimModeIndicator: &hvi,
+		Padding:              &pad,
+	}
+	got, err = buildClaudeStatusLineValue(cmd, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(got), &parsed); err != nil {
+		t.Fatalf("value does not parse: %v\n%s", err, got)
+	}
+	if parsed["type"] != "command" {
+		t.Errorf("type = %v", parsed["type"])
+	}
+	if parsed["command"] != cmd {
+		t.Errorf("command = %v", parsed["command"])
+	}
+	if parsed["refreshInterval"] != float64(30) {
+		t.Errorf("refreshInterval = %v", parsed["refreshInterval"])
+	}
+	if parsed["hideVimModeIndicator"] != true {
+		t.Errorf("hideVimModeIndicator = %v", parsed["hideVimModeIndicator"])
+	}
+	if parsed["padding"] != float64(2) {
+		t.Errorf("padding = %v", parsed["padding"])
+	}
+
+	// Zero padding is emitted when explicitly requested.
+	padZero := 0
+	got, err = buildClaudeStatusLineValue(cmd, StatusLineOptions{Padding: &padZero})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `"padding":0`) {
+		t.Errorf("explicit zero padding should be present: %s", got)
+	}
+
+	// Hide-vim-mode-indicator=false is still emitted when explicitly requested
+	// (the field is boolean and the user chose it).
+	hviFalse := false
+	got, err = buildClaudeStatusLineValue(cmd, StatusLineOptions{HideVimModeIndicator: &hviFalse})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `"hideVimModeIndicator":false`) {
+		t.Errorf("explicit false hideVimModeIndicator should be present: %s", got)
+	}
+}
+
+func TestStatusLineOptionsValidate(t *testing.T) {
+	cases := []struct {
+		name    string
+		opts    StatusLineOptions
+		wantErr bool
+	}{
+		{"empty", StatusLineOptions{}, false},
+		{"refresh ok", func() StatusLineOptions { v := 1; return StatusLineOptions{RefreshInterval: &v} }(), false},
+		{"padding ok", func() StatusLineOptions { v := 0; return StatusLineOptions{Padding: &v} }(), false},
+		{"refresh invalid", func() StatusLineOptions { v := 0; return StatusLineOptions{RefreshInterval: &v} }(), true},
+		{"padding invalid", func() StatusLineOptions { v := -1; return StatusLineOptions{Padding: &v} }(), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.opts.validate()
+			if tc.wantErr && err == nil {
+				t.Error("expected error, got nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
 	}
 }
