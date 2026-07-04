@@ -32,6 +32,7 @@ func TerminalWidth(p Payload) int {
 type Payload struct {
 	SessionID      string      `json:"session_id"`
 	SessionName    string      `json:"session_name"`
+	PromptID       string      `json:"prompt_id"`
 	ConversationID string      `json:"conversation_id"`
 	Cwd            string      `json:"cwd"`
 	Version        string      `json:"version"`
@@ -46,7 +47,9 @@ type Payload struct {
 	Worktree       Worktree    `json:"worktree"`
 	Vim            Vim         `json:"vim"`
 	Effort         Effort      `json:"effort"`
+	Thinking       Thinking    `json:"thinking"`
 	OutputStyle    OutputStyle `json:"output_style"`
+	PR             PR          `json:"pr"`
 
 	// agy additions
 	Product       string  `json:"product"`
@@ -72,6 +75,13 @@ type Workspace struct {
 	ProjectDir  string   `json:"project_dir"`
 	GitWorktree string   `json:"git_worktree"`
 	AddedDirs   []string `json:"added_dirs"`
+	Repo        Repo     `json:"repo"`
+}
+
+type Repo struct {
+	Host  string `json:"host"`
+	Owner string `json:"owner"`
+	Name  string `json:"name"`
 }
 
 type OutputStyle struct {
@@ -80,6 +90,10 @@ type OutputStyle struct {
 
 type Effort struct {
 	Level string `json:"level"`
+}
+
+type Thinking struct {
+	Enabled *bool `json:"enabled"`
 }
 
 type Cost struct {
@@ -120,12 +134,21 @@ type Agent struct {
 }
 
 type Worktree struct {
-	Name   string `json:"name"`
-	Branch string `json:"branch"`
+	Name           string `json:"name"`
+	Branch         string `json:"branch"`
+	Path           string `json:"path"`
+	OriginalCwd    string `json:"original_cwd"`
+	OriginalBranch string `json:"original_branch"`
 }
 
 type Vim struct {
 	Mode string `json:"mode"`
+}
+
+type PR struct {
+	Number      int    `json:"number"`
+	URL         string `json:"url"`
+	ReviewState string `json:"review_state"`
 }
 
 func SamplePayload() Payload {
@@ -138,13 +161,22 @@ func SamplePayload() Payload {
 	pct65 := 65.0
 	return Payload{
 		SessionName: "my-project",
+		PromptID:    "550e8400-e29b-41d4-a716-446655440000",
 		Cwd:         "/Users/me/code/my-project",
 		Version:     "0.1.0",
 		Exceeds200K: &trueVal,
 		Model:       Model{DisplayName: "Claude 3.7 Sonnet"},
-		Workspace:   Workspace{CurrentDir: "/Users/me/code/my-project", ProjectDir: "/Users/me/code/my-project", GitWorktree: "my-project", AddedDirs: []string{"/Users/me/code/shared-lib"}},
+		Workspace: Workspace{
+			CurrentDir:  "/Users/me/code/my-project",
+			ProjectDir:  "/Users/me/code/my-project",
+			GitWorktree: "my-project",
+			AddedDirs:   []string{"/Users/me/code/shared-lib"},
+			Repo:        Repo{Host: "github.com", Owner: "callmemorgan", Name: "claude-statusline"},
+		},
 		OutputStyle: OutputStyle{Name: "Explanatory"},
 		Email:       "you@example.com",
+		Thinking:    Thinking{Enabled: &trueVal},
+		PR:          PR{Number: 42, URL: "https://github.com/callmemorgan/claude-statusline/pull/42", ReviewState: "pending"},
 		Cost: Cost{
 			TotalCostUSD:      0.42,
 			TotalLinesAdded:   128,
@@ -168,10 +200,16 @@ func SamplePayload() Payload {
 			FiveHour: LimitWindow{UsedPercentage: &pct50, ResetsAt: &reset5h},
 			SevenDay: LimitWindow{UsedPercentage: &pct30, ResetsAt: &reset7d},
 		},
-		Agent:    Agent{Name: "CodeReview"},
-		Worktree: Worktree{Name: "my-project", Branch: "feature/config"},
-		Vim:      Vim{Mode: "normal"},
-		Effort:   Effort{Level: "high"},
+		Agent: Agent{Name: "CodeReview"},
+		Worktree: Worktree{
+			Name:           "my-project",
+			Branch:         "feature/config",
+			Path:           "/Users/me/code/my-project",
+			OriginalCwd:    "/Users/me/code",
+			OriginalBranch: "main",
+		},
+		Vim:    Vim{Mode: "normal"},
+		Effort: Effort{Level: "high"},
 	}
 }
 
