@@ -10,7 +10,7 @@ Each tool pipes a JSON payload to the binary on every turn; it renders a compact
 - **Burn-rate intelligence** — rate-limit projections (`→58%` at reset), cost per hour (`$1.84/h`), and time-to-compact estimates (`↗ ~35m`), computed from your session's own history.
 - **One-command setup** — `claude-statusline install` wires everything up and verifies it.
 - **A real configuration TUI** — live width-aware preview, theme and preset pickers, a color swatch picker, per-segment settings, search, an animated demo mode, and a render-in-your-terminal view for honest theme checking.
-- **31 built-in segments + plugins** — assigned to lines 1–9; empty lines collapse, and segments hide automatically when their data is missing.
+- **30 built-in segments + plugins** — assigned to lines 1–9; empty lines collapse, and segments hide automatically when their data is missing.
 
 The core renderer is a single static binary (one TOML dependency); the interactive TUI uses [tview](https://github.com/rivo/tview).
 

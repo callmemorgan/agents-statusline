@@ -147,8 +147,8 @@ func DefaultConfig() Config {
 	return Config{
 		Segments: []string{
 			"vim-mode", "sandbox", "session-name", "agent-state", "directory",
-			"added-dirs", "git-branch", "artifact-count", "lines-changed", "cache-percent", "cost", "update",
-			"model", "output-style", "version", "duration", "cost-rate", "api-efficiency", "tokens",
+			"added-dirs", "repo", "pr", "git-branch", "artifact-count", "lines-changed", "cache-percent", "cost", "update",
+			"model", "output-style", "thinking", "version", "duration", "cost-rate", "api-efficiency", "tokens", "prompt-id",
 			"context-window", "rate-limit-5h", "rate-limit-7d", "plan-tier",
 		},
 		Lines: nil,
