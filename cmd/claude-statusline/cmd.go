@@ -14,6 +14,7 @@ import (
 	"github.com/callmemorgan/claude-statusline/internal/palette"
 	"github.com/callmemorgan/claude-statusline/internal/payload"
 	"github.com/callmemorgan/claude-statusline/internal/plugins"
+	"github.com/callmemorgan/claude-statusline/internal/quota"
 	"github.com/callmemorgan/claude-statusline/internal/releasenotes"
 	"github.com/callmemorgan/claude-statusline/internal/render"
 	"github.com/callmemorgan/claude-statusline/internal/segments"
@@ -52,6 +53,17 @@ func dispatch() {
 			return
 		case "plugin-refresh":
 			if err := plugins.RunPluginRefresh(); err != nil {
+				os.Exit(1)
+			}
+			return
+		case "quota-refresh":
+			if err := quota.RunRefresh(); err != nil {
+				os.Exit(1)
+			}
+			return
+		case "quota":
+			if err := quota.RunStatus(os.Stdout); err != nil {
+				fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 				os.Exit(1)
 			}
 			return
@@ -103,6 +115,11 @@ func runRender(debug bool) {
 		}
 	}
 	initSegments(cfg.Plugins)
+
+	// OAuth quota shim: fill the model-class weekly windows from the cached
+	// usage-endpoint data when the payload lacks them (opt-in, one ReadFile).
+	// Runs before state.Record so burn-rate projections see the shim values.
+	quota.MaybeInject(&p, cfg.QuotaShim, start)
 
 	st := state.LoadState(cfg.State, segments.FirstNonEmpty(p.SessionID, p.ConversationID), start)
 	st.Record(p, start)

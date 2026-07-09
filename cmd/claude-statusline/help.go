@@ -42,6 +42,9 @@ Commands:
                Flags: --check (resolve + report only, never install).
                Subcommand: verify (check the latest release's signature
                against the embedded key, then exit; installs nothing).
+  quota        Fetch Claude's OAuth usage endpoint and print the model-class
+               weekly windows plus [quota_shim] cache state — verifies the
+               quota shim end-to-end.
   help         Show this message.
   (none)       Read the JSON payload from stdin and print the statusline —
                this is how Claude Code invokes the binary.
@@ -76,6 +79,10 @@ Configuration:
   [update]     background update check + segment: mode (notify|auto|off,
                default notify), check_hours (1-168, default 24);
                auto is a no-op for npm installs
+  [quota_shim] opt-in bridge that fills the Fable/Sonnet/Opus weekly bars
+               from Claude's OAuth usage endpoint until Claude Code sends
+               those fields in the statusline payload: enabled (default
+               false), refresh_minutes (1-1440, default 5)
   [[plugins]]  custom executable segments — see README.md
 
 Line 1 segments — Session & workspace:
@@ -115,9 +122,10 @@ Line 3 segments — Usage bars:
   context-window  Usage bar with growth trend and time-to-compact ↗ ~35m (both)
   rate-limit-5h     5-hour quota bar, countdown, burn-rate projection →58%
   rate-limit-7d     7-day weekly quota bar, countdown, burn-rate projection
-  rate-limit-fable  Fable 5 weekly included-quota bar (when Claude sends it)
-  rate-limit-sonnet Sonnet weekly quota bar (when Claude sends it)
-  rate-limit-opus   Opus weekly quota bar (when Claude sends it)
+  rate-limit-fable  Fable 5 weekly included-quota bar (when Claude sends it,
+                    or via the opt-in [quota_shim] bridge)
+  rate-limit-sonnet Sonnet weekly quota bar (when Claude sends it, or shim)
+  rate-limit-opus   Opus weekly quota bar (when Claude sends it, or shim)
                     (rate limits: Claude Code Pro/Max only)
 
 Segments hide automatically when their source data is missing or zero.

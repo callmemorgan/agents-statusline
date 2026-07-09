@@ -73,6 +73,25 @@ type Config struct {
 	ReleaseNotes  ReleaseNotesConfig        `toml:"release_notes,omitempty"`
 	Plugins       []PluginDef               `toml:"plugins,omitempty"`
 	Update        UpdateConfig              `toml:"update,omitempty"`
+	QuotaShim     QuotaShimConfig           `toml:"quota_shim,omitempty"`
+}
+
+// QuotaShimConfig is the [quota_shim] table: an opt-in bridge that fills the
+// model-class weekly rate-limit windows (Fable/Sonnet/Opus) from Claude's
+// OAuth usage endpoint until Claude Code's statusline payload carries them
+// natively. Off by default: enabling it means the background worker reads
+// the Claude Code OAuth token (keychain or credentials file) and calls
+// api.anthropic.com on the user's behalf.
+type QuotaShimConfig struct {
+	Enabled        bool `toml:"enabled,omitempty"`
+	RefreshMinutes *int `toml:"refresh_minutes,omitempty"` // 1..1440, default 5
+}
+
+func (q QuotaShimConfig) RefreshEvery() time.Duration {
+	if q.RefreshMinutes == nil {
+		return 5 * time.Minute
+	}
+	return time.Duration(*q.RefreshMinutes) * time.Minute
 }
 
 // UpdateConfig is the [update] table in config.toml. Mode "" or unset means
@@ -281,6 +300,7 @@ func MergeWithDefaults(loaded Config) Config {
 	cfg.State = loaded.State
 	cfg.ReleaseNotes = loaded.ReleaseNotes
 	cfg.Update = loaded.Update
+	cfg.QuotaShim = loaded.QuotaShim
 	if loaded.Segments == nil {
 		inSegments := make(map[string]bool, len(cfg.Segments))
 		for _, id := range cfg.Segments {
@@ -444,6 +464,10 @@ func ValidateConfig(cfg *Config) []ConfigWarning {
 	if h := cfg.Update.CheckHours; h != nil && (*h < 1 || *h > 168) {
 		warns = append(warns, ConfigWarning{Path: "update.check_hours", Msg: fmt.Sprintf("%d out of range 1-168 (using 24)", *h)})
 		cfg.Update.CheckHours = nil
+	}
+	if m := cfg.QuotaShim.RefreshMinutes; m != nil && (*m < 1 || *m > 1440) {
+		warns = append(warns, ConfigWarning{Path: "quota_shim.refresh_minutes", Msg: fmt.Sprintf("%d out of range 1-1440 (using 5)", *m)})
+		cfg.QuotaShim.RefreshMinutes = nil
 	}
 	return warns
 }

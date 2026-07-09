@@ -158,11 +158,14 @@ func (m *ModelScopedLimit) UnmarshalJSON(data []byte) error {
 	m.DisplayName = a.DisplayName
 	m.UsedPercentage = a.UsedPercentage
 	m.Utilization = a.Utilization
-	m.ResetsAt = parseResetsAt(a.ResetsAt)
+	m.ResetsAt = ParseResetsAt(a.ResetsAt)
 	return nil
 }
 
-func parseResetsAt(raw json.RawMessage) *int64 {
+// ParseResetsAt parses a resets_at value that may be unix seconds (number)
+// or an RFC3339 timestamp string. Shared with the OAuth quota shim, which
+// receives the same wire convention.
+func ParseResetsAt(raw json.RawMessage) *int64 {
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil
 	}

@@ -178,3 +178,16 @@ timeout_ms = 200
 # [update]
 # mode = "notify"
 # check_hours = 24
+
+# OAuth quota shim: fills the Fable/Sonnet/Opus weekly rate-limit bars from
+# Claude's OAuth usage endpoint (the data behind `claude /usage`) until
+# Claude Code's statusline payload carries those fields natively. Opt-in:
+# when enabled, a detached background worker reads your Claude Code OAuth
+# token (macOS keychain or ~/.claude/.credentials.json) and calls
+# api.anthropic.com at most once per refresh_minutes. Only percentages and
+# reset times are cached to disk — never the token. Payload data always
+# wins once Claude Code starts sending the fields. Verify with
+# `claude-statusline quota`.
+# [quota_shim]
+# enabled = true
+# refresh_minutes = 5   # 1-1440

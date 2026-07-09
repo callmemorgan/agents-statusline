@@ -225,7 +225,7 @@ Segments that receive no data from the active tool hide themselves automatically
 | `context-window` | 3 | all three | Usage bar with color-coded %, growth trend arrow, and time-to-compact estimate (`↗ ~35m`) |
 | `rate-limit-5h` | 3 | Claude Code | 5-hour rate limit bar with countdown and burn-rate projection (`→58%`) (Pro/Max only) |
 | `rate-limit-7d` | 3 | Claude Code | 7-day weekly rate limit bar with countdown and burn-rate projection (Pro/Max only) |
-| `rate-limit-fable` | 3 | Claude Code | Fable 5 weekly included-quota bar (`seven_day_overage_included`) — self-hides until Claude Code sends the field. On upgrade, configs that already list `rate-limit-7d` get this segment inserted after it (schema v2) |
+| `rate-limit-fable` | 3 | Claude Code | Fable 5 weekly included-quota bar (`seven_day_overage_included`) — self-hides until Claude Code sends the field (or enable the `[quota_shim]` bridge). On upgrade, configs that already list `rate-limit-7d` get this segment inserted after it (schema v2) |
 | `rate-limit-sonnet` | 3 | Claude Code | Sonnet weekly quota bar (`seven_day_sonnet`) — self-hides until Claude Code sends the field |
 | `rate-limit-opus` | 3 | Claude Code | Opus weekly quota bar (`seven_day_opus`) — self-hides until Claude Code sends the field |
 
@@ -271,7 +271,7 @@ No segment is gated by tool name — each one renders when the active harness se
 
 ✓ renders · ✗ no data, stays hidden.
 
-¹ Claude Code's statusline currently pipes `five_hour` and `seven_day` only. The Fable/Sonnet/Opus segments parse `seven_day_overage_included`, `seven_day_sonnet`, `seven_day_opus`, and optional `model_scoped[]` when present, and stay hidden otherwise (Claude Code 2.1.205 does not emit them yet).
+¹ Claude Code's statusline currently pipes `five_hour` and `seven_day` only. The Fable/Sonnet/Opus segments parse `seven_day_overage_included`, `seven_day_sonnet`, `seven_day_opus`, and optional `model_scoped[]` when present, and stay hidden otherwise (Claude Code 2.1.205 does not emit them yet). The opt-in `[quota_shim]` bridge fills them from the OAuth usage endpoint in the meantime — see [OAuth quota shim](#oauth-quota-shim).
 
 ### Burn rates, projections, and trends
 
@@ -641,7 +641,7 @@ Claude Code sends this JSON structure via stdin:
 - `pr` — only while an open PR is found for the current branch
 - `worktree` — only during `--worktree` sessions
 - `rate_limits` — only for Claude Pro/Max subscribers after the first API response
-- `rate_limits.seven_day_sonnet` / `seven_day_opus` / `seven_day_overage_included` — model-class weekly windows (Fable uses `seven_day_overage_included`); not yet emitted by Claude Code 2.1.205's statusline builder, but parsed when present
+- `rate_limits.seven_day_sonnet` / `seven_day_opus` / `seven_day_overage_included` — model-class weekly windows (Fable uses `seven_day_overage_included`); not yet emitted by Claude Code 2.1.205's statusline builder, but parsed when present (or filled by the `[quota_shim]` bridge)
 - `rate_limits.model_scoped` — optional per-model buckets (`display_name`, `used_percentage` or `utilization`, `resets_at`); used as a fallback when the named windows above are absent
 
 **Fields that may be `null`:**
@@ -744,6 +744,26 @@ Source builds (`version = "dev"`) short-circuit the whole feature: no check, no 
 
 ---
 
+## OAuth quota shim
+
+Claude Code 2.1.205 does not yet include the model-class weekly windows (`seven_day_overage_included`, `seven_day_sonnet`, `seven_day_opus`) in the statusline payload, so the `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` segments normally stay hidden. The quota shim bridges the gap until it does:
+
+```toml
+[quota_shim]
+enabled = true
+refresh_minutes = 5   # 1..1440, default 5
+```
+
+When enabled, a detached worker (same shape as the async plugin refresh and the update check — the render path never touches the network) fetches `api.anthropic.com/api/oauth/usage` — the data behind `claude /usage` — at most once per `refresh_minutes` and caches the model-class weekly windows to `quota-shim.json` under the state dir. The render path injects them into `rate_limits.model_scoped` when the payload carries none, so the bars render exactly as if Claude Code had sent the fields — reset countdowns and burn-rate projections included.
+
+- **Opt-in.** Enabling it means the background worker reads your Claude Code OAuth token — `$CLAUDE_CODE_OAUTH_TOKEN`, the macOS keychain (`Claude Code-credentials`), or `.credentials.json` under `$CLAUDE_CONFIG_DIR` / `~/.claude` — and calls api.anthropic.com on your behalf. Only percentages and reset times are written to disk, never the token.
+- **Payload wins.** The moment Claude Code ships the fields, they take precedence: the accessors prefer the named windows, and a payload that carries its own `model_scoped` disables injection entirely. The shim goes inert without a config change.
+- **Unofficial endpoint.** It may change shape or disappear; every failure is soft — empty cache, hidden segments, backoff via the cache mtime.
+- **Verify with `claude-statusline quota`**: prints shim/cache state plus a live fetch of the windows.
+
+---
+
+
 ## Troubleshooting
 
 **Status line not appearing**
@@ -758,7 +778,7 @@ Source builds (`version = "dev"`) short-circuit the whole feature: no check, no 
 - Check `debug` output to see if the fields are present in the payload
 - Remember: zero values hide `cost`, `duration`, `lines-changed`, `tokens`, etc.
 - `rate_limits` only appears for Claude Pro/Max after the first API call
-- `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` need the matching model-class keys in the payload (not sent by Claude Code 2.1.205 statusline yet — they hide until they are)
+- `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` need the matching model-class keys in the payload (not sent by Claude Code 2.1.205 statusline yet — they hide until they are, or enable the `[quota_shim]` OAuth bridge)
 - Burn rates, projections, and trends need ~5 minutes of session history
 - `agent-name` only appears when running with `--agent`; `vim-mode` only with vim mode on
 
