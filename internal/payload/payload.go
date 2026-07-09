@@ -120,12 +120,14 @@ type CurrentUsage struct {
 }
 
 type RateLimits struct {
-	FiveHour                LimitWindow        `json:"five_hour"`
-	SevenDay                LimitWindow        `json:"seven_day"`
-	SevenDaySonnet          LimitWindow        `json:"seven_day_sonnet"`
-	SevenDayOpus            LimitWindow        `json:"seven_day_opus"`
-	SevenDayOverageIncluded LimitWindow        `json:"seven_day_overage_included"` // Fable 5 included weekly quota
-	ModelScoped             []ModelScopedLimit `json:"model_scoped,omitempty"`     // per-model buckets when server emits them
+	FiveHour LimitWindow `json:"five_hour"`
+	SevenDay LimitWindow `json:"seven_day"`
+	// ModelScoped carries the model-class weekly windows (Fable/Sonnet/Opus).
+	// Claude Code's statusline payload does not send them — the OAuth quota
+	// shim (internal/quota) injects them after parsing, which is why the
+	// field is excluded from JSON. If Claude Code ever ships them on the
+	// wire, add parsing back then, against the real field names.
+	ModelScoped []ModelScopedLimit `json:"-"`
 }
 
 type LimitWindow struct {
@@ -133,33 +135,12 @@ type LimitWindow struct {
 	ResetsAt       *int64   `json:"resets_at"`
 }
 
-// ModelScopedLimit is a per-model weekly window from Claude Code's session
-// status (and a likely future statusline field). display_name is a
+// ModelScopedLimit is a per-model weekly window. display_name is a
 // server-supplied label such as "Fable", "Sonnet", or "Opus".
 type ModelScopedLimit struct {
-	DisplayName    string   `json:"display_name"`
-	UsedPercentage *float64 `json:"used_percentage"` // 0–100 when present
-	Utilization    *float64 `json:"utilization"`     // 0–1 alternative
-	ResetsAt       *int64   `json:"-"`               // unix seconds; see UnmarshalJSON
-}
-
-// UnmarshalJSON accepts resets_at as unix seconds (number) or RFC3339 string.
-func (m *ModelScopedLimit) UnmarshalJSON(data []byte) error {
-	type alias struct {
-		DisplayName    string          `json:"display_name"`
-		UsedPercentage *float64        `json:"used_percentage"`
-		Utilization    *float64        `json:"utilization"`
-		ResetsAt       json.RawMessage `json:"resets_at"`
-	}
-	var a alias
-	if err := json.Unmarshal(data, &a); err != nil {
-		return err
-	}
-	m.DisplayName = a.DisplayName
-	m.UsedPercentage = a.UsedPercentage
-	m.Utilization = a.Utilization
-	m.ResetsAt = ParseResetsAt(a.ResetsAt)
-	return nil
+	DisplayName    string
+	UsedPercentage *float64 // 0–100 when present
+	ResetsAt       *int64   // unix seconds
 }
 
 // ParseResetsAt parses a resets_at value that may be unix seconds (number)
@@ -191,52 +172,25 @@ func ParseResetsAt(raw json.RawMessage) *int64 {
 	return nil
 }
 
-// toLimitWindow prefers used_percentage; falls back to utilization×100.
-func (m ModelScopedLimit) toLimitWindow() LimitWindow {
-	var pct *float64
-	switch {
-	case m.UsedPercentage != nil:
-		v := *m.UsedPercentage
-		pct = &v
-	case m.Utilization != nil:
-		v := *m.Utilization * 100
-		pct = &v
-	}
-	return LimitWindow{UsedPercentage: pct, ResetsAt: m.ResetsAt}
-}
-
-// windowOrScoped returns primary when it has usage data; otherwise the first
-// model_scoped entry whose display_name contains needle (case-insensitive).
-func (r RateLimits) windowOrScoped(primary LimitWindow, needle string) LimitWindow {
-	if primary.UsedPercentage != nil {
-		return primary
-	}
-	needle = strings.ToLower(needle)
+// scoped returns the first ModelScoped entry whose display_name contains
+// needle (case-insensitive) and has usage data.
+func (r RateLimits) scoped(needle string) LimitWindow {
 	for _, m := range r.ModelScoped {
-		if strings.Contains(strings.ToLower(m.DisplayName), needle) {
-			w := m.toLimitWindow()
-			if w.UsedPercentage != nil {
-				return w
-			}
+		if strings.Contains(strings.ToLower(m.DisplayName), needle) && m.UsedPercentage != nil {
+			return LimitWindow{UsedPercentage: m.UsedPercentage, ResetsAt: m.ResetsAt}
 		}
 	}
 	return LimitWindow{}
 }
 
-// Fable is the Fable 5 included weekly quota (seven_day_overage_included).
-func (r RateLimits) Fable() LimitWindow {
-	return r.windowOrScoped(r.SevenDayOverageIncluded, "fable")
-}
+// Fable is the Fable 5 included weekly quota.
+func (r RateLimits) Fable() LimitWindow { return r.scoped("fable") }
 
 // Sonnet is the weekly Sonnet-class quota.
-func (r RateLimits) Sonnet() LimitWindow {
-	return r.windowOrScoped(r.SevenDaySonnet, "sonnet")
-}
+func (r RateLimits) Sonnet() LimitWindow { return r.scoped("sonnet") }
 
 // Opus is the weekly Opus-class quota.
-func (r RateLimits) Opus() LimitWindow {
-	return r.windowOrScoped(r.SevenDayOpus, "opus")
-}
+func (r RateLimits) Opus() LimitWindow { return r.scoped("opus") }
 
 type Agent struct {
 	Name string `json:"name"`
@@ -309,11 +263,15 @@ func SamplePayload() Payload {
 			},
 		},
 		RateLimits: RateLimits{
-			FiveHour:                LimitWindow{UsedPercentage: &pct50, ResetsAt: &reset5h},
-			SevenDay:                LimitWindow{UsedPercentage: &pct30, ResetsAt: &reset7d},
-			SevenDaySonnet:          LimitWindow{UsedPercentage: &pct20, ResetsAt: &reset7d},
-			SevenDayOpus:            LimitWindow{UsedPercentage: &pct15, ResetsAt: &reset7d},
-			SevenDayOverageIncluded: LimitWindow{UsedPercentage: &pct40, ResetsAt: &reset7d},
+			FiveHour: LimitWindow{UsedPercentage: &pct50, ResetsAt: &reset5h},
+			SevenDay: LimitWindow{UsedPercentage: &pct30, ResetsAt: &reset7d},
+			// The model-class windows arrive via the quota shim, never the
+			// wire; the preview seeds them the same way.
+			ModelScoped: []ModelScopedLimit{
+				{DisplayName: "Fable", UsedPercentage: &pct40, ResetsAt: &reset7d},
+				{DisplayName: "Sonnet", UsedPercentage: &pct20, ResetsAt: &reset7d},
+				{DisplayName: "Opus", UsedPercentage: &pct15, ResetsAt: &reset7d},
+			},
 		},
 		Agent: Agent{Name: "CodeReview"},
 		Worktree: Worktree{

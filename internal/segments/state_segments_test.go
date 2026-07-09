@@ -101,9 +101,11 @@ func TestModelClassRateLimitSegments(t *testing.T) {
 	resetAt := now.Add(48 * time.Hour).Unix()
 	pct := 40.0
 	var p payload.Payload
-	p.RateLimits.SevenDayOverageIncluded = payload.LimitWindow{UsedPercentage: &pct, ResetsAt: &resetAt}
-	p.RateLimits.SevenDaySonnet = payload.LimitWindow{UsedPercentage: &pct, ResetsAt: &resetAt}
-	p.RateLimits.SevenDayOpus = payload.LimitWindow{UsedPercentage: &pct, ResetsAt: &resetAt}
+	p.RateLimits.ModelScoped = []payload.ModelScopedLimit{
+		{DisplayName: "Fable", UsedPercentage: &pct, ResetsAt: &resetAt},
+		{DisplayName: "Sonnet", UsedPercentage: &pct, ResetsAt: &resetAt},
+		{DisplayName: "Opus", UsedPercentage: &pct, ResetsAt: &resetAt},
+	}
 
 	// Rising history on each model-class series → projections.
 	st := &state.SessionState{}

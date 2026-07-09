@@ -146,16 +146,7 @@ func TestMaybeInjectPayloadWins(t *testing.T) {
 	MaybeInject(&p, shimEnabled(), time.Now())
 
 	if got := p.RateLimits.Fable(); got.UsedPercentage == nil || *got.UsedPercentage != 12 {
-		t.Fatalf("payload model_scoped overridden: %+v, want 12%%", got)
-	}
-
-	// A payload-provided named window also wins over injected entries.
-	var p2 payload.Payload
-	named := 33.0
-	p2.RateLimits.SevenDayOverageIncluded = payload.LimitWindow{UsedPercentage: &named}
-	MaybeInject(&p2, shimEnabled(), time.Now())
-	if got := p2.RateLimits.Fable(); got.UsedPercentage == nil || *got.UsedPercentage != 33 {
-		t.Fatalf("named window overridden: %+v, want 33%%", got)
+		t.Fatalf("pre-populated model_scoped overridden: %+v, want 12%%", got)
 	}
 }
 

@@ -126,14 +126,14 @@ func TestDemoPreviewPayload(t *testing.T) {
 	if got := *p.RateLimits.FiveHour.ResetsAt - now.Unix(); got != 1800 {
 		t.Errorf("5h reset winds down with the bar: in %ds, want 1800s (10%% of 5h)", got)
 	}
-	if p.RateLimits.SevenDayOverageIncluded.UsedPercentage == nil || *p.RateLimits.SevenDayOverageIncluded.UsedPercentage != 90 {
-		t.Errorf("fable pct = %v, want 90", p.RateLimits.SevenDayOverageIncluded.UsedPercentage)
+	if got := p.RateLimits.Fable(); got.UsedPercentage == nil || *got.UsedPercentage != 90 {
+		t.Errorf("fable pct = %v, want 90", got.UsedPercentage)
 	}
-	if p.RateLimits.SevenDaySonnet.UsedPercentage == nil || *p.RateLimits.SevenDaySonnet.UsedPercentage != 90 {
-		t.Errorf("sonnet pct = %v, want 90", p.RateLimits.SevenDaySonnet.UsedPercentage)
+	if got := p.RateLimits.Sonnet(); got.UsedPercentage == nil || *got.UsedPercentage != 90 {
+		t.Errorf("sonnet pct = %v, want 90", got.UsedPercentage)
 	}
-	if p.RateLimits.SevenDayOpus.UsedPercentage == nil || *p.RateLimits.SevenDayOpus.UsedPercentage != 90 {
-		t.Errorf("opus pct = %v, want 90", p.RateLimits.SevenDayOpus.UsedPercentage)
+	if got := p.RateLimits.Opus(); got.UsedPercentage == nil || *got.UsedPercentage != 90 {
+		t.Errorf("opus pct = %v, want 90", got.UsedPercentage)
 	}
 	if p.Cost.TotalCostUSD != 2.25 {
 		t.Errorf("cost = %v, want 2.25 (90%% of $2.50)", p.Cost.TotalCostUSD)

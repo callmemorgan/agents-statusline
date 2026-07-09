@@ -1,12 +1,12 @@
 // Package quota implements the OAuth quota shim: a detached worker fetches
 // Claude's OAuth usage endpoint (the same one `claude /usage` reads) and
 // caches the model-class weekly windows; the render path injects them into
-// rate_limits.model_scoped when the statusline payload does not carry them,
-// so the rate-limit-fable/-sonnet/-opus segments render before Claude Code
-// ships the fields natively. Payload data always wins: the RateLimits
-// accessors prefer the named windows, and a payload that already carries
-// model_scoped entries disables injection entirely. Only percentages and
-// reset times are ever written to disk — never the OAuth token.
+// RateLimits.ModelScoped — a field the statusline wire never populates —
+// so the rate-limit-fable/-sonnet/-opus segments render even though Claude
+// Code does not send these windows. If Claude Code ever ships them in the
+// payload, add wire parsing back in internal/payload against the real field
+// names and let it take precedence here. Only percentages and reset times
+// are ever written to disk — never the OAuth token.
 package quota
 
 import (

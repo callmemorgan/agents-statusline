@@ -1,85 +1,57 @@
 package payload
 
-import (
-	"encoding/json"
-	"testing"
-	"time"
-)
+import "testing"
 
-func TestModelClassWindowsPreferDirectFields(t *testing.T) {
-	pctF, pctS, pctO := 67.0, 22.0, 8.0
-	scoped := 99.0
+func TestModelClassAccessorsReadModelScoped(t *testing.T) {
+	pctF, pctS := 67.0, 22.0
+	reset := int64(1752148800)
 	r := RateLimits{
-		SevenDayOverageIncluded: LimitWindow{UsedPercentage: &pctF},
-		SevenDaySonnet:          LimitWindow{UsedPercentage: &pctS},
-		SevenDayOpus:            LimitWindow{UsedPercentage: &pctO},
 		ModelScoped: []ModelScopedLimit{
-			{DisplayName: "Fable", UsedPercentage: &scoped},
-			{DisplayName: "Sonnet", UsedPercentage: &scoped},
-			{DisplayName: "Opus", UsedPercentage: &scoped},
+			{DisplayName: "Fable", UsedPercentage: &pctF, ResetsAt: &reset},
+			{DisplayName: "Claude Sonnet", UsedPercentage: &pctS},
+			{DisplayName: "Opus"}, // no usage data → treated as absent
 		},
 	}
-	if got := *r.Fable().UsedPercentage; got != 67 {
-		t.Errorf("Fable() = %v, want 67 (direct field)", got)
-	}
-	if got := *r.Sonnet().UsedPercentage; got != 22 {
-		t.Errorf("Sonnet() = %v, want 22", got)
-	}
-	if got := *r.Opus().UsedPercentage; got != 8 {
-		t.Errorf("Opus() = %v, want 8", got)
-	}
-}
-
-func TestModelClassWindowsFallBackToModelScoped(t *testing.T) {
-	util := 0.42
-	resetISO := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
-	raw := []byte(`{
-		"model_scoped": [
-			{"display_name": "Fable", "utilization": 0.42, "resets_at": "2026-07-10T12:00:00Z"},
-			{"display_name": "Claude Sonnet", "used_percentage": 33, "resets_at": 1752148800}
-		]
-	}`)
-	var r RateLimits
-	if err := json.Unmarshal(raw, &r); err != nil {
-		t.Fatal(err)
-	}
 	f := r.Fable()
-	if f.UsedPercentage == nil || *f.UsedPercentage != util*100 {
-		t.Errorf("Fable from utilization = %v, want 42", f.UsedPercentage)
+	if f.UsedPercentage == nil || *f.UsedPercentage != 67 {
+		t.Errorf("Fable() = %v, want 67", f.UsedPercentage)
 	}
-	if f.ResetsAt == nil || *f.ResetsAt != resetISO.Unix() {
-		t.Errorf("Fable resets_at = %v, want %d", f.ResetsAt, resetISO.Unix())
+	if f.ResetsAt == nil || *f.ResetsAt != reset {
+		t.Errorf("Fable resets_at = %v, want %d", f.ResetsAt, reset)
 	}
-	s := r.Sonnet()
-	if s.UsedPercentage == nil || *s.UsedPercentage != 33 {
-		t.Errorf("Sonnet from used_percentage = %v, want 33", s.UsedPercentage)
-	}
-	if s.ResetsAt == nil || *s.ResetsAt != 1752148800 {
-		t.Errorf("Sonnet resets_at = %v, want 1752148800", s.ResetsAt)
+	if s := r.Sonnet(); s.UsedPercentage == nil || *s.UsedPercentage != 22 {
+		t.Errorf("Sonnet() = %v, want 22 (substring match)", s.UsedPercentage)
 	}
 	if r.Opus().UsedPercentage != nil {
-		t.Errorf("Opus should be empty without data, got %v", r.Opus())
+		t.Errorf("Opus without data should be empty, got %v", r.Opus())
 	}
 }
 
-func TestParsePayloadModelClassFields(t *testing.T) {
+// TestModelClassFieldsNotOnTheWire pins the intentional absence: Claude
+// Code's statusline payload does not send model-class weekly windows, so the
+// parser must ignore any such keys (they arrive via the quota shim instead).
+func TestModelClassFieldsNotOnTheWire(t *testing.T) {
 	raw := []byte(`{
 		"model": {"display_name": "Claude Fable 5"},
 		"workspace": {"current_dir": "~"},
 		"rate_limits": {
 			"five_hour": {"used_percentage": 10, "resets_at": 1},
 			"seven_day_overage_included": {"used_percentage": 55, "resets_at": 2},
-			"seven_day_sonnet": {"used_percentage": 12, "resets_at": 3}
+			"seven_day_sonnet": {"used_percentage": 12, "resets_at": 3},
+			"model_scoped": [{"display_name": "Fable", "used_percentage": 99}]
 		}
 	}`)
 	p := ParsePayload(raw)
-	if p.RateLimits.Fable().UsedPercentage == nil || *p.RateLimits.Fable().UsedPercentage != 55 {
-		t.Errorf("Fable = %v", p.RateLimits.Fable())
+	if got := p.RateLimits.FiveHour.UsedPercentage; got == nil || *got != 10 {
+		t.Errorf("five_hour = %v, want 10", got)
 	}
-	if p.RateLimits.Sonnet().UsedPercentage == nil || *p.RateLimits.Sonnet().UsedPercentage != 12 {
-		t.Errorf("Sonnet = %v", p.RateLimits.Sonnet())
+	if p.RateLimits.Fable().UsedPercentage != nil {
+		t.Errorf("Fable parsed from the wire: %v, want ignored", p.RateLimits.Fable())
 	}
-	if p.RateLimits.Opus().UsedPercentage != nil {
-		t.Errorf("Opus should be absent, got %v", p.RateLimits.Opus())
+	if p.RateLimits.Sonnet().UsedPercentage != nil {
+		t.Errorf("Sonnet parsed from the wire: %v, want ignored", p.RateLimits.Sonnet())
+	}
+	if len(p.RateLimits.ModelScoped) != 0 {
+		t.Errorf("model_scoped parsed from the wire: %v, want ignored", p.RateLimits.ModelScoped)
 	}
 }

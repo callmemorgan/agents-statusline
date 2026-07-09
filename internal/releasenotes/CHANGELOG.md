@@ -7,6 +7,9 @@ much larger values (e.g. 99999) to force top placement. Bullets without a
 marker default to importance 0.
 -->
 
+## v1.8.3 — 2026-07-09
+- [4] **Model-class windows are shim-only now.** Removed the speculative statusline-payload parsing of `seven_day_overage_included` / `seven_day_sonnet` / `seven_day_opus` / `model_scoped` — Claude Code does not send these fields to the statusline, so the binary no longer pretends to read them from the wire. The Fable/Sonnet/Opus bars are fed exclusively by the opt-in `[quota_shim]` OAuth bridge; if Claude Code ever ships the fields, wire parsing will return against the real schema.
+
 ## v1.8.2 — 2026-07-09
 - [5] **OAuth quota shim.** New opt-in `[quota_shim]` config table lights up the `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` bars today: a detached background worker fetches Claude's OAuth usage endpoint (the data behind `claude /usage`) and the render path fills `rate_limits.model_scoped` when the statusline payload lacks the model-class windows. Payload data always wins once Claude Code ships the fields. Only percentages and reset times are cached — never the OAuth token.
 - [3] New `claude-statusline quota` subcommand: verifies the shim end-to-end (cache state + live fetch of the model-class weekly windows).

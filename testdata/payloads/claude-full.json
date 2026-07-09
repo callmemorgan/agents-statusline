@@ -12,10 +12,7 @@
   "thinking": {"enabled": true},
   "rate_limits": {
     "five_hour": {"used_percentage": 45, "resets_at": 1750009000},
-    "seven_day": {"used_percentage": 12, "resets_at": 1750273600},
-    "seven_day_sonnet": {"used_percentage": 22, "resets_at": 1750273600},
-    "seven_day_opus": {"used_percentage": 8, "resets_at": 1750273600},
-    "seven_day_overage_included": {"used_percentage": 67, "resets_at": 1750273600}
+    "seven_day": {"used_percentage": 12, "resets_at": 1750273600}
   },
   "agent": {"name": "ReviewBot"},
   "pr": {"number": 42, "url": "https://github.com/callmemorgan/claude-statusline/pull/42", "review_state": "pending"},
