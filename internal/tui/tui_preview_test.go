@@ -109,6 +109,33 @@ func TestSamplePayloadShowsNewSegments(t *testing.T) {
 	}
 }
 
+func TestPreviewShowsEverySubscriptionProvider(t *testing.T) {
+	segments.Init()
+	now := time.Unix(1750000000, 0)
+	foreign := previewForeignUsage(now)
+	for _, tc := range []struct{ id, want string }{
+		{"usage-claude", "Claude 5h"},
+		{"usage-codex", "Codex 5h"},
+		{"usage-grok", "Grok weekly"},
+		{"usage-agy", "Antigravity weekly"},
+		{"usage-kimi", "Kimi weekly"},
+	} {
+		seg, ok := segments.ByID(tc.id)
+		if !ok {
+			t.Fatalf("no segment %q", tc.id)
+		}
+		out, show := seg.Render(segments.RenderCtx{
+			S:       config.SettingsFor(config.Config{}, seg.ID, seg.Settings),
+			Foreign: foreign,
+			Now:     now,
+			Preview: true,
+		})
+		if !show || !strings.Contains(out, tc.want) {
+			t.Errorf("%s = %q, show=%v; want %q", tc.id, out, show, tc.want)
+		}
+	}
+}
+
 func TestDemoPreviewPayload(t *testing.T) {
 	// 1750000000000 is a multiple of the 5000ms sweep; +4500ms → pct 90.
 	now := time.UnixMilli(1750000000000 + 4500)

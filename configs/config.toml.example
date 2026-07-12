@@ -59,6 +59,7 @@ segments = [
   "rate-limit-fable",
   "rate-limit-sonnet",
   "rate-limit-opus",
+	"usage-claude",
   "plan-tier",
   "prompt-id",
 ]

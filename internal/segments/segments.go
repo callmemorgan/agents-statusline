@@ -277,17 +277,24 @@ func contextTrend(ctx RenderCtx, ctxPct int) string {
 	return ""
 }
 
-// shortDuration formats an ETA compactly: 35m, 1h20m.
+// shortDuration formats an ETA compactly: 35m, 1h20m, 5d10h.
+// Multi-day windows (weekly quotas) use days so "130h17m" never appears.
 func shortDuration(d time.Duration) string {
 	if d < time.Minute {
 		d = time.Minute
 	}
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	if h > 0 {
-		return fmt.Sprintf("%dh%02dm", h, m)
+	totalMin := int(d.Minutes())
+	days := totalMin / (24 * 60)
+	hours := (totalMin % (24 * 60)) / 60
+	mins := totalMin % 60
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd%dh", days, hours)
+	case hours > 0:
+		return fmt.Sprintf("%dh%02dm", hours, mins)
+	default:
+		return fmt.Sprintf("%dm", mins)
 	}
-	return fmt.Sprintf("%dm", m)
 }
 
 func renderRateLimit5h(ctx RenderCtx) (string, bool) {
@@ -310,10 +317,11 @@ func renderRateLimitOpus(ctx RenderCtx) (string, bool) {
 	return rateLimitSegment("Opus", ctx.P.RateLimits.Opus(), 7*24*3600, "rl_opus", ctx)
 }
 
-func renderForeignCodex(ctx RenderCtx) (string, bool) { return renderForeignUsage("codex", ctx) }
-func renderForeignGrok(ctx RenderCtx) (string, bool)  { return renderForeignUsage("grok", ctx) }
-func renderForeignAGY(ctx RenderCtx) (string, bool)   { return renderForeignUsage("antigravity", ctx) }
-func renderForeignKimi(ctx RenderCtx) (string, bool)  { return renderForeignUsage("kimi", ctx) }
+func renderForeignCodex(ctx RenderCtx) (string, bool)  { return renderForeignUsage("codex", ctx) }
+func renderForeignClaude(ctx RenderCtx) (string, bool) { return renderForeignUsage("claude", ctx) }
+func renderForeignGrok(ctx RenderCtx) (string, bool)   { return renderForeignUsage("grok", ctx) }
+func renderForeignAGY(ctx RenderCtx) (string, bool)    { return renderForeignUsage("antigravity", ctx) }
+func renderForeignKimi(ctx RenderCtx) (string, bool)   { return renderForeignUsage("kimi", ctx) }
 
 func renderForeignUsage(provider string, ctx RenderCtx) (string, bool) {
 	if ctx.Foreign == nil {
@@ -526,6 +534,7 @@ func allSegmentInfos() []Info {
 		{ID: "rate-limit-sonnet", Line: 3, Desc: "Sonnet weekly quota bar with countdown and projection", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, true, barWidth, IconsetNames(), config.ProjectionSpecs(180)...), NeedsState: true, Render: renderRateLimitSonnet},
 		{ID: "rate-limit-opus", Line: 3, Desc: "Opus weekly quota bar with countdown and projection", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, true, barWidth, IconsetNames(), config.ProjectionSpecs(180)...), NeedsState: true, Render: renderRateLimitOpus},
 		{ID: "usage-codex", Line: 4, Desc: "Codex subscription usage windows from the claude-all cache", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, false, barWidth, IconsetNames()), Render: renderForeignCodex},
+		{ID: "usage-claude", Line: 4, Desc: "Claude subscription usage windows from the OAuth quota cache", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, false, barWidth, IconsetNames()), Render: renderForeignClaude},
 		{ID: "usage-grok", Line: 4, Desc: "Grok subscription usage windows from the claude-all cache", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, false, barWidth, IconsetNames()), Render: renderForeignGrok},
 		{ID: "usage-agy", Line: 4, Desc: "Antigravity subscription usage windows from the claude-all cache", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, false, barWidth, IconsetNames()), Render: renderForeignAGY},
 		{ID: "usage-kimi", Line: 4, Desc: "Kimi subscription usage windows from the claude-all cache", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, false, barWidth, IconsetNames()), Render: renderForeignKimi},

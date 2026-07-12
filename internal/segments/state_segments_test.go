@@ -205,10 +205,14 @@ func TestContextTrend(t *testing.T) {
 
 func TestShortDuration(t *testing.T) {
 	cases := map[time.Duration]string{
-		30 * time.Second:            "1m",
-		35 * time.Minute:            "35m",
-		80 * time.Minute:            "1h20m",
-		2*time.Hour + 5*time.Minute: "2h05m",
+		30 * time.Second:                               "1m",
+		35 * time.Minute:                               "35m",
+		80 * time.Minute:                               "1h20m",
+		2*time.Hour + 5*time.Minute:                    "2h05m",
+		23*time.Hour + 59*time.Minute:                  "23h59m",
+		24 * time.Hour:                                 "1d0h",
+		5*24*time.Hour + 10*time.Hour + 17*time.Minute: "5d10h", // was 130h17m
+		6*24*time.Hour + 2*time.Hour:                   "6d2h",
 	}
 	for d, want := range cases {
 		if got := shortDuration(d); got != want {

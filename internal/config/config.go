@@ -173,7 +173,7 @@ func DefaultConfig() Config {
 			"model", "output-style", "thinking", "version", "duration", "cost-rate", "api-efficiency", "tokens", "prompt-id",
 			"context-window", "rate-limit-5h", "rate-limit-7d",
 			"rate-limit-fable", "rate-limit-sonnet", "rate-limit-opus", "plan-tier",
-			"usage-codex", "usage-grok", "usage-agy", "usage-kimi",
+			"usage-claude", "usage-codex", "usage-grok", "usage-agy", "usage-kimi",
 		},
 		Lines: nil,
 	}

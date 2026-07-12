@@ -62,6 +62,11 @@ func dispatch() {
 				os.Exit(1)
 			}
 			return
+		case "foreign-usage-refresh":
+			if err := foreignusage.RunRefresh(); err != nil {
+				os.Exit(1)
+			}
+			return
 		case "quota":
 			if err := quota.RunStatus(os.Stdout); err != nil {
 				fmt.Fprintf(os.Stderr, "✗ %v\n", err)
@@ -148,6 +153,7 @@ func runRender(debug bool) {
 	// post-render side effect, and it never blocks: the worker is
 	// detached, returns immediately, and respects `mode = "off"`.
 	update.MaybeSpawnUpdateCheck(cfg.Update, start)
+	foreignusage.MaybeRefresh(start)
 }
 
 // initSegments initializes the segment registry and registers plugin segments.

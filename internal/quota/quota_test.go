@@ -53,6 +53,22 @@ func TestParseUsage(t *testing.T) {
 	}
 }
 
+func TestParseUsageCacheIncludesAccountWindows(t *testing.T) {
+	cache, err := parseUsageCache([]byte(usageFixture))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cache.FiveHour == nil || cache.FiveHour.UsedPercentage == nil || *cache.FiveHour.UsedPercentage != 2 {
+		t.Fatalf("five_hour = %+v, want 2%%", cache.FiveHour)
+	}
+	if cache.SevenDay == nil || cache.SevenDay.UsedPercentage == nil || *cache.SevenDay.UsedPercentage != 0 {
+		t.Fatalf("seven_day = %+v, want 0%%", cache.SevenDay)
+	}
+	if cache.FiveHour.DisplayName != "Claude 5h" || cache.SevenDay.DisplayName != "Claude weekly" {
+		t.Fatalf("labels = %q, %q", cache.FiveHour.DisplayName, cache.SevenDay.DisplayName)
+	}
+}
+
 func TestParseUsageNullResets(t *testing.T) {
 	entries, err := parseUsage([]byte(`{"limits":[{"kind":"weekly_scoped","percent":0,"resets_at":null,"scope":{"model":{"display_name":"Fable"}}}]}`))
 	if err != nil || len(entries) != 1 {

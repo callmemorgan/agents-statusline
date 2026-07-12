@@ -127,6 +127,8 @@ Line 3 segments — Usage bars:
   rate-limit-sonnet Sonnet weekly quota bar (via [quota_shim])
   rate-limit-opus   Opus weekly quota bar (via [quota_shim])
                     (rate limits: Claude Code Pro/Max only)
+  usage-claude      Claude 5-hour and weekly subscription bars from the
+                    [quota_shim] OAuth cache (visible in claude-all)
 
 Segments hide automatically when their source data is missing or zero.
 Burn rates, projections, and trends appear after ~5 minutes of session

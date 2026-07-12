@@ -228,6 +228,7 @@ Segments that receive no data from the active tool hide themselves automatically
 | `rate-limit-fable` | 3 | Claude Code | Fable 5 weekly included-quota bar, fed by the opt-in `[quota_shim]` OAuth bridge (Claude Code does not send this data in the statusline payload) — self-hides without it. On upgrade, configs that already list `rate-limit-7d` get this segment inserted after it (schema v2) |
 | `rate-limit-sonnet` | 3 | Claude Code | Sonnet weekly quota bar via the `[quota_shim]` bridge — self-hides without it |
 | `rate-limit-opus` | 3 | Claude Code | Opus weekly quota bar via the `[quota_shim]` bridge — self-hides without it |
+| `usage-claude` | 4 | Claude Code | Unified Claude subscription 5-hour and weekly bars from the `[quota_shim]` OAuth cache — visible regardless of the active gateway model |
 
 ### Harness support
 
@@ -778,6 +779,7 @@ When enabled, a detached worker (same shape as the async plugin refresh and the 
 - Remember: zero values hide `cost`, `duration`, `lines-changed`, `tokens`, etc.
 - `rate_limits` only appears for Claude Pro/Max after the first API call
 - `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` are fed only by the `[quota_shim]` OAuth bridge (Claude Code does not send model-class windows in the statusline payload) — enable it in config.toml and check `agents-statusline quota`
+- `usage-claude` reads the OAuth quota cache; Codex/Grok/Antigravity/Kimi usage reads `foreign-usage.json`. Each render uses cached values immediately and launches one detached `claude-all-usage` refresh when the foreign cache is at least one minute old, so the next render gets fresh bars without blocking the statusline.
 - Burn rates, projections, and trends need ~5 minutes of session history
 - `agent-name` only appears when running with `--agent`; `vim-mode` only with vim mode on
 

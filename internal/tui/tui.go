@@ -13,6 +13,7 @@ import (
 
 	"github.com/callmemorgan/agents-statusline/internal/ansi"
 	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/foreignusage"
 	"github.com/callmemorgan/agents-statusline/internal/palette"
 	"github.com/callmemorgan/agents-statusline/internal/payload"
 	"github.com/callmemorgan/agents-statusline/internal/plugins"
@@ -83,6 +84,33 @@ func previewState(now time.Time) *state.SessionState {
 	return st
 }
 
+// previewForeignUsage supplies deterministic subscription windows for every
+// provider segment. The configurator must demonstrate these segments without
+// reading the user's live cache or requiring any provider login.
+func previewForeignUsage(now time.Time) *foreignusage.Cache {
+	reset := func(after time.Duration) string { return now.Add(after).UTC().Format(time.RFC3339) }
+	return &foreignusage.Cache{Providers: map[string]foreignusage.Provider{
+		"claude": {Mode: "authoritative", State: "available", Windows: []foreignusage.Window{
+			{ID: "5h", Label: "Claude 5h", UsedPercent: 32, ResetAt: reset(2*time.Hour + 14*time.Minute)},
+			{ID: "weekly", Label: "Claude weekly", UsedPercent: 18, ResetAt: reset(4*24*time.Hour + 9*time.Hour)},
+		}},
+		"codex": {Mode: "authoritative", State: "available", Windows: []foreignusage.Window{
+			{ID: "5h", Label: "Codex 5h", UsedPercent: 27, ResetAt: reset(3*time.Hour + 5*time.Minute)},
+			{ID: "weekly", Label: "Codex weekly", UsedPercent: 43, ResetAt: reset(5*24*time.Hour + 2*time.Hour)},
+		}},
+		"grok": {Mode: "authoritative", State: "available", Windows: []foreignusage.Window{
+			{ID: "weekly", Label: "Grok weekly", UsedPercent: 12, ResetAt: reset(6*24*time.Hour + 4*time.Hour)},
+		}},
+		"antigravity": {Mode: "authoritative", State: "available", Windows: []foreignusage.Window{
+			{ID: "weekly", Label: "Antigravity weekly", UsedPercent: 8, ResetAt: reset(3*24*time.Hour + 11*time.Hour)},
+		}},
+		"kimi": {Mode: "authoritative", State: "available", Windows: []foreignusage.Window{
+			{ID: "weekly", Label: "Kimi weekly", UsedPercent: 64, ResetAt: reset(18 * time.Hour)},
+			{ID: "5h", Label: "Kimi 5h", UsedPercent: 21, ResetAt: reset(2*time.Hour + 40*time.Minute)},
+		}},
+	}}
+}
+
 // Run launches the interactive configuration TUI. It loads the config,
 // initializes the segment registry and plugins, and blocks until the user quits.
 // The readme string is the full README.md content for the in-TUI help overlay.
@@ -112,6 +140,7 @@ func Run(readme string) {
 	// for the state-derived segments, and a fake rich-git result (the sample
 	// payload's workspace isn't a real repo). Both are preview-only.
 	pvState := previewState(time.Now())
+	pvForeign := previewForeignUsage(time.Now())
 	segments.GitStatusPreview = &segments.GitStatusInfo{Dirty: true, Ahead: 1, Behind: 2}
 	defer func() { segments.GitStatusPreview = nil }()
 	stashPreview := 3
@@ -302,6 +331,7 @@ func Run(readme string) {
 				S:       config.SettingsFor(cfg, s.ID, s.Settings),
 				Cfg:     cfg,
 				State:   pvState,
+				Foreign: pvForeign,
 				Now:     time.Now(),
 				Preview: true,
 			}
@@ -522,7 +552,7 @@ func Run(readme string) {
 		if demoActive {
 			p = demoPreviewPayload(p, time.Now())
 		}
-		lines := render.Statusline(render.Input{P: p, C: palette.CurrentPalette(cfg.Theme, cfg.ColorDepth, cfg.ThemeColors), Cfg: cfg, State: pvState, Width: width, Now: time.Now(), Preview: true})
+		lines := render.Statusline(render.Input{P: p, C: palette.CurrentPalette(cfg.Theme, cfg.ColorDepth, cfg.ThemeColors), Cfg: cfg, State: pvState, Foreign: pvForeign, Width: width, Now: time.Now(), Preview: true})
 		var previewText string
 		if previewWidth > 0 {
 			for i, l := range lines {
@@ -1024,7 +1054,7 @@ func Run(readme string) {
 					if err != nil || w <= 0 {
 						w = 80
 					}
-					lines := render.Statusline(render.Input{P: payload.SamplePayload(), C: palette.CurrentPalette(cfg.Theme, cfg.ColorDepth, cfg.ThemeColors), Cfg: cfg, State: pvState, Width: w, Now: time.Now(), Preview: true})
+					lines := render.Statusline(render.Input{P: payload.SamplePayload(), C: palette.CurrentPalette(cfg.Theme, cfg.ColorDepth, cfg.ThemeColors), Cfg: cfg, State: pvState, Foreign: pvForeign, Width: w, Now: time.Now(), Preview: true})
 					themeName := cfg.Theme
 					if themeName == "" {
 						themeName = "classic"

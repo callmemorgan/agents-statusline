@@ -50,6 +50,8 @@ type cacheEntry struct {
 
 type cacheFile struct {
 	FetchedAt   int64        `json:"fetched_at"`
+	FiveHour    *cacheEntry  `json:"five_hour,omitempty"`
+	SevenDay    *cacheEntry  `json:"seven_day,omitempty"`
 	ModelScoped []cacheEntry `json:"model_scoped"`
 }
 
@@ -84,15 +86,15 @@ func MaybeInject(p *payload.Payload, cfg config.QuotaShimConfig, now time.Time) 
 	if !cfg.Enabled {
 		return
 	}
-	entries, mtime := loadCache()
+	cache, mtime := loadCache()
 	if needsRefresh(mtime, now, cfg.RefreshEvery()) {
 		trySpawnRefresh()
 	}
-	if len(entries) == 0 || len(p.RateLimits.ModelScoped) > 0 {
+	if len(cache.ModelScoped) == 0 || len(p.RateLimits.ModelScoped) > 0 {
 		return
 	}
-	scoped := make([]payload.ModelScopedLimit, 0, len(entries))
-	for _, e := range entries {
+	scoped := make([]payload.ModelScopedLimit, 0, len(cache.ModelScoped))
+	for _, e := range cache.ModelScoped {
 		scoped = append(scoped, payload.ModelScopedLimit{
 			DisplayName:    e.DisplayName,
 			UsedPercentage: e.UsedPercentage,
@@ -102,7 +104,7 @@ func MaybeInject(p *payload.Payload, cfg config.QuotaShimConfig, now time.Time) 
 	p.RateLimits.ModelScoped = scoped
 }
 
-func loadCache() ([]cacheEntry, time.Time) {
+func loadCache() (cacheFile, time.Time) {
 	path := cachePath()
 	var mtime time.Time
 	if info, err := os.Stat(path); err == nil {
@@ -110,13 +112,13 @@ func loadCache() ([]cacheEntry, time.Time) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, mtime
+		return cacheFile{}, mtime
 	}
 	var f cacheFile
 	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, mtime
+		return cacheFile{}, mtime
 	}
-	return f.ModelScoped, mtime
+	return f, mtime
 }
 
 func needsRefresh(mtime time.Time, now time.Time, refresh time.Duration) bool {
@@ -149,7 +151,7 @@ func RunRefresh() error {
 		return err
 	}
 
-	entries, err := fetchUsage()
+	usage, err := fetchUsage()
 	path := cachePath()
 	now := time.Now()
 	if err != nil {
@@ -161,7 +163,8 @@ func RunRefresh() error {
 		return nil
 	}
 
-	data, marshalErr := json.Marshal(cacheFile{FetchedAt: now.Unix(), ModelScoped: entries})
+	usage.FetchedAt = now.Unix()
+	data, marshalErr := json.Marshal(usage)
 	if marshalErr != nil {
 		return marshalErr
 	}
@@ -173,31 +176,31 @@ func RunRefresh() error {
 	return nil
 }
 
-func fetchUsage() ([]cacheEntry, error) {
+func fetchUsage() (cacheFile, error) {
 	token, err := loadToken()
 	if err != nil {
-		return nil, err
+		return cacheFile{}, err
 	}
 	req, err := http.NewRequest(http.MethodGet, usageURL, nil)
 	if err != nil {
-		return nil, err
+		return cacheFile{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
 	client := &http.Client{Timeout: fetchTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return cacheFile{}, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("usage endpoint returned " + resp.Status)
+		return cacheFile{}, errors.New("usage endpoint returned " + resp.Status)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, err
+		return cacheFile{}, err
 	}
-	return parseUsage(body)
+	return parseUsageCache(body)
 }
 
 // ─── Endpoint Parsing ────────────────────────────────────────────────
@@ -223,6 +226,8 @@ type oauthLimit struct {
 }
 
 type oauthUsage struct {
+	FiveHour       *oauthWindow `json:"five_hour"`
+	SevenDay       *oauthWindow `json:"seven_day"`
 	SevenDaySonnet *oauthWindow `json:"seven_day_sonnet"`
 	SevenDayOpus   *oauthWindow `json:"seven_day_opus"`
 	Limits         []oauthLimit `json:"limits"`
@@ -232,9 +237,14 @@ type oauthUsage struct {
 // weekly_scoped limit, plus the top-level seven_day_sonnet/seven_day_opus
 // windows when no scoped entry already covers that model class.
 func parseUsage(data []byte) ([]cacheEntry, error) {
+	cache, err := parseUsageCache(data)
+	return cache.ModelScoped, err
+}
+
+func parseUsageCache(data []byte) (cacheFile, error) {
 	var u oauthUsage
 	if err := json.Unmarshal(data, &u); err != nil {
-		return nil, err
+		return cacheFile{}, err
 	}
 	var entries []cacheEntry
 	for _, l := range u.Limits {
@@ -272,7 +282,18 @@ func parseUsage(data []byte) ([]cacheEntry, error) {
 	}
 	addWindow(u.SevenDaySonnet, "Sonnet")
 	addWindow(u.SevenDayOpus, "Opus")
-	return entries, nil
+	accountWindow := func(w *oauthWindow, name string) *cacheEntry {
+		if w == nil || w.Utilization == nil {
+			return nil
+		}
+		pct := *w.Utilization
+		return &cacheEntry{DisplayName: name, UsedPercentage: &pct, ResetsAt: payload.ParseResetsAt(w.ResetsAt)}
+	}
+	return cacheFile{
+		FiveHour:    accountWindow(u.FiveHour, "Claude 5h"),
+		SevenDay:    accountWindow(u.SevenDay, "Claude weekly"),
+		ModelScoped: entries,
+	}, nil
 }
 
 // ─── Status Subcommand ───────────────────────────────────────────────
@@ -289,19 +310,20 @@ func RunStatus(w io.Writer) error {
 		fmt.Fprintln(w, "quota shim: disabled — enable with [quota_shim] enabled = true in config.toml")
 	}
 
-	if entries, mtime := loadCache(); !mtime.IsZero() {
+	if cache, mtime := loadCache(); !mtime.IsZero() {
 		fmt.Fprintf(w, "cache: %s (updated %s ago, %d window(s))\n",
-			cachePath(), time.Since(mtime).Round(time.Second), len(entries))
+			cachePath(), time.Since(mtime).Round(time.Second), len(cache.ModelScoped)+accountWindowCount(cache))
 	} else {
 		fmt.Fprintf(w, "cache: %s (absent)\n", cachePath())
 	}
 
-	entries, err := fetchUsage()
+	usage, err := fetchUsage()
 	if err != nil {
 		return fmt.Errorf("live fetch failed: %w", err)
 	}
+	entries := append(accountWindows(usage), usage.ModelScoped...)
 	if len(entries) == 0 {
-		fmt.Fprintln(w, "live: endpoint reachable, but no model-class weekly windows on this account")
+		fmt.Fprintln(w, "live: endpoint reachable, but no quota windows on this account")
 		return nil
 	}
 	for _, e := range entries {
@@ -316,6 +338,19 @@ func RunStatus(w io.Writer) error {
 	}
 	return nil
 }
+
+func accountWindows(cache cacheFile) []cacheEntry {
+	entries := make([]cacheEntry, 0, 2)
+	if cache.FiveHour != nil {
+		entries = append(entries, *cache.FiveHour)
+	}
+	if cache.SevenDay != nil {
+		entries = append(entries, *cache.SevenDay)
+	}
+	return entries
+}
+
+func accountWindowCount(cache cacheFile) int { return len(accountWindows(cache)) }
 
 // ─── Token Discovery ─────────────────────────────────────────────────
 
