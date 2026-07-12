@@ -11,7 +11,7 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/callmemorgan/claude-statusline/internal/palette"
+	"github.com/callmemorgan/agents-statusline/internal/palette"
 )
 
 var reANSI = regexp.MustCompile(`\x1b\[[0-9;]*m`)

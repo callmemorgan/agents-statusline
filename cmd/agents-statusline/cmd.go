@@ -9,19 +9,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/install"
-	"github.com/callmemorgan/claude-statusline/internal/palette"
-	"github.com/callmemorgan/claude-statusline/internal/payload"
-	"github.com/callmemorgan/claude-statusline/internal/plugins"
-	"github.com/callmemorgan/claude-statusline/internal/quota"
-	"github.com/callmemorgan/claude-statusline/internal/releasenotes"
-	"github.com/callmemorgan/claude-statusline/internal/render"
-	"github.com/callmemorgan/claude-statusline/internal/segments"
-	"github.com/callmemorgan/claude-statusline/internal/state"
-	"github.com/callmemorgan/claude-statusline/internal/tui"
-	"github.com/callmemorgan/claude-statusline/internal/update"
-	"github.com/callmemorgan/claude-statusline/internal/version"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/foreignusage"
+	"github.com/callmemorgan/agents-statusline/internal/install"
+	"github.com/callmemorgan/agents-statusline/internal/palette"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/plugins"
+	"github.com/callmemorgan/agents-statusline/internal/quota"
+	"github.com/callmemorgan/agents-statusline/internal/releasenotes"
+	"github.com/callmemorgan/agents-statusline/internal/render"
+	"github.com/callmemorgan/agents-statusline/internal/segments"
+	"github.com/callmemorgan/agents-statusline/internal/state"
+	"github.com/callmemorgan/agents-statusline/internal/tui"
+	"github.com/callmemorgan/agents-statusline/internal/update"
+	"github.com/callmemorgan/agents-statusline/internal/version"
 )
 
 //go:embed README.md
@@ -83,7 +84,7 @@ func dispatch() {
 			}
 			return
 		default:
-			fmt.Fprintf(os.Stderr, "unknown command %q (try: claude-statusline --help)\n", os.Args[1])
+			fmt.Fprintf(os.Stderr, "unknown command %q (try: agents-statusline --help)\n", os.Args[1])
 			os.Exit(2)
 		}
 	}
@@ -111,7 +112,7 @@ func runRender(debug bool) {
 	colors := palette.CurrentPalette(cfg.Theme, cfg.ColorDepth, cfg.ThemeColors)
 	if os.Getenv("STATUSLINE_VERBOSE") != "" {
 		for _, w := range warns {
-			fmt.Fprintf(os.Stderr, "claude-statusline: config: %s\n", w)
+			fmt.Fprintf(os.Stderr, "agents-statusline: config: %s\n", w)
 		}
 	}
 	initSegments(cfg.Plugins)
@@ -126,7 +127,7 @@ func runRender(debug bool) {
 
 	width := payload.TerminalWidth(p)
 	style := render.StyleFor(cfg, colors)
-	lines := render.Statusline(render.Input{P: p, C: colors, Cfg: cfg, State: st, Width: width, Now: start})
+	lines := render.Statusline(render.Input{P: p, C: colors, Cfg: cfg, State: st, Foreign: foreignusage.Load(), Width: width, Now: start})
 
 	lines = releasenotes.MaybeTakeover(cfg.ReleaseNotes, lines, colors, width, style.Padding, start)
 

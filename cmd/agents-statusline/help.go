@@ -3,17 +3,17 @@ package main
 import (
 	"fmt"
 
-	"github.com/callmemorgan/claude-statusline/internal/version"
+	"github.com/callmemorgan/agents-statusline/internal/version"
 )
 
 // ─── Help ────────────────────────────────────────────────────────────
 
 func printHelp() {
 	v, _, _ := version.VersionString()
-	fmt.Printf("claude-statusline v%s — statusline renderer for Claude Code and Antigravity CLI\n", v)
+	fmt.Printf("agents-statusline v%s — statusline renderer for Claude Code and Antigravity CLI\n", v)
 	fmt.Println(`
 Usage:
-  claude-statusline <command> [flags]
+  agents-statusline <command> [flags]
 
 Commands:
   install      Wire this binary into ~/.claude/settings.json (or
@@ -52,7 +52,7 @@ Commands:
   Legacy flag spellings (--configure, --debug, --version, --help) still work.
 
 Configuration:
-  ~/.config/claude-statusline/config.toml
+  ~/.config/agents-statusline/config.toml
   (a pre-1.0 config.json migrates automatically; the original is kept as
    config.json.bak)
 
@@ -140,11 +140,11 @@ Environment:
 
 Examples:
   # One-command setup
-  claude-statusline install
+  agents-statusline install
 
   # Minimal smoke test
-  echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | claude-statusline
+  echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | agents-statusline
 
   # Interactive configuration
-  claude-statusline configure`)
+  agents-statusline configure`)
 }

@@ -26,11 +26,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/segments"
-	"github.com/callmemorgan/claude-statusline/internal/state"
-	"github.com/callmemorgan/claude-statusline/internal/sys"
-	"github.com/callmemorgan/claude-statusline/internal/version"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/segments"
+	"github.com/callmemorgan/agents-statusline/internal/state"
+	"github.com/callmemorgan/agents-statusline/internal/sys"
+	"github.com/callmemorgan/agents-statusline/internal/version"
 )
 
 // InstallKind classifies the running binary so the worker can choose between
@@ -51,7 +51,7 @@ const (
 // configurable update URL would be a foot-gun.
 const (
 	updateRepoOwner = "callmemorgan"
-	updateRepoName  = "claude-statusline"
+	updateRepoName  = "agents-statusline"
 )
 
 // updateBrewTap is the Homebrew tap hosting the formula (the "homebrew-"
@@ -186,11 +186,11 @@ func recordUpdateResult(from, to, method string, verified bool) {
 func UpdateHintFor(kind InstallKind) string {
 	switch kind {
 	case KindBrew:
-		return "brew upgrade claude-statusline"
+		return "brew upgrade agents-statusline"
 	case KindNpm:
-		return "npm update -g @morgan.rebrand/claude-statusline"
+		return "npm update -g @morgan.rebrand/agents-statusline"
 	default:
-		return "claude-statusline update"
+		return "agents-statusline update"
 	}
 }
 
@@ -202,7 +202,7 @@ func RenderSegment(ctx segments.RenderCtx) (string, bool) {
 	now := ctx.Now
 
 	// Post-update confirmation takes precedence over everything, including
-	// mode=off, so a manual `claude-statusline update` is briefly acknowledged.
+	// mode=off, so a manual `agents-statusline update` is briefly acknowledged.
 	if r, ok := loadUpdateResult(); ok && r.To == current {
 		if d := now.Unix() - r.At; d >= 0 && d < int64(expandedWindow/time.Second) {
 			return fmt.Sprintf("%s✓ updated to v%s%s", ctx.C.ROK, current, ctx.C.Rst), true
@@ -378,7 +378,7 @@ func updateLockPath() string {
 }
 
 // updateBrewTimeout is the worker's per-upgrade budget for `brew upgrade`.
-// The foreground `claude-statusline update` subcommand uses no timeout.
+// The foreground `agents-statusline update` subcommand uses no timeout.
 const updateBrewTimeout = 5 * time.Minute
 
 // updateStaleLockTolerance is how long an orphaned lock is considered alive.
@@ -420,7 +420,7 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind InstallKin
 	// npm owns its installed binary; self-swap would fight the package manager.
 	// Print a hint and never touch the file.
 	if kind == KindNpm {
-		fmt.Println("claude-statusline was installed via npm; update with `" + UpdateHintFor(KindNpm) + "`.")
+		fmt.Println("agents-statusline was installed via npm; update with `" + UpdateHintFor(KindNpm) + "`.")
 		return
 	}
 	// KindDev only catches version == "dev"; a +dirty or Go pseudo-version
@@ -429,13 +429,13 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind InstallKin
 	// source-build hint instead of "up to date" (version.CompareVersions treats the
 	// non-release current version as malformed and would otherwise report 0).
 	if kind == KindDev || !version.IsReleaseVersion(current) {
-		fmt.Println("claude-statusline is a source build; update with `go install github.com/" + updateRepoOwner + "/" + updateRepoName + "@latest`.")
+		fmt.Println("agents-statusline is a source build; update with `go install github.com/" + updateRepoOwner + "/" + updateRepoName + "@latest`.")
 		return
 	}
 
 	latest, err := resolveLatestTagFn()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "claude-statusline update: could not resolve latest release: %v\n", err)
+		fmt.Fprintf(os.Stderr, "agents-statusline update: could not resolve latest release: %v\n", err)
 		osExit(1)
 		return
 	}
@@ -443,7 +443,7 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind InstallKin
 
 	cmp := version.CompareVersions(latest, current)
 	if cmp <= 0 {
-		fmt.Printf("claude-statusline v%s is up to date.\n", current)
+		fmt.Printf("agents-statusline v%s is up to date.\n", current)
 		return
 	}
 	fmt.Printf("Latest release: v%s (current v%s)\n", latest, current)
@@ -457,7 +457,7 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind InstallKin
 	// overlapping swaps. If the worker (or another `update`) holds it, bail
 	// cleanly rather than racing.
 	if !sys.TryAcquireLock(updateLockPath(), updateStaleLockTolerance) {
-		fmt.Fprintln(os.Stderr, "claude-statusline update: another update is already in progress; try again shortly.")
+		fmt.Fprintln(os.Stderr, "agents-statusline update: another update is already in progress; try again shortly.")
 		osExit(1)
 		return
 	}
@@ -469,7 +469,7 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind InstallKin
 		brewPath := findBrewExe()
 		if brewPath == "" {
 			releaseLock()
-			fmt.Fprintln(os.Stderr, "claude-statusline update: brew not found; please run `"+UpdateHintFor(KindBrew)+"` manually.")
+			fmt.Fprintln(os.Stderr, "agents-statusline update: brew not found; please run `"+UpdateHintFor(KindBrew)+"` manually.")
 			osExit(1)
 			return
 		}
@@ -481,7 +481,7 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind InstallKin
 		_, err := brewRunner(brewPath, true, 0)
 		if err != nil {
 			releaseLock()
-			fmt.Fprintf(os.Stderr, "claude-statusline update: brew upgrade failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "agents-statusline update: brew upgrade failed: %v\n", err)
 			osExit(1)
 			return
 		}
@@ -491,11 +491,11 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind InstallKin
 	case KindManual:
 		if err := downloadAndSwapFn(latest, current); err != nil {
 			releaseLock()
-			fmt.Fprintf(os.Stderr, "claude-statusline update: %v\n", err)
+			fmt.Fprintf(os.Stderr, "agents-statusline update: %v\n", err)
 			osExit(1)
 			return
 		}
-		fmt.Printf("Updated v%s → v%s. Run `claude-statusline release-notes` to see what changed.\n", current, latest)
+		fmt.Printf("Updated v%s → v%s. Run `agents-statusline release-notes` to see what changed.\n", current, latest)
 	}
 }
 
@@ -507,13 +507,13 @@ func runUpdateFor(args []string, checkOnly bool, current string, kind InstallKin
 func Verify() {
 	tag, err := resolveLatestTagFn()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "claude-statusline update verify: could not resolve latest release: %v\n", err)
+		fmt.Fprintf(os.Stderr, "agents-statusline update verify: could not resolve latest release: %v\n", err)
 		osExit(1)
 		return
 	}
 	dir, err := newStagingDir()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "claude-statusline update verify: staging dir: %v\n", err)
+		fmt.Fprintf(os.Stderr, "agents-statusline update verify: staging dir: %v\n", err)
 		osExit(1)
 		return
 	}
@@ -521,30 +521,30 @@ func Verify() {
 
 	sumsPath, err := fetchChecksumsFn(dir, checksumsURL(tag))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "claude-statusline update verify: download checksums: %v\n", err)
+		fmt.Fprintf(os.Stderr, "agents-statusline update verify: download checksums: %v\n", err)
 		osExit(1)
 		return
 	}
 	sums, err := os.ReadFile(sumsPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "claude-statusline update verify: read checksums: %v\n", err)
+		fmt.Fprintf(os.Stderr, "agents-statusline update verify: read checksums: %v\n", err)
 		osExit(1)
 		return
 	}
 	bundlePath, err := fetchChecksumsBundleFn(dir, checksumsBundleURL(tag))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "claude-statusline update verify: download signature: %v\n", err)
+		fmt.Fprintf(os.Stderr, "agents-statusline update verify: download signature: %v\n", err)
 		osExit(1)
 		return
 	}
 	bundle, err := os.ReadFile(bundlePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "claude-statusline update verify: read signature: %v\n", err)
+		fmt.Fprintf(os.Stderr, "agents-statusline update verify: read signature: %v\n", err)
 		osExit(1)
 		return
 	}
 	if err := verifyChecksumsSig(sums, bundle); err != nil {
-		fmt.Fprintf(os.Stderr, "claude-statusline update verify: signature INVALID for v%s: %v\n", tag, err)
+		fmt.Fprintf(os.Stderr, "agents-statusline update verify: signature INVALID for v%s: %v\n", tag, err)
 		osExit(1)
 		return
 	}
@@ -578,9 +578,9 @@ const updateMaxDownloadBytes = 64 * 1024 * 1024
 func updateUserAgent() string {
 	v, _, _ := version.VersionString()
 	if v == "dev" {
-		return "claude-statusline/dev"
+		return "agents-statusline/dev"
 	}
-	return "claude-statusline/" + v
+	return "agents-statusline/" + v
 }
 
 // resolveLatestTag hits GitHub's /releases/latest with redirects disabled
@@ -646,7 +646,7 @@ func assetName(goos, goarch string) string {
 	if goos == "windows" {
 		ext = "zip"
 	}
-	return "claude-statusline_" + osTitle + "_" + arch + "." + ext
+	return "agents-statusline_" + osTitle + "_" + arch + "." + ext
 }
 
 // releaseBaseURL is the GitHub releases base shared by tag resolution and
@@ -907,7 +907,7 @@ var osExecutable = os.Executable
 // is ~15 MiB). A var (not const) so tests can lower it without a 128 MiB fixture.
 var updateMaxExtractBytes int64 = 128 * 1024 * 1024
 
-// extractAsset pulls the inner claude-statusline binary out of a .tar.gz or
+// extractAsset pulls the inner agents-statusline binary out of a .tar.gz or
 // .zip archive into the archive's own (per-run) directory, returning the path
 // to the extracted file (chmod 0755).
 func extractAsset(archivePath, name string) (string, error) {
@@ -923,9 +923,9 @@ func extractAsset(archivePath, name string) (string, error) {
 // the OS (and by the smoke test that runs it). Shared by both extractors; the
 // unique name means two concurrent runs never collide on a fixed path.
 func writeExtractedBinary(dir string, src io.Reader) (string, error) {
-	pattern := "claude-statusline-*.extracted"
+	pattern := "agents-statusline-*.extracted"
 	if runtime.GOOS == "windows" {
-		pattern = "claude-statusline-*.exe"
+		pattern = "agents-statusline-*.exe"
 	}
 	out, err := os.CreateTemp(dir, pattern)
 	if err != nil {
@@ -969,7 +969,7 @@ func extractTarGz(archivePath string) (string, error) {
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
-			return "", errors.New("claude-statusline binary not found in archive")
+			return "", errors.New("agents-statusline binary not found in archive")
 		}
 		if err != nil {
 			return "", err
@@ -980,7 +980,7 @@ func extractTarGz(archivePath string) (string, error) {
 			continue
 		}
 		base := filepath.Base(hdr.Name)
-		if base != "claude-statusline" && base != "claude-statusline.exe" {
+		if base != "agents-statusline" && base != "agents-statusline.exe" {
 			continue
 		}
 		return writeExtractedBinary(dir, tr)
@@ -999,7 +999,7 @@ func extractZip(archivePath string) (string, error) {
 			continue
 		}
 		base := filepath.Base(f.Name)
-		if base != "claude-statusline" && base != "claude-statusline.exe" {
+		if base != "agents-statusline" && base != "agents-statusline.exe" {
 			continue
 		}
 		src, err := f.Open()
@@ -1010,7 +1010,7 @@ func extractZip(archivePath string) (string, error) {
 		src.Close()
 		return outPath, err
 	}
-	return "", errors.New("claude-statusline binary not found in archive")
+	return "", errors.New("agents-statusline binary not found in archive")
 }
 
 // smokeTest runs the staged binary with "version" and requires the output
@@ -1082,7 +1082,7 @@ func refreshBrewTap(brewPath string) {
 // shelling out to brew/git.
 var refreshBrewTapFn = refreshBrewTap
 
-// brewRunner runs `brew upgrade claude-statusline` with rails that keep
+// brewRunner runs `brew upgrade agents-statusline` with rails that keep
 // the worker polite to the user's system. live=true streams output to the
 // caller's terminal; live=false discards it. timeout=0 means no timeout
 // (used by the foreground subcommand); otherwise a context with that timeout
@@ -1100,7 +1100,7 @@ var brewRunner = func(brewPath string, live bool, timeout time.Duration) ([]stri
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	c := exec.CommandContext(ctx, brewPath, "upgrade", "claude-statusline")
+	c := exec.CommandContext(ctx, brewPath, "upgrade", "agents-statusline")
 	c.Env = append(os.Environ(),
 		"HOMEBREW_NO_AUTO_UPDATE=1",
 		"HOMEBREW_NO_INSTALL_CLEANUP=1",
@@ -1184,7 +1184,7 @@ const exeStagingStaleAfter = 10 * time.Minute
 // exeStagingPrefixes are the swap-file name prefixes preCleanExeStaging reaps.
 // Covers both the per-PID names this version writes and the fixed legacy names
 // an older binary may have left behind.
-var exeStagingPrefixes = []string{".claude-statusline.new", ".claude-statusline.old"}
+var exeStagingPrefixes = []string{".agents-statusline.new", ".agents-statusline.old"}
 
 // preCleanExeStaging reaps *stale* leftover swap files (.old/.new) in the exe's
 // directory from a previously crashed run. It only removes files older than
@@ -1223,7 +1223,7 @@ func preCleanExeStaging() {
 }
 
 // atomicSwap copies the staged binary into the exe's directory as
-// .claude-statusline.new.<pid>, then renames current→.old.<pid> and
+// .agents-statusline.new.<pid>, then renames current→.old.<pid> and
 // .new.<pid>→current in the same directory (atomic). Per-PID names mean two
 // concurrent swaps (e.g. the worker and a foreground `update`) never collide on
 // a shared path. On failure, .old is restored; .old is removed at the end
@@ -1233,8 +1233,8 @@ func preCleanExeStaging() {
 func atomicSwap(exePath, stagedPath string) error {
 	dir := filepath.Dir(exePath)
 	pid := os.Getpid()
-	newPath := filepath.Join(dir, fmt.Sprintf(".claude-statusline.new.%d", pid))
-	oldPath := filepath.Join(dir, fmt.Sprintf(".claude-statusline.old.%d", pid))
+	newPath := filepath.Join(dir, fmt.Sprintf(".agents-statusline.new.%d", pid))
+	oldPath := filepath.Join(dir, fmt.Sprintf(".agents-statusline.old.%d", pid))
 
 	// Stage: copy (not rename) stagedPath into newPath, because the
 	// staging dir may be on a different filesystem than the exe.

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/payload"
-	"github.com/callmemorgan/claude-statusline/internal/state"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/state"
 )
 
 // rlState builds session history where the 5h rate limit climbs `perHour`

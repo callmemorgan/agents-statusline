@@ -1,4 +1,4 @@
-module github.com/callmemorgan/claude-statusline
+module github.com/callmemorgan/agents-statusline
 
 go 1.26
 

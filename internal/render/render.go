@@ -5,13 +5,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/ansi"
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/palette"
-	"github.com/callmemorgan/claude-statusline/internal/payload"
-	"github.com/callmemorgan/claude-statusline/internal/plugins"
-	"github.com/callmemorgan/claude-statusline/internal/segments"
-	"github.com/callmemorgan/claude-statusline/internal/state"
+	"github.com/callmemorgan/agents-statusline/internal/ansi"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/foreignusage"
+	"github.com/callmemorgan/agents-statusline/internal/palette"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/plugins"
+	"github.com/callmemorgan/agents-statusline/internal/segments"
+	"github.com/callmemorgan/agents-statusline/internal/state"
 )
 
 const (
@@ -44,6 +45,7 @@ type Input struct {
 	C       palette.Palette
 	Cfg     config.Config
 	State   *state.SessionState
+	Foreign *foreignusage.Cache
 	Width   int
 	Now     time.Time
 	Preview bool // true when rendering for the TUI assembler/preview
@@ -107,6 +109,7 @@ func Statusline(in Input) []string {
 				Width:   in.Width,
 				Now:     in.Now,
 				Preview: in.Preview,
+				Foreign: in.Foreign,
 			}
 			if s.NeedsState {
 				ctx.State = in.State

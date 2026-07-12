@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/config"
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/callmemorgan/claude-statusline/internal/ansi"
-	"github.com/callmemorgan/claude-statusline/internal/palette"
-	"github.com/callmemorgan/claude-statusline/internal/version"
+	"github.com/callmemorgan/agents-statusline/internal/ansi"
+	"github.com/callmemorgan/agents-statusline/internal/palette"
+	"github.com/callmemorgan/agents-statusline/internal/version"
 )
 
 // b makes a releaseBullet with default importance 0.
@@ -437,7 +437,7 @@ func TestVersionSeenRoundTrip(t *testing.T) {
 		dir := t.TempDir()
 		t.Setenv("XDG_STATE_HOME", dir)
 		// versionSeenPath uses stateBaseDir() which joins XDG_STATE_HOME with
-		// "claude-statusline". We need that to be created on save.
+		// "agents-statusline". We need that to be created on save.
 		v := versionSeen{Version: "1.1.0", FirstSeen: 1700000000}
 		saveVersionSeen(v)
 		got, ok := loadVersionSeen()
@@ -451,10 +451,10 @@ func TestVersionSeenRoundTrip(t *testing.T) {
 	t.Run("corrupt JSON returns ok=false", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Setenv("XDG_STATE_HOME", dir)
-		if err := os.MkdirAll(filepath.Join(dir, "claude-statusline"), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(dir, "agents-statusline"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "claude-statusline", "last-version.json"), []byte("not json"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "agents-statusline", "last-version.json"), []byte("not json"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := loadVersionSeen(); ok {
@@ -472,7 +472,7 @@ func TestVersionSeenRoundTrip(t *testing.T) {
 		dir := t.TempDir()
 		t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "deep", "nested"))
 		saveVersionSeen(versionSeen{Version: "1.1.0", FirstSeen: 1})
-		if _, err := os.Stat(filepath.Join(dir, "deep", "nested", "claude-statusline", "last-version.json")); err != nil {
+		if _, err := os.Stat(filepath.Join(dir, "deep", "nested", "agents-statusline", "last-version.json")); err != nil {
 			t.Errorf("file not created: %v", err)
 		}
 	})
@@ -951,7 +951,7 @@ func TestMaybeReleaseTakeoverSaveFailure(t *testing.T) {
 		t.Helper()
 		base := t.TempDir()
 		t.Setenv("XDG_STATE_HOME", base)
-		dir := filepath.Join(base, "claude-statusline")
+		dir := filepath.Join(base, "agents-statusline")
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -1002,7 +1002,7 @@ func TestMaybeReleaseTakeoverMaxLines(t *testing.T) {
 		t.Helper()
 		base := t.TempDir()
 		t.Setenv("XDG_STATE_HOME", base)
-		dir := filepath.Join(base, "claude-statusline")
+		dir := filepath.Join(base, "agents-statusline")
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}

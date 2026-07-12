@@ -1,8 +1,8 @@
 {
-  "name": "claude-statusline-dev",
+  "name": "agents-statusline-dev",
   "version": "0.0.0",
   "private": true,
-  "description": "Development tooling for claude-statusline",
+  "description": "Development tooling for agents-statusline",
   "license": "MIT",
   "devDependencies": {
     "@biomejs/biome": "^1.9.4"

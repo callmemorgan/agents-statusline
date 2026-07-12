@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-const pkgFamily = "@morgan.rebrand/claude-statusline";
+const pkgFamily = "@morgan.rebrand/agents-statusline";
 const readmesDir = "npm/readmes";
 
 const targets = [
@@ -43,11 +43,11 @@ function assetName(goos, goarch) {
 	else if (arch === "386") arch = "i386";
 	else if (arch === "arm") arch = "armv7";
 	const ext = goos === "windows" ? "zip" : "tar.gz";
-	return `claude-statusline_${osTitle}_${arch}.${ext}`;
+	return `agents-statusline_${osTitle}_${arch}.${ext}`;
 }
 
 function findBinary(dir) {
-	const names = ["claude-statusline", "claude-statusline.exe"];
+	const names = ["agents-statusline", "agents-statusline.exe"];
 	// GoReleaser archives are flat; look only at the extraction root so an
 	// auxiliary file (completion script, etc.) with the same basename can never
 	// be mistaken for the binary.
@@ -150,7 +150,7 @@ function main() {
 		const extractDir = join(pkgDir, "_extract");
 		const extracted = extractArchive(archivePath, extractDir);
 		const binName =
-			t.goos === "windows" ? "claude-statusline.exe" : "claude-statusline";
+			t.goos === "windows" ? "agents-statusline.exe" : "agents-statusline";
 		const binPath = join(pkgDir, "bin", binName);
 		cpSync(extracted, binPath);
 		chmodSync(binPath, 0o755);
@@ -172,14 +172,14 @@ function main() {
 		const pkgJson = {
 			name,
 			version,
-			description: `Prebuilt claude-statusline binary for ${t.os}/${t.cpu}`,
+			description: `Prebuilt agents-statusline binary for ${t.os}/${t.cpu}`,
 			license: "MIT",
 			// `npm publish --provenance` cross-checks repository.url against the repo
 			// the workflow runs in; every package (main + platform) must name the same
 			// source repo or the publish 422s. Mirrors the main package's repository.
 			repository: {
 				type: "git",
-				url: "git+https://github.com/callmemorgan/claude-statusline.git",
+				url: "git+https://github.com/callmemorgan/agents-statusline.git",
 			},
 			os: [t.os],
 			cpu: [t.cpu],
@@ -196,7 +196,7 @@ function main() {
 
 	// Build main package from template.
 	const mainTemplate = JSON.parse(
-		readFileSync("npm/claude-statusline/package.json", "utf8"),
+		readFileSync("npm/agents-statusline/package.json", "utf8"),
 	);
 
 	// The committed optionalDependencies list is hand-maintained; fail the build
@@ -220,14 +220,14 @@ function main() {
 	};
 	const mainDir = join(outRoot, pkgFamily);
 	mkdirSync(join(mainDir, "bin"), { recursive: true });
-	const shimSrc = "npm/claude-statusline/bin/claude-statusline.js";
-	const shimDst = join(mainDir, "bin", "claude-statusline.js");
+	const shimSrc = "npm/agents-statusline/bin/agents-statusline.js";
+	const shimDst = join(mainDir, "bin", "agents-statusline.js");
 	cpSync(shimSrc, shimDst);
 	chmodSync(shimDst, 0o755);
 
-	// Copy the pi extension so `pi install npm:@morgan.rebrand/claude-statusline`
+	// Copy the pi extension so `pi install npm:@morgan.rebrand/agents-statusline`
 	// can load it straight from the published package.
-	const extSrc = "npm/claude-statusline/extensions";
+	const extSrc = "npm/agents-statusline/extensions";
 	const extDst = join(mainDir, "extensions");
 	cpSync(extSrc, extDst, { recursive: true });
 

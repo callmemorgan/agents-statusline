@@ -49,13 +49,13 @@ interface PiContext {
 }
 
 function resolveCommand(): string {
-	if (process.env.CLAUDE_STATUSLINE_BIN) {
-		return process.env.CLAUDE_STATUSLINE_BIN;
+	if (process.env.AGENTS_STATUSLINE_BIN) {
+		return process.env.AGENTS_STATUSLINE_BIN;
 	}
 	try {
-		return require.resolve("../bin/claude-statusline.js");
+		return require.resolve("../bin/agents-statusline.js");
 	} catch {
-		return "claude-statusline";
+		return "agents-statusline";
 	}
 }
 

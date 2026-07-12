@@ -1,7 +1,7 @@
 # Spec: Auto-update (background check + self-swap)
 
 Status: in progress — handed off for implementation 2026-06-12 (decisions settled by interview)
-Target: claude-statusline (this repo), Go, `package main`
+Target: agents-statusline (this repo), Go, `package main`
 
 ## Problem
 
@@ -18,19 +18,19 @@ upgrade path short of re-downloading by hand. We want:
    next render execs the new binary — and the existing release-notes takeover
    announces what changed. No "apply at next launch" staging step is needed:
    the binary is a one-shot process, so an atomic rename **is** "next launch".
-4. A `claude-statusline update` subcommand for explicit, foreground updates.
+4. A `agents-statusline update` subcommand for explicit, foreground updates.
 
 ## Architecture (mirrors existing subsystems — reuse, don't reinvent)
 
 ```
-render path:  read $XDG_STATE_HOME/claude-statusline/update.json (one ReadFile)
+render path:  read $XDG_STATE_HOME/agents-statusline/update.json (one ReadFile)
               └ stale? → spawn detached `update-check` (lock + detach, exactly
                           like spawnRefresher in plugins.go) → return immediately
 
 update-check: resolve latest tag (one HTTPS request, no GitHub API quota)
               → write update.json atomically
               → mode == "auto" && newer? → manual install: download, verify, swap
-                                         → brew install:   brew upgrade claude-statusline
+                                         → brew install:   brew upgrade agents-statusline
                                          → npm install:    no-op (npm owns the binary)
 ```
 
@@ -49,23 +49,23 @@ update-check: resolve latest tag (one HTTPS request, no GitHub API quota)
   is opt-in. `off` disables everything including the network check.
 - **The notify segment self-discloses daily**: while an update is pending,
   the segment renders an **expanded** form for a short window after each
-  daily check (`⬆ v1.2.0 · run: claude-statusline update · disable:
+  daily check (`⬆ v1.2.0 · run: agents-statusline update · disable:
   [update] in config.toml`) and a **compact** form (`⬆ v1.2.0`) the rest of
   the day. The window is derived from the cache's `checked_at` — no extra
   state (see segment section).
 - **Homebrew installs never self-swap the binary directly** — replacing a
   Cellar-managed binary fights brew's bookkeeping. In `auto` mode the worker
-  instead runs **`brew upgrade claude-statusline`** itself (with the rails in
+  instead runs **`brew upgrade agents-statusline`** itself (with the rails in
   the worker section); in `notify` mode they get the segment + hint.
 - **npm installs never self-swap and never run a package-manager upgrade** —
   npm owns the binary (it lives under `node_modules`), so `auto` is a no-op
   for them: the worker still writes the cache (the notify segment works) but
-  takes no install action. Both the segment hint and `claude-statusline
-  update` point at **`npm update -g @morgan.rebrand/claude-statusline`**
+  takes no install action. Both the segment hint and `agents-statusline
+  update` point at **`npm update -g @morgan.rebrand/agents-statusline`**
   instead. Detected by a `node_modules` path component, matched **before**
   brew (a global npm prefix can sit under a Homebrew-managed node). pi
   installs use the same npm package, so they are covered by the same rule;
-  update them with `pi update --extension npm:@morgan.rebrand/claude-statusline`
+  update them with `pi update --extension npm:@morgan.rebrand/agents-statusline`
   or `pi update`.
 - **`dev` builds disable the whole feature** (no check, no segment, no
   subcommand action beyond an explanatory message). Source builds have no
@@ -76,12 +76,12 @@ update-check: resolve latest tag (one HTTPS request, no GitHub API quota)
 - **Downgrades are never applied** (latest < current, e.g. a yanked release
   → do nothing, hide the segment).
 - **Default check interval is 24h** (`check_hours`, range 1–168).
-- **`claude-statusline install` mentions, never prompts**: its success
+- **`agents-statusline install` mentions, never prompts**: its success
   output gains one line — `update checks: notify (configure via [update] in
   config.toml)` — so the default is disclosed at onboarding without making
   install interactive (scripts pipe it).
 - **Latest-version lookup avoids the GitHub API** (60 unauthenticated
-  req/h/IP): `GET https://github.com/callmemorgan/claude-statusline/releases/latest`
+  req/h/IP): `GET https://github.com/callmemorgan/agents-statusline/releases/latest`
   with redirects disabled → parse the tag from the 302 `Location` header
   (`…/releases/tag/v1.2.0`). Asset URLs are then fully predictable from the
   GoReleaser name template.
@@ -89,7 +89,7 @@ update-check: resolve latest tag (one HTTPS request, no GitHub API quota)
   This protects download integrity; it trusts GitHub. Cosign verification of
   `checksums.txt` would need a sigstore dependency tree — explicitly out of
   scope for v1, noted as future work.
-- Repo owner/name are **compile-time constants** (`callmemorgan/claude-statusline`),
+- Repo owner/name are **compile-time constants** (`callmemorgan/agents-statusline`),
   not configurable — a configurable update URL is a foot-gun.
 
 ## Config: `[update]` table
@@ -164,7 +164,7 @@ Do not import a semver library for three integers.
 
 ### Check cache
 
-`$XDG_STATE_HOME/claude-statusline/update.json` (sibling of
+`$XDG_STATE_HOME/agents-statusline/update.json` (sibling of
 `last-version.json`; use `stateBaseDir()`):
 
 ```json
@@ -218,12 +218,12 @@ via defer.
    pseudo-version) — non-release builds never hit the network.
 2. Resolve latest tag (redirect trick above; `http.Client` with
    `CheckRedirect: func(...) error { return http.ErrUseLastResponse }`,
-   10s timeout, explicit User-Agent `claude-statusline/<version>`).
+   10s timeout, explicit User-Agent `agents-statusline/<version>`).
 3. `saveUpdateCheck({now, latest})` — notify mode stops here, and so does
    `kindNpm` regardless of mode (npm-owned binaries are never self-modified;
    the cache write above is enough for the notify segment to work).
 4. Auto mode + `kindBrew` + `compareVersions(latest, current) > 0` →
-   run `brew upgrade claude-statusline`:
+   run `brew upgrade agents-statusline`:
    - locate `brew` on PATH (also try `/opt/homebrew/bin/brew`,
      `/usr/local/bin/brew`); missing → fall back to notify-only silently.
    - env `HOMEBREW_NO_AUTO_UPDATE=1` (upgrade the formula, don't trigger a
@@ -235,7 +235,7 @@ via defer.
      interval retries.
 5. Auto mode, all of: `kindManual`, `compareVersions(latest, current) > 0`,
    exe dir writable → self-swap:
-   a. Download `claude-statusline_<Os>_<Arch>.<ext>` from
+   a. Download `agents-statusline_<Os>_<Arch>.<ext>` from
       `…/releases/download/v<latest>/` into `stateBaseDir()/staging/`.
       Asset name mapping mirrors `.goreleaser.yaml`: GOOS title-cased
       (darwin→`Darwin`), amd64→`x86_64`, windows gets `.zip`, others
@@ -244,15 +244,15 @@ via defer.
    b. Download `checksums.txt`, find the asset's line, verify sha256 of the
       archive bytes. Mismatch → delete staging, abort (cache already
       written, so the segment still notifies).
-   c. Extract the `claude-statusline` binary from the archive
+   c. Extract the `agents-statusline` binary from the archive
       (archive/tar+gzip; archive/zip on Windows), `chmod 0755`.
    d. **Smoke-test**: run the staged binary with `version` (2s timeout) and
       require the output to contain `latest`. A binary that doesn't execute
       on this machine must never reach the exe path.
    e. **Atomic swap** (same-directory renames only — staging may be on a
       different filesystem than the exe):
-      1. copy staged → `<exeDir>/.claude-statusline.new`
-      2. rename current exe → `<exeDir>/.claude-statusline.old`
+      1. copy staged → `<exeDir>/.agents-statusline.new`
+      2. rename current exe → `<exeDir>/.agents-statusline.old`
       3. rename `.new` → exe path; on failure, rename `.old` back (rollback)
       4. remove `.old`; on Windows this fails while any old process lives —
          ignore, and delete leftover `.old`/`.new` at the start of every
@@ -284,7 +284,7 @@ two forms:
 
 - **Expanded** (the daily disclosure) while
   `ctx.Now - checked_at < expandedWindow` (const, **5 minutes**):
-  `⬆ v1.2.0 · run: claude-statusline update · disable: [update] in config.toml`
+  `⬆ v1.2.0 · run: agents-statusline update · disable: [update] in config.toml`
 - **Compact** otherwise: `⬆ v1.2.0`
 
 The check runs at most once per `check_hours`, and it only runs while the
@@ -300,20 +300,20 @@ default-on.
 
 ### The `update` subcommand (foreground, explicit)
 
-`claude-statusline update` — user-initiated, so it ignores `mode` (explicit
+`agents-statusline update` — user-initiated, so it ignores `mode` (explicit
 intent) but **not** the safety rails (kind, major, checksum, smoke-test):
 
 - `kindDev` → "source build — update with `go install …@latest`", exit 0.
 - `kindNpm` → "installed via npm — update with `npm update -g
-  @morgan.rebrand/claude-statusline`", exit 0 (never touches the binary).
-- `kindBrew` → run `brew upgrade claude-statusline` in the foreground with
+  @morgan.rebrand/agents-statusline`", exit 0 (never touches the binary).
+- `kindBrew` → run `brew upgrade agents-statusline` in the foreground with
   live output (same rails as the worker's brew branch, minus the silence);
   brew missing → print the manual command, exit 1.
-- Already current → "claude-statusline v1.2.0 is up to date", exit 0.
+- Already current → "agents-statusline v1.2.0 is up to date", exit 0.
 - Newer exists → print what it found, run the same download/verify/swap code
   path as the worker (shared functions, progress on stderr is fine here —
   this is not the render path), report success: "updated v1.1.0 → v1.2.0 —
-  run `claude-statusline release-notes` to see what changed".
+  run `agents-statusline release-notes` to see what changed".
 - `--check` → check + report only, never install. Exit 0 either way.
 - Any failure → message on stderr, exit 1.
 
@@ -397,14 +397,14 @@ manual smoke below, not unit tests — do not mock HTTP for coverage theater.
    the binary** — never point the swap at the repo build you're editing):
 
    ```bash
-   go build -ldflags "-X github.com/callmemorgan/claude-statusline/internal/version.Version=1.0.0" -o /tmp/upd-test/bin/claude-statusline ./cmd/claude-statusline
+   go build -ldflags "-X github.com/callmemorgan/agents-statusline/internal/version.Version=1.0.0" -o /tmp/upd-test/bin/agents-statusline ./cmd/agents-statusline
    export HOME=/tmp/upd-test XDG_STATE_HOME=/tmp/upd-test/state XDG_CONFIG_HOME=/tmp/upd-test/config
-   printf '[update]\nmode = "auto"\n' > …/config/claude-statusline/config.toml
-   echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | /tmp/upd-test/bin/claude-statusline
+   printf '[update]\nmode = "auto"\n' > …/config/agents-statusline/config.toml
+   echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | /tmp/upd-test/bin/agents-statusline
    # wait for the worker; binary should now be the latest release, and the
    # next render shows the release-notes takeover
-   /tmp/upd-test/bin/claude-statusline version
-   /tmp/upd-test/bin/claude-statusline update --check
+   /tmp/upd-test/bin/agents-statusline version
+   /tmp/upd-test/bin/agents-statusline update --check
    ```
 
 ## Acceptance criteria
@@ -420,10 +420,10 @@ manual smoke below, not unit tests — do not mock HTTP for coverage theater.
       interval; next render announces via the release-notes takeover;
       checksum mismatch or failed smoke-test leaves the old binary untouched.
 - [ ] Auto mode on a Homebrew install: never touches the binary directly;
-      runs `brew upgrade claude-statusline` with `HOMEBREW_NO_AUTO_UPDATE=1`,
+      runs `brew upgrade agents-statusline` with `HOMEBREW_NO_AUTO_UPDATE=1`,
       silently skipping when brew is absent.
-- [ ] `claude-statusline install` output mentions the update-check default.
-- [ ] `claude-statusline update` / `--check` behave per the table; honest
+- [ ] `agents-statusline install` output mentions the update-check default.
+- [ ] `agents-statusline update` / `--check` behave per the table; honest
       exit codes.
 - [ ] Interrupted/concurrent workers never corrupt the exe (lock + rename
       rollback; `.old`/`.new` leftovers cleaned on the next run).

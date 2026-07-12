@@ -2,6 +2,7 @@
 !npm/claude-statusline
 !npm/claude-statusline/**
 /claude-statusline.exe
+build/
 .worktrees/
 .claude/
 

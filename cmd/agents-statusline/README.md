@@ -1,14 +1,14 @@
-# claude-statusline
+# agents-statusline
 
 A fast, themeable statusline for [Claude Code](https://claude.ai/code), [Antigravity](https://antigravity.google/product/antigravity-cli) (`agy`), and [Pi](https://pi.dev) — your session's cost, context, and limits at a glance.
 
-![claude-statusline rendering a live session with the Tokyo Night theme — git branch, lines changed, cost, burn rate, context-window trend, and rate-limit projections](assets/claude-tokyo-night.png)
+![agents-statusline rendering a live session with the Tokyo Night theme — git branch, lines changed, cost, burn rate, context-window trend, and rate-limit projections](assets/claude-tokyo-night.png)
 
 Each tool pipes a JSON payload to the binary on every turn; it renders a compact, color-coded readout in your terminal:
 
 - **Ten built-in themes** — classic, Catppuccin Mocha, Nord, Dracula, Gruvbox Dark, Tokyo Night, Newsprint, Paper, Solarized Light, and Monochrome — in truecolor with automatic 256/16-color fallback. Paper, Solarized Light, and Monochrome are tuned for light terminal backgrounds.
 - **Burn-rate intelligence** — rate-limit projections (`→58%` at reset), cost per hour (`$1.84/h`), and time-to-compact estimates (`↗ ~35m`), computed from your session's own history.
-- **One-command setup** — `claude-statusline install` wires everything up and verifies it.
+- **One-command setup** — `agents-statusline install` wires everything up and verifies it.
 - **A real configuration TUI** — live width-aware preview, theme and preset pickers, a color swatch picker, per-segment settings, search, an animated demo mode, and a render-in-your-terminal view for honest theme checking.
 - **30 built-in segments + plugins** — assigned to lines 1–9; empty lines collapse, and segments hide automatically when their data is missing.
 
@@ -22,17 +22,17 @@ The core renderer is a single static binary (one TOML dependency); the interacti
 
 ```bash
 brew tap callmemorgan/tap
-brew install claude-statusline
-claude-statusline install
+brew install agents-statusline
+agents-statusline install
 ```
 
-Upgrade later with `brew upgrade claude-statusline`.
+Upgrade later with `brew upgrade agents-statusline`.
 
 **Any platform — `go install`:**
 
 ```bash
-go install github.com/callmemorgan/claude-statusline@latest
-claude-statusline install
+go install github.com/callmemorgan/agents-statusline@latest
+agents-statusline install
 ```
 
 Requires Go 1.22+. Make sure `$(go env GOPATH)/bin` is on your `$PATH`.
@@ -40,29 +40,29 @@ Requires Go 1.22+. Make sure `$(go env GOPATH)/bin` is on your `$PATH`.
 **Any platform — npm:**
 
 ```bash
-npm i -g @morgan.rebrand/claude-statusline
-claude-statusline install
+npm i -g @morgan.rebrand/agents-statusline
+agents-statusline install
 ```
 
-Requires Node 14+. npm installs a small JS shim that `spawnSync`s the correct per-platform binary from `optionalDependencies`; Homebrew and manual installs remain the low-latency recommendation because each render pays the cost of one Node process spawn. If you already have another `claude-statusline` on your `$PATH` (for example a Go install at `$(go env GOPATH)/bin/claude-statusline` or `~/.local/bin/claude-statusline`), npm may not be the one executed — check with `which claude-statusline`.
+Requires Node 14+. npm installs a small JS shim that `spawnSync`s the correct per-platform binary from `optionalDependencies`; Homebrew and manual installs remain the low-latency recommendation because each render pays the cost of one Node process spawn. If you already have another `agents-statusline` on your `$PATH` (for example a Go install at `$(go env GOPATH)/bin/agents-statusline` or `~/.local/bin/agents-statusline`), npm may not be the one executed — check with `which agents-statusline`.
 
 > npm packages are built and published automatically with each GitHub release.
 
 **Pi:**
 
 ```bash
-pi install npm:@morgan.rebrand/claude-statusline
+pi install npm:@morgan.rebrand/agents-statusline
 ```
 
-This installs the package as a Pi extension. The extension wires the renderer into Pi's footer and refreshes on session/turn/model events. No separate `claude-statusline install` step is needed inside Pi.
+This installs the package as a Pi extension. The extension wires the renderer into Pi's footer and refreshes on session/turn/model events. No separate `agents-statusline install` step is needed inside Pi.
 
-> The Pi extension resolves the Go binary from the same `@morgan.rebrand/claude-statusline` npm package (via its per-platform `optionalDependencies`). Because Pi owns the files, the binary's own self-swapper leaves Pi installs alone and points you at `pi update` instead. If you want to use a local build while developing, set `CLAUDE_STATUSLINE_BIN` to the absolute path of a `claude-statusline` binary before launching Pi.
+> The Pi extension resolves the Go binary from the same `@morgan.rebrand/agents-statusline` npm package (via its per-platform `optionalDependencies`). Because Pi owns the files, the binary's own self-swapper leaves Pi installs alone and points you at `pi update` instead. If you want to use a local build while developing, set `AGENTS_STATUSLINE_BIN` to the absolute path of a `agents-statusline` binary before launching Pi.
 
 Upgrade later with Pi's own package manager:
 
 ```bash
 # update this package only
-pi update --extension npm:@morgan.rebrand/claude-statusline
+pi update --extension npm:@morgan.rebrand/agents-statusline
 # update Pi and all packages (skips pinned specs)
 pi update
 # update packages only, without touching pi itself
@@ -71,7 +71,7 @@ pi update --extensions
 
 **Prebuilt binaries:**
 
-Download a binary from the [releases page](https://github.com/callmemorgan/claude-statusline/releases). Each release ships a `checksums.txt` signed with a key-based cosign bundle (`checksums.txt.bundle`); the public key is [`release/cosign.pub`](release/cosign.pub) in this repo. Verify the signature, then the asset's checksum:
+Download a binary from the [releases page](https://github.com/callmemorgan/agents-statusline/releases). Each release ships a `checksums.txt` signed with a key-based cosign bundle (`checksums.txt.bundle`); the public key is [`release/cosign.pub`](release/cosign.pub) in this repo. Verify the signature, then the asset's checksum:
 
 ```bash
 cosign verify-blob \
@@ -84,14 +84,14 @@ shasum -a 256 -c checksums.txt --ignore-missing
 
 `--insecure-ignore-tlog` skips the online transparency-log inclusion check so verification works offline against just the embedded key — it does not weaken the signature check itself. The self-update path performs this same key-based verification in-process — no `cosign` needed at runtime.
 
-> **macOS note:** Downloaded binaries are not notarized. If Gatekeeper blocks the binary on first run, run `xattr -d com.apple.quarantine /path/to/claude-statusline`, or use Homebrew/`go install` instead.
+> **macOS note:** Downloaded binaries are not notarized. If Gatekeeper blocks the binary on first run, run `xattr -d com.apple.quarantine /path/to/agents-statusline`, or use Homebrew/`go install` instead.
 
 **Build from source:**
 
 ```bash
-git clone https://github.com/callmemorgan/claude-statusline.git
-cd claude-statusline
-go build -o claude-statusline ./cmd/claude-statusline
+git clone https://github.com/callmemorgan/agents-statusline.git
+cd agents-statusline
+go build -o agents-statusline ./cmd/agents-statusline
 ```
 
 ---
@@ -99,10 +99,10 @@ go build -o claude-statusline ./cmd/claude-statusline
 ## Wiring it up
 
 ```bash
-claude-statusline install
+agents-statusline install
 ```
 
-This backs up `~/.claude/settings.json` (honoring `$CLAUDE_CONFIG_DIR` when set), splices in the `statusLine` key **without reformatting the rest of the file**, and verifies the wiring by rendering a sample payload through the exact command Claude Code will run. Flags: `--dry-run` to preview, `--force` to overwrite an existing entry, `--target agy` for Antigravity, `--settings-path` for non-standard locations. `claude-statusline uninstall` removes the wiring (`--restore` swaps the backup back).
+This backs up `~/.claude/settings.json` (honoring `$CLAUDE_CONFIG_DIR` when set), splices in the `statusLine` key **without reformatting the rest of the file**, and verifies the wiring by rendering a sample payload through the exact command Claude Code will run. Flags: `--dry-run` to preview, `--force` to overwrite an existing entry, `--target agy` for Antigravity, `--settings-path` for non-standard locations. `agents-statusline uninstall` removes the wiring (`--restore` swaps the backup back).
 
 Optional Claude Code `statusLine` fields can be set at install time and are written only when their flag is passed:
 
@@ -113,7 +113,7 @@ Optional Claude Code `statusLine` fields can be set at install time and are writ
 For example:
 
 ```bash
-claude-statusline install --refresh-interval 30 --hide-vim-mode-indicator --statusline-padding 2
+agents-statusline install --refresh-interval 30 --hide-vim-mode-indicator --statusline-padding 2
 ```
 
 ### Subagent status line
@@ -121,10 +121,10 @@ claude-statusline install --refresh-interval 30 --hide-vim-mode-indicator --stat
 Claude Code can also render a per-task status line for subagents and long-running tools via the `subagentStatusLine` hook. To wire it up alongside the main status line:
 
 ```bash
-claude-statusline install --subagent-statusline
+agents-statusline install --subagent-statusline
 ```
 
-This adds a `subagentStatusLine` key to `settings.json` that invokes `claude-statusline subagent-statusline`. The hook receives JSON with base payload fields plus `columns` and a `tasks` array; the command emits one `{"id":"<task id>","content":"<ANSI string>"}` JSON line per task. Empty `id`s keep the default rendering, and empty `content` hides the row. Pass `--dry-run` to preview the change.
+This adds a `subagentStatusLine` key to `settings.json` that invokes `agents-statusline subagent-statusline`. The hook receives JSON with base payload fields plus `columns` and a `tasks` array; the command emits one `{"id":"<task id>","content":"<ANSI string>"}` JSON line per task. Empty `id`s keep the default rendering, and empty `content` hides the row. Pass `--dry-run` to preview the change.
 
 <details>
 <summary>Manual wiring (fallback)</summary>
@@ -135,7 +135,7 @@ Claude Code — add to `~/.claude/settings.json`:
 {
   "statusLine": {
     "type": "command",
-    "command": "claude-statusline"
+    "command": "agents-statusline"
   }
 }
 ```
@@ -144,7 +144,7 @@ Antigravity — add to your `agy` config:
 
 ```json
 {
-  "statusline": "claude-statusline"
+  "statusline": "agents-statusline"
 }
 ```
 
@@ -155,10 +155,10 @@ The binary auto-detects which tool is calling it via the `product` field in the 
 
 ### Pi configuration
 
-After `pi install npm:@morgan.rebrand/claude-statusline`, the extension is active immediately. It uses the same config file as the other tools:
+After `pi install npm:@morgan.rebrand/agents-statusline`, the extension is active immediately. It uses the same config file as the other tools:
 
 ```bash
-claude-statusline configure   # edit themes, segments, and settings
+agents-statusline configure   # edit themes, segments, and settings
 ```
 
 Changes are picked up on the next Pi render. The extension builds a Claude-compatible payload from Pi's live context — session id, working directory, model, and context-window usage — so a focused set of segments shows up under Pi: `session-name`, `directory`, `model`, the `context-window` bar, `git-branch`, `git-stash`, and the `update` notice. The Claude- and Antigravity-specific segments don't render, because Pi doesn't send their data. See the [harness support](#harness-support) matrix for the exact per-segment breakdown.
@@ -166,7 +166,7 @@ Changes are picked up on the next Pi render. The extension builds a Claude-compa
 To remove the statusline from Pi:
 
 ```bash
-pi remove npm:@morgan.rebrand/claude-statusline
+pi remove npm:@morgan.rebrand/agents-statusline
 ```
 
 ---
@@ -275,7 +275,7 @@ No segment is gated by tool name — each one renders when the active harness se
 
 ### Burn rates, projections, and trends
 
-`cost-rate`, the rate-limit `→58%` projections, and the context `↗ ~35m` trend are computed from a small per-session history file the renderer maintains at `~/.local/state/claude-statusline/sessions/` (`$XDG_STATE_HOME` respected). They appear after ~5 minutes of session history, never extrapolate a short burst across a long window, and stay hidden when usage is flat or falling. Disable or tune via the `[state]` config table.
+`cost-rate`, the rate-limit `→58%` projections, and the context `↗ ~35m` trend are computed from a small per-session history file the renderer maintains at `~/.local/state/agents-statusline/sessions/` (`$XDG_STATE_HOME` respected). They appear after ~5 minutes of session history, never extrapolate a short burst across a long window, and stay hidden when usage is flat or falling. Disable or tune via the `[state]` config table.
 
 ---
 
@@ -351,7 +351,7 @@ dim = "245"       # xterm-256 index
 ## Configuration
 
 ```bash
-claude-statusline configure
+agents-statusline configure
 ```
 
 An interactive TUI: segment list (left), description panel (right), a **live preview at your real terminal width**, and a status strip showing the active theme/preset and unsaved-changes marker. The preview is fed synthetic session history and git status, so every feature — burn rates, projections, trends, rich git — is visible while you configure it. Nothing touches disk until you save.
@@ -391,7 +391,7 @@ preset = "cost-tracker"   # used when `segments` is absent; your lines/settings/
 
 ### Manual config
 
-Config lives at `~/.config/claude-statusline/config.toml` — a pre-1.0 `config.json` is **migrated automatically** on first run (the original is kept as `config.json.bak`). An annotated example is at [`configs/config.toml.example`](configs/config.toml.example).
+Config lives at `~/.config/agents-statusline/config.toml` — a pre-1.0 `config.json` is **migrated automatically** on first run (the original is kept as `config.json.bak`). An annotated example is at [`configs/config.toml.example`](configs/config.toml.example).
 
 ```toml
 theme = "nord"
@@ -451,7 +451,7 @@ One segment, whole stdout is the value:
 ```toml
 [[plugins]]
 id = "memory"
-command = "~/.config/claude-statusline/plugins/memory.sh"
+command = "~/.config/agents-statusline/plugins/memory.sh"
 line = 1
 desc = "RAM usage"
 timeout_ms = 200
@@ -463,7 +463,7 @@ One command, multiple independent segments. The command runs **once** per turn; 
 
 ```toml
 [[plugins]]
-command = "~/.config/claude-statusline/plugins/memory.sh"
+command = "~/.config/agents-statusline/plugins/memory.sh"
 timeout_ms = 200
 
   [[plugins.fields]]
@@ -497,7 +497,7 @@ Plugins that talk to slow external services (`kubectl`, `gh api`, a weather fetc
 ```toml
 [[plugins]]
 id = "k8s-context"
-command = "~/.config/claude-statusline/plugins/k8s.sh"
+command = "~/.config/agents-statusline/plugins/k8s.sh"
 async = true
 refresh_ms = 10000   # consider cache stale after 10s
 timeout_ms = 8000    # kill the background run after 8s
@@ -529,8 +529,8 @@ The binary exposes these to every plugin:
 A full working example lives at [`examples/plugins/memory.sh`](examples/plugins/memory.sh). It reports `mem-used`, `swap-used`, and `%-mem-used`, and works on both macOS (`vm_stat`/`sysctl`) and Linux (`/proc/meminfo`).
 
 ```sh
-cp examples/plugins/memory.sh ~/.config/claude-statusline/plugins/memory.sh
-chmod +x ~/.config/claude-statusline/plugins/memory.sh
+cp examples/plugins/memory.sh ~/.config/agents-statusline/plugins/memory.sh
+chmod +x ~/.config/agents-statusline/plugins/memory.sh
 ```
 
 Plugin segments appear in `configure` with a `[plugin]` label alongside built-in segments — same toggle, line assignment, and reorder controls.
@@ -656,7 +656,7 @@ The binary detects Antigravity by the `product: "antigravity"` field and automat
 ## Debug
 
 ```bash
-echo '{"product":"antigravity",...}' | claude-statusline debug
+echo '{"product":"antigravity",...}' | agents-statusline debug
 ```
 
 Prints a field presence table comparing the received payload against the Claude Code and Antigravity schemas, all parsed values, and any config validation warnings. Useful for diagnosing missing segments or unexpected payload shapes. Set `STATUSLINE_VERBOSE=1` to also print config warnings to stderr during normal renders.
@@ -666,11 +666,11 @@ Prints a field presence table comparing the received payload against the Claude 
 ## Release notes
 
 ```bash
-claude-statusline release-notes                 # current version
-claude-statusline release-notes v1.0.2          # any past version
-claude-statusline release-notes v1.0.0..v1.2.0  # cross-version summary
-claude-statusline release-notes --all           # every version, newest first
-claude-statusline --release-notes               # flag form also works
+agents-statusline release-notes                 # current version
+agents-statusline release-notes v1.0.2          # any past version
+agents-statusline release-notes v1.0.0..v1.2.0  # cross-version summary
+agents-statusline release-notes --all           # every version, newest first
+agents-statusline --release-notes               # flag form also works
 ```
 
 Prints notes sourced from the embedded `CHANGELOG.md` (no network). Each version's section is the same data that ships with the binary, so the on-disk content can't get out of sync with what you installed. Bullets are sorted by importance: CHANGELOG.md entries can use a leading `[N]` marker (ordinary items 0–5, critical/pinned items can use e.g. 99999), and bullets without a marker default to importance 0.
@@ -692,12 +692,12 @@ max_lines = 10          # 0 or "status-line" keeps the statusline's own height
 
 ## Updates
 
-The binary checks GitHub for new releases in the background. Default is `notify` — a small `⬆ vX.Y.Z` segment appears on line 1 when you're behind, and the next render (or `claude-statusline update`) installs it.
+The binary checks GitHub for new releases in the background. Default is `notify` — a small `⬆ vX.Y.Z` segment appears on line 1 when you're behind, and the next render (or `agents-statusline update`) installs it.
 
 ```bash
-claude-statusline update          # check + install
-claude-statusline update --check  # check + report only, never install
-claude-statusline update verify   # verify the latest release's signature, then exit (installs nothing)
+agents-statusline update          # check + install
+agents-statusline update --check  # check + report only, never install
+agents-statusline update verify   # verify the latest release's signature, then exit (installs nothing)
 ```
 
 `update verify` runs the same in-process signature check the self-swap path uses — it fetches the latest release's `checksums.txt` and its cosign bundle, checks them against the embedded public key, and prints the key fingerprint. It installs nothing and fails closed (non-zero exit) on any error.
@@ -707,7 +707,7 @@ claude-statusline update verify   # verify the latest release's signature, then 
 The notify segment has two forms:
 
 - **Compact** (`⬆ v1.2.0`) the rest of the day.
-- **Expanded** for ~5 minutes after each check: `⬆ v1.2.0 · run: claude-statusline update · disable: [update] in config.toml`. The disclosure window is derived from the cache's `checked_at`, so no extra state is needed.
+- **Expanded** for ~5 minutes after each check: `⬆ v1.2.0 · run: agents-statusline update · disable: [update] in config.toml`. The disclosure window is derived from the cache's `checked_at`, so no extra state is needed.
 
 After a self-update lands, the same segment shows `✓ updated to vX.Y.Z` for ~5 minutes (read from `update-result.json`, written by the install path). It self-hides once the window passes or when the running binary's version doesn't match the recorded target, so a no-op `brew upgrade` or a stale record never confirms.
 
@@ -721,7 +721,7 @@ mode = "notify"   # default: show segment only
 check_hours = 24  # 1..168, default 24
 ```
 
-`auto` mode **crosses MAJOR versions** — it's a one-way door that downloads, verifies the cosign signature on `checksums.txt` against the embedded public key, sha256-verifies the asset against it, smoke-tests the staged binary, and atomically swaps the on-disk exe. Homebrew installs run `brew upgrade claude-statusline` instead of touching the binary directly (package-manager bookkeeping fights self-swap); npm installs are ignored entirely by `auto` because npm owns the file (update with `npm update -g @morgan.rebrand/claude-statusline` instead). Pi installs are also ignored by the binary's self-swapper because Pi's package manager owns the files — update them with `pi update --extension npm:@morgan.rebrand/claude-statusline` or `pi update`. The tap's git checkout is refreshed first (a targeted `git pull`, not a global `brew update`) so brew sees the newly-published formula despite `HOMEBREW_NO_AUTO_UPDATE`. Failures are silent on the next interval retries; an invalid signature, a checksum mismatch, or a failed smoke-test leaves the old binary in place (it fails closed).
+`auto` mode **crosses MAJOR versions** — it's a one-way door that downloads, verifies the cosign signature on `checksums.txt` against the embedded public key, sha256-verifies the asset against it, smoke-tests the staged binary, and atomically swaps the on-disk exe. Homebrew installs run `brew upgrade agents-statusline` instead of touching the binary directly (package-manager bookkeeping fights self-swap); npm installs are ignored entirely by `auto` because npm owns the file (update with `npm update -g @morgan.rebrand/agents-statusline` instead). Pi installs are also ignored by the binary's self-swapper because Pi's package manager owns the files — update them with `pi update --extension npm:@morgan.rebrand/agents-statusline` or `pi update`. The tap's git checkout is refreshed first (a targeted `git pull`, not a global `brew update`) so brew sees the newly-published formula despite `HOMEBREW_NO_AUTO_UPDATE`. Failures are silent on the next interval retries; an invalid signature, a checksum mismatch, or a failed smoke-test leaves the old binary in place (it fails closed).
 
 `mode = "off"` is the right choice for air-gapped or centrally-managed deployments — it produces zero spawns and zero reads beyond the config.
 
@@ -744,7 +744,7 @@ When enabled, a detached worker (same shape as the async plugin refresh and the 
 - **Opt-in.** Enabling it means the background worker reads your Claude Code OAuth token — `$CLAUDE_CODE_OAUTH_TOKEN`, the macOS keychain (`Claude Code-credentials`), or `.credentials.json` under `$CLAUDE_CONFIG_DIR` / `~/.claude` — and calls api.anthropic.com on your behalf. Only percentages and reset times are written to disk, never the token.
 - **Sole source, by design.** The binary deliberately does not parse model-class windows from the statusline payload — Claude Code never sends them, and guessing at a future wire format is worse than adding real parsing when (if) it ships. At that point wire data should take precedence over the shim.
 - **Unofficial endpoint.** It may change shape or disappear; every failure is soft — empty cache, hidden segments, backoff via the cache mtime.
-- **Verify with `claude-statusline quota`**: prints shim/cache state plus a live fetch of the windows.
+- **Verify with `agents-statusline quota`**: prints shim/cache state plus a live fetch of the windows.
 
 ---
 
@@ -753,7 +753,7 @@ When enabled, a detached worker (same shape as the async plugin refresh and the 
 
 **Status line not appearing**
 
-- Run `claude-statusline install` again — it reports "Already installed" or exactly what's wrong
+- Run `agents-statusline install` again — it reports "Already installed" or exactly what's wrong
 - Check that the tool is actually piping JSON (test with `debug`)
 - Claude Code: run `claude --debug` to log exit code and stderr from statusline invocations
 - Ensure workspace trust is accepted (statusline requires the same trust as hooks)
@@ -763,7 +763,7 @@ When enabled, a detached worker (same shape as the async plugin refresh and the 
 - Check `debug` output to see if the fields are present in the payload
 - Remember: zero values hide `cost`, `duration`, `lines-changed`, `tokens`, etc.
 - `rate_limits` only appears for Claude Pro/Max after the first API call
-- `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` are fed only by the `[quota_shim]` OAuth bridge (Claude Code does not send model-class windows in the statusline payload) — enable it in config.toml and check `claude-statusline quota`
+- `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` are fed only by the `[quota_shim]` OAuth bridge (Claude Code does not send model-class windows in the statusline payload) — enable it in config.toml and check `agents-statusline quota`
 - Burn rates, projections, and trends need ~5 minutes of session history
 - `agent-name` only appears when running with `--agent`; `vim-mode` only with vim mode on
 
@@ -772,14 +772,14 @@ When enabled, a detached worker (same shape as the async plugin refresh and the 
 - `NO_COLOR=1` or `TERM=dumb` disables colors intentionally
 - Claude Code may strip `COLORTERM` from the statusline environment; force themes with `color_depth = "truecolor"` in config.toml
 - 256/16-color terminals get quantized theme colors — that's the fallback working as intended
-- The TUI preview approximates colors; press `v` in `claude-statusline configure` to render against your real terminal
+- The TUI preview approximates colors; press `v` in `agents-statusline configure` to render against your real terminal
 - Want the pre-1.0 colors? That's the default theme, `classic` (alias: `original`) — active whenever no `theme` is set
 
 **Config seems ignored**
 
-- The config moved to `~/.config/claude-statusline/config.toml` in 1.0 (your old `config.json` was migrated automatically and kept as `config.json.bak`)
+- The config moved to `~/.config/agents-statusline/config.toml` in 1.0 (your old `config.json` was migrated automatically and kept as `config.json.bak`)
 - Mixing binary versions? A pre-1.0 binary reads `config.json`, 1.0+ reads `config.toml` — running the 1.0 binary once migrates the JSON away, and an older still-installed binary (e.g. Homebrew) falls back to defaults. Copy `config.json.bak` back to `config.json` to keep the old binary working until you upgrade; the 1.0 binary ignores it once `config.toml` exists
-- Run `claude-statusline debug < payload.json` to see config warnings (unknown keys, bad values)
+- Run `agents-statusline debug < payload.json` to see config warnings (unknown keys, bad values)
 
 **Context percentage looks wrong**
 

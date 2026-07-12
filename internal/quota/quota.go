@@ -22,10 +22,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/payload"
-	"github.com/callmemorgan/claude-statusline/internal/state"
-	"github.com/callmemorgan/claude-statusline/internal/sys"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/state"
+	"github.com/callmemorgan/agents-statusline/internal/sys"
 )
 
 // ─── Cache ───────────────────────────────────────────────────────────
@@ -277,7 +277,7 @@ func parseUsage(data []byte) ([]cacheEntry, error) {
 
 // ─── Status Subcommand ───────────────────────────────────────────────
 
-// RunStatus implements `claude-statusline quota`: a foreground fetch that
+// RunStatus implements `agents-statusline quota`: a foreground fetch that
 // prints the model-class weekly windows plus shim cache state, so users can
 // verify the shim end-to-end before enabling it.
 func RunStatus(w io.Writer) error {

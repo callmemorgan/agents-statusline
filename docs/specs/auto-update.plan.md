@@ -13,11 +13,11 @@ already locked in the spec are not re-litigated here; this document is about
 - **`version == "dev"` short-circuits the whole feature.** Same carve-out
   `release-notes` uses. This is what keeps goldens inert without `-update`.
 - **Homebrew installs never have their binary swapped by us** — package-manager
-  bookkeeping fights that. `auto` mode on brew runs `brew upgrade claude-statusline` instead.
+  bookkeeping fights that. `auto` mode on brew runs `brew upgrade agents-statusline` instead.
 - **Auto means auto** — it crosses MAJOR versions, never downgrades.
 - **No new dependencies.** `crypto/sha256`, `archive/tar`, `archive/zip`,
   `compress/gzip`, `net/http` are all stdlib.
-- **Repo owner/name are compile-time constants** (`callmemorgan/claude-statusline`),
+- **Repo owner/name are compile-time constants** (`callmemorgan/agents-statusline`),
   not configurable.
 - **Manual smoke uses an isolated copy of the binary** — never point the
   swap at the repo build you're editing. The spec's `Implementation order`
@@ -171,7 +171,7 @@ exercise `tryAcquireLock` end-to-end).
     and Go pseudo-versions) so non-release builds never hit the network.
   - Resolves the latest tag via HTTP `GET /releases/latest` with
     `CheckRedirect: http.ErrUseLastResponse`, 10s timeout, explicit
-    `User-Agent: claude-statusline/<version>`. Parses `…/releases/tag/vX.Y.Z`
+    `User-Agent: agents-statusline/<version>`. Parses `…/releases/tag/vX.Y.Z`
     from the 302 `Location` header.
   - Writes the cache (`{now, latest}` or `{now, ""}` on failure). Even a
     network failure writes the cache so a dead network doesn't respawn
@@ -195,17 +195,17 @@ exercise `tryAcquireLock` end-to-end).
   - Resolves asset name via `assetName(goos, goarch)`. Cross-checks
     `runtime.GOOS`/`runtime.GOARCH` against the running binary so a
     swapped binary on a different machine is impossible.
-  - Downloads to `stateBaseDir()/staging/claude-statusline.<ext>` with a
+  - Downloads to `stateBaseDir()/staging/agents-statusline.<ext>` with a
     64 MiB hard cap (read body into a counting reader; abort on overflow).
   - Downloads `checksums.txt` separately, parses the line for the asset,
     verifies the archive bytes' sha256. Mismatch → delete staging, abort.
-  - Extracts the inner `claude-statusline` binary (`archive/tar`+`gzip`
+  - Extracts the inner `agents-statusline` binary (`archive/tar`+`gzip`
     for `.tar.gz`, `archive/zip` for `.zip`), `chmod 0755`.
   - Smoke-tests: runs the staged binary with `version` (2s timeout),
     requires stdout to contain `latest` (the version we just downloaded).
   - **Atomic swap**, all renames in the exe's directory:
-    1. copy staged → `<exeDir>/.claude-statusline.new`
-    2. rename current exe → `<exeDir>/.claude-statusline.old`
+    1. copy staged → `<exeDir>/.agents-statusline.new`
+    2. rename current exe → `<exeDir>/.agents-statusline.old`
     3. rename `.new` → exe path
     4. on (3) failure, rename `.old` back (rollback)
     5. remove `.old` (on Windows this fails while the old process lives;
@@ -282,13 +282,13 @@ non-representative).
   smoke-test).
 - `kindDev` → print "source build — update with `go install …@latest`",
   exit 0.
-- `kindBrew` → run `brew upgrade claude-statusline` in the foreground
+- `kindBrew` → run `brew upgrade agents-statusline` in the foreground
   (same env as the worker, but with live stdout/stderr). Missing brew →
   print the manual command, exit 1.
-- Already current → "claude-statusline vX.Y.Z is up to date", exit 0.
+- Already current → "agents-statusline vX.Y.Z is up to date", exit 0.
 - Newer exists → print what it found, call `downloadAndSwap(latest,
   current)` (the shared function from step 4), print
-  "updated vA → vB — run `claude-statusline release-notes` to see what
+  "updated vA → vB — run `agents-statusline release-notes` to see what
   changed".
 - `--check` (and `--update` via the existing `TrimLeft("-")` dispatch) →
   resolve + report only, never install. Exit 0 either way.
@@ -310,7 +310,7 @@ unlisted.
 
 **`install.go` change:** append one line to the verified-render output in
 `verifyInstall`: `update checks: notify (configure via [update] in
-config.toml)`. Lives right after "Customize anytime: claude-statusline
+config.toml)`. Lives right after "Customize anytime: agents-statusline
 configure". No interaction with the verify step itself.
 
 **`config.toml.example` change:** append the commented `[update]` block
@@ -325,7 +325,7 @@ cache when it shouldn't).
 
 **Manual smoke (run by user, not by this plan):** the spec's recipe in
 `Implementation order` step 7 is the canonical procedure. The
-`/tmp/upd-test/bin/claude-statusline` carve-out is the one thing this
+`/tmp/upd-test/bin/agents-statusline` carve-out is the one thing this
 plan can't enforce — but the test suite + the swap test in test 7
 together cover the "swaps the right file" invariant end-to-end with a
 fake exe.
@@ -379,7 +379,7 @@ right step instead of "everything broke at the end."
    call site is `filepath.EvalSymlinks` on the running binary, and the
    brew bin symlink always points into a Cellar or Caskroom.
 2. **Windows .zip extraction.** `archive/zip` is in stdlib, but the
-   inner entry name might not be exactly `claude-statusline` — GoReleaser
+   inner entry name might not be exactly `agents-statusline` — GoReleaser
    can prefix with a directory. Test 7 will exercise this; if extraction
    fails, the test points directly at the bug.
 3. **Network on the render path.** Strictly forbidden. The render trigger
@@ -420,7 +420,7 @@ Every box in the spec's "Acceptance criteria" maps to a specific check:
   announces via release-notes takeover; checksum/smoke failure leaves
   the old binary. Tests 6 + 7 + manual smoke.
 - [x] Auto on brew: never touches the binary directly; runs
-  `brew upgrade claude-statusline` with `HOMEBREW_NO_AUTO_UPDATE=1`;
+  `brew upgrade agents-statusline` with `HOMEBREW_NO_AUTO_UPDATE=1`;
   silent when brew absent. Test 9.
 - [x] `install` output mentions the default. One-line `install.go`
   change in step 6.

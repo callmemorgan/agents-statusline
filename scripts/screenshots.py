@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Regenerate the README screenshots in assets/.
 
-Renders the locally built binary (./claude-statusline) against a synthetic
+Renders the locally built binary (./agents-statusline) against a synthetic
 payload plus a fabricated hour of session history — so burn rates,
 projections, and trends all light up — once per theme, then screenshots the
 ANSI output via headless Chrome (real font fallback, so every glyph renders).
 
 Usage:
-    go build -o claude-statusline .
+    go build -o agents-statusline .
     python3 scripts/screenshots.py
 
 Requires Google Chrome. Everything runs against a throwaway HOME under /tmp;
@@ -21,9 +21,9 @@ import subprocess
 import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BIN = os.path.join(REPO, "claude-statusline")
+BIN = os.path.join(REPO, "agents-statusline")
 ASSETS = os.path.join(REPO, "assets")
-WORK = "/tmp/claude-statusline-screenshots"
+WORK = "/tmp/agents-statusline-screenshots"
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 THEMES = [
@@ -169,12 +169,12 @@ def build_state():
 def render(theme, payload_obj, with_state):
     home = os.path.join(WORK, "home")
     shutil.rmtree(home, ignore_errors=True)
-    cfg_dir = os.path.join(home, ".config", "claude-statusline")
+    cfg_dir = os.path.join(home, ".config", "agents-statusline")
     os.makedirs(cfg_dir)
     with open(os.path.join(cfg_dir, "config.toml"), "w") as f:
         f.write(f'theme = "{theme}"\n')
     if with_state:
-        sess_dir = os.path.join(home, ".local", "state", "claude-statusline", "sessions")
+        sess_dir = os.path.join(home, ".local", "state", "agents-statusline", "sessions")
         os.makedirs(sess_dir)
         with open(os.path.join(sess_dir, SESSION_ID + ".json"), "w") as f:
             json.dump(build_state(), f)
@@ -308,7 +308,7 @@ def screenshot(name, ansi, bg):
 
 def main():
     if not os.path.exists(BIN):
-        raise SystemExit("build first: go build -o claude-statusline .")
+        raise SystemExit("build first: go build -o agents-statusline .")
     shutil.rmtree(WORK, ignore_errors=True)
     os.makedirs(WORK)
     os.makedirs(ASSETS, exist_ok=True)

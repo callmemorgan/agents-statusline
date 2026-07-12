@@ -17,13 +17,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/config"
 
-	"github.com/callmemorgan/claude-statusline/internal/palette"
-	"github.com/callmemorgan/claude-statusline/internal/segments"
-	"github.com/callmemorgan/claude-statusline/internal/version"
+	"github.com/callmemorgan/agents-statusline/internal/palette"
+	"github.com/callmemorgan/agents-statusline/internal/segments"
+	"github.com/callmemorgan/agents-statusline/internal/version"
 
-	"github.com/callmemorgan/claude-statusline/internal/state"
+	"github.com/callmemorgan/agents-statusline/internal/state"
 )
 
 // ─── step 2: DetectInstallKind, version.CompareVersions, cache ───────
@@ -35,20 +35,20 @@ func TestDetectInstallKind(t *testing.T) {
 		ver  string
 		want InstallKind
 	}{
-		{"dev-version", "/usr/local/bin/claude-statusline", "dev", KindDev},
+		{"dev-version", "/usr/local/bin/agents-statusline", "dev", KindDev},
 		{"dev-on-cellar-path", "/opt/homebrew/Cellar/cs/1.0.0/bin/cs", "dev", KindDev},
-		{"cellar-apple-silicon", "/opt/homebrew/Cellar/claude-statusline/1.0.0/bin/claude-statusline", "1.0.0", KindBrew},
-		{"cellar-intel", "/usr/local/Cellar/claude-statusline/1.0.0/bin/claude-statusline", "1.0.0", KindBrew},
-		{"homebrew-prefix", "/home/me/.linuxbrew/Cellar/claude-statusline/1.0.0/bin/claude-statusline", "1.0.0", KindBrew},
-		{"local-bin", "/home/me/.local/bin/claude-statusline", "1.0.0", KindManual},
-		{"usr-local", "/usr/local/bin/claude-statusline", "1.0.0", KindManual},
-		{"windows-path", `C:\Program Files\claude-statusline\claude-statusline.exe`, "1.0.0", KindManual},
+		{"cellar-apple-silicon", "/opt/homebrew/Cellar/agents-statusline/1.0.0/bin/agents-statusline", "1.0.0", KindBrew},
+		{"cellar-intel", "/usr/local/Cellar/agents-statusline/1.0.0/bin/agents-statusline", "1.0.0", KindBrew},
+		{"homebrew-prefix", "/home/me/.linuxbrew/Cellar/agents-statusline/1.0.0/bin/agents-statusline", "1.0.0", KindBrew},
+		{"local-bin", "/home/me/.local/bin/agents-statusline", "1.0.0", KindManual},
+		{"usr-local", "/usr/local/bin/agents-statusline", "1.0.0", KindManual},
+		{"windows-path", `C:\Program Files\agents-statusline\agents-statusline.exe`, "1.0.0", KindManual},
 		{"mixed-case-cellar", "/opt/homebrew/CELLAR/Claude-Statusline/1.0.0/bin/x", "1.0.0", KindBrew},
-		{"npm-global-scoped", "/Users/me/.nvm/versions/node/v20.0.0/lib/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", "1.0.0", KindNpm},
-		{"npm-local-bin", "/home/me/project/node_modules/.bin/claude-statusline", "1.0.0", KindNpm},
-		{"npm-npx-cache", "/Users/me/.npm/_npx/abc123/node_modules/@morgan.rebrand/claude-statusline/bin/claude-statusline", "1.0.0", KindNpm},
-		{"node-modules-backup-not-npm", "/home/me/node_modules-backup/claude-statusline/bin/claude-statusline", "1.0.0", KindManual},
-		{"npm-under-homebrew-prefix", "/opt/homebrew/lib/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", "1.0.0", KindNpm},
+		{"npm-global-scoped", "/Users/me/.nvm/versions/node/v20.0.0/lib/node_modules/@morgan.rebrand/agents-statusline-darwin-arm64/bin/agents-statusline", "1.0.0", KindNpm},
+		{"npm-local-bin", "/home/me/project/node_modules/.bin/agents-statusline", "1.0.0", KindNpm},
+		{"npm-npx-cache", "/Users/me/.npm/_npx/abc123/node_modules/@morgan.rebrand/agents-statusline/bin/agents-statusline", "1.0.0", KindNpm},
+		{"node-modules-backup-not-npm", "/home/me/node_modules-backup/agents-statusline/bin/agents-statusline", "1.0.0", KindManual},
+		{"npm-under-homebrew-prefix", "/opt/homebrew/lib/node_modules/@morgan.rebrand/agents-statusline-darwin-arm64/bin/agents-statusline", "1.0.0", KindNpm},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -95,7 +95,7 @@ func TestUpdateCheckCacheRoundTrip(t *testing.T) {
 		t.Error("corrupt JSON should return ok=false")
 	}
 
-	want := filepath.Join(dir, "claude-statusline", "update.json")
+	want := filepath.Join(dir, "agents-statusline", "update.json")
 	if updateCheckPath() != want {
 		t.Errorf("updateCheckPath = %q, want %q", updateCheckPath(), want)
 	}
@@ -237,7 +237,7 @@ func TestMaybeSpawnUpdateCheck(t *testing.T) {
 		t.Errorf("dev test build should not spawn via the public path, got %d calls", len(*calls))
 	}
 
-	want := filepath.Join(dir, "claude-statusline", "update-check.lock")
+	want := filepath.Join(dir, "agents-statusline", "update-check.lock")
 	if updateLockPath() != want {
 		t.Errorf("updateLockPath = %q, want %q", updateLockPath(), want)
 	}
@@ -282,14 +282,14 @@ func TestAssetName(t *testing.T) {
 	cases := []struct {
 		goos, goarch, want string
 	}{
-		{"darwin", "amd64", "claude-statusline_Darwin_x86_64.tar.gz"},
-		{"darwin", "arm64", "claude-statusline_Darwin_arm64.tar.gz"},
-		{"linux", "amd64", "claude-statusline_Linux_x86_64.tar.gz"},
-		{"linux", "arm64", "claude-statusline_Linux_arm64.tar.gz"},
-		{"linux", "arm", "claude-statusline_Linux_armv7.tar.gz"},
-		{"windows", "amd64", "claude-statusline_Windows_x86_64.zip"},
-		{"windows", "arm64", "claude-statusline_Windows_arm64.zip"},
-		{"linux", "386", "claude-statusline_Linux_i386.tar.gz"},
+		{"darwin", "amd64", "agents-statusline_Darwin_x86_64.tar.gz"},
+		{"darwin", "arm64", "agents-statusline_Darwin_arm64.tar.gz"},
+		{"linux", "amd64", "agents-statusline_Linux_x86_64.tar.gz"},
+		{"linux", "arm64", "agents-statusline_Linux_arm64.tar.gz"},
+		{"linux", "arm", "agents-statusline_Linux_armv7.tar.gz"},
+		{"windows", "amd64", "agents-statusline_Windows_x86_64.zip"},
+		{"windows", "arm64", "agents-statusline_Windows_arm64.zip"},
+		{"linux", "386", "agents-statusline_Linux_i386.tar.gz"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.goos+"_"+tc.goarch, func(t *testing.T) {
@@ -301,12 +301,12 @@ func TestAssetName(t *testing.T) {
 	}
 
 	// URL form is fully predictable.
-	if got := assetURL("1.2.0", "claude-statusline_Darwin_x86_64.tar.gz"); got !=
-		"https://github.com/callmemorgan/claude-statusline/releases/download/v1.2.0/claude-statusline_Darwin_x86_64.tar.gz" {
+	if got := assetURL("1.2.0", "agents-statusline_Darwin_x86_64.tar.gz"); got !=
+		"https://github.com/callmemorgan/agents-statusline/releases/download/v1.2.0/agents-statusline_Darwin_x86_64.tar.gz" {
 		t.Errorf("assetURL = %q", got)
 	}
 	if got := checksumsURL("1.2.0"); got !=
-		"https://github.com/callmemorgan/claude-statusline/releases/download/v1.2.0/checksums.txt" {
+		"https://github.com/callmemorgan/agents-statusline/releases/download/v1.2.0/checksums.txt" {
 		t.Errorf("checksumsURL = %q", got)
 	}
 }
@@ -324,14 +324,14 @@ func TestVerifyChecksum(t *testing.T) {
 	}
 
 	// parseChecksumLine: real checksums.txt line, binary mode + CRLF.
-	sums := have + "  claude-statusline_Darwin_x86_64.tar.gz\n" +
+	sums := have + "  agents-statusline_Darwin_x86_64.tar.gz\n" +
 		"abc  other-file.tar.gz\n" +
-		have + "  *claude-statusline_Linux_arm64.tar.gz\r\n"
-	got, ok := parseChecksumLine(sums, "claude-statusline_Darwin_x86_64.tar.gz")
+		have + "  *agents-statusline_Linux_arm64.tar.gz\r\n"
+	got, ok := parseChecksumLine(sums, "agents-statusline_Darwin_x86_64.tar.gz")
 	if !ok || got != have {
 		t.Errorf("parseChecksumLine real line = %q, %v", got, ok)
 	}
-	got, ok = parseChecksumLine(sums, "claude-statusline_Linux_arm64.tar.gz")
+	got, ok = parseChecksumLine(sums, "agents-statusline_Linux_arm64.tar.gz")
 	if !ok || got != have {
 		t.Errorf("parseChecksumLine binary+CRLF = %q, %v", got, ok)
 	}
@@ -365,7 +365,7 @@ func TestVerifyChecksum(t *testing.T) {
 		return p, nil
 	}
 	verifyChecksumsSig = func(blob, bundle []byte) error { return nil }
-	if err := verifyChecksum(dir, archivePath, "claude-statusline_Darwin_x86_64.tar.gz", "1.2.0"); err != nil {
+	if err := verifyChecksum(dir, archivePath, "agents-statusline_Darwin_x86_64.tar.gz", "1.2.0"); err != nil {
 		t.Errorf("verifyChecksum: %v", err)
 	}
 
@@ -376,7 +376,7 @@ func TestVerifyChecksum(t *testing.T) {
 	if err := os.WriteFile(archiveFlipped, flipped, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyChecksum(dir, archiveFlipped, "claude-statusline_Darwin_x86_64.tar.gz", "1.2.0"); err == nil {
+	if err := verifyChecksum(dir, archiveFlipped, "agents-statusline_Darwin_x86_64.tar.gz", "1.2.0"); err == nil {
 		t.Error("flipped checksum should fail")
 	}
 
@@ -389,7 +389,7 @@ func TestVerifyChecksum(t *testing.T) {
 		}
 		return sumsPath, nil
 	}
-	if err := verifyChecksum(dir, archivePath, "claude-statusline_Darwin_x86_64.tar.gz", "1.2.0"); err == nil {
+	if err := verifyChecksum(dir, archivePath, "agents-statusline_Darwin_x86_64.tar.gz", "1.2.0"); err == nil {
 		t.Error("missing entry should fail")
 	}
 
@@ -401,7 +401,7 @@ func TestVerifyChecksum(t *testing.T) {
 		return sumsPath, nil
 	}
 	verifyChecksumsSig = func(blob, bundle []byte) error { return errors.New("bad sig") }
-	if err := verifyChecksum(dir, archivePath, "claude-statusline_Darwin_x86_64.tar.gz", "1.2.0"); err == nil {
+	if err := verifyChecksum(dir, archivePath, "agents-statusline_Darwin_x86_64.tar.gz", "1.2.0"); err == nil {
 		t.Error("invalid signature should fail verifyChecksum")
 	}
 }
@@ -419,7 +419,7 @@ func TestExtractAsset(t *testing.T) {
 	gz := gzip.NewWriter(f)
 	tw := tar.NewWriter(gz)
 	body := []byte("new binary contents")
-	hdr := &tar.Header{Name: "claude-statusline", Mode: 0o755, Size: int64(len(body)), Typeflag: tar.TypeReg}
+	hdr := &tar.Header{Name: "agents-statusline", Mode: 0o755, Size: int64(len(body)), Typeflag: tar.TypeReg}
 	if err := tw.WriteHeader(hdr); err != nil {
 		t.Fatal(err)
 	}
@@ -456,7 +456,7 @@ func TestExtractAsset(t *testing.T) {
 		t.Fatal(err)
 	}
 	zw := zip.NewWriter(zipFile)
-	w, err := zw.Create("claude-statusline_1.2.0/claude-statusline")
+	w, err := zw.Create("agents-statusline_1.2.0/agents-statusline")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,7 +497,7 @@ func TestExtractAsset(t *testing.T) {
 
 func TestAtomicSwap(t *testing.T) {
 	dir := t.TempDir()
-	exe := filepath.Join(dir, "claude-statusline")
+	exe := filepath.Join(dir, "agents-statusline")
 	original := []byte("original binary")
 	if err := os.WriteFile(exe, original, 0o755); err != nil {
 		t.Fatal(err)
@@ -521,8 +521,8 @@ func TestAtomicSwap(t *testing.T) {
 	}
 	pid := os.Getpid()
 	for _, p := range []string{
-		filepath.Join(dir, fmt.Sprintf(".claude-statusline.old.%d", pid)),
-		filepath.Join(dir, fmt.Sprintf(".claude-statusline.new.%d", pid)),
+		filepath.Join(dir, fmt.Sprintf(".agents-statusline.old.%d", pid)),
+		filepath.Join(dir, fmt.Sprintf(".agents-statusline.new.%d", pid)),
 	} {
 		if _, err := os.Stat(p); err == nil {
 			t.Errorf("leftover %q should be cleaned up", p)
@@ -534,7 +534,7 @@ func TestAtomicSwap(t *testing.T) {
 	// case: the second rename (new → exe) blows up because the parent
 	// doesn't exist, and the test verifies the rollback path (the .old
 	// rename never happened, so the original exe is untouched).
-	badExe := filepath.Join(dir, "no-such-subdir", "claude-statusline")
+	badExe := filepath.Join(dir, "no-such-subdir", "agents-statusline")
 	if err := atomicSwap(badExe, staged); err == nil {
 		t.Error("atomicSwap with non-existent dir should fail")
 	}
@@ -551,7 +551,7 @@ func TestAtomicSwap(t *testing.T) {
 	// pre-create .new as a directory, then run atomicSwap and verify
 	// the original exe survives.
 	dir2 := t.TempDir()
-	exe2 := filepath.Join(dir2, "claude-statusline")
+	exe2 := filepath.Join(dir2, "agents-statusline")
 	if err := os.WriteFile(exe2, []byte("untouched"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -561,12 +561,12 @@ func TestAtomicSwap(t *testing.T) {
 	}
 	// Create a directory at .new.<pid> so the .new → exe rename fails (rename
 	// over a non-empty directory is not allowed by os.Rename).
-	_ = os.Mkdir(filepath.Join(dir2, fmt.Sprintf(".claude-statusline.new.%d", pid)), 0o755)
-	_ = os.WriteFile(filepath.Join(dir2, fmt.Sprintf(".claude-statusline.new.%d", pid), "blocker"), nil, 0o644)
+	_ = os.Mkdir(filepath.Join(dir2, fmt.Sprintf(".agents-statusline.new.%d", pid)), 0o755)
+	_ = os.WriteFile(filepath.Join(dir2, fmt.Sprintf(".agents-statusline.new.%d", pid), "blocker"), nil, 0o644)
 	// Pre-existing .old → this is what would have been written by step
 	// 1 of the swap (current → .old), and the rollback should restore it.
 	oldContent := []byte("stale .old, should not be left over")
-	_ = os.WriteFile(filepath.Join(dir2, fmt.Sprintf(".claude-statusline.old.%d", pid)), oldContent, 0o644)
+	_ = os.WriteFile(filepath.Join(dir2, fmt.Sprintf(".agents-statusline.old.%d", pid)), oldContent, 0o644)
 	err = atomicSwap(exe2, staged2)
 	// The error depends on the platform (rename-over-dir behavior
 	// varies). On macOS/Linux the second rename fails; on Windows it
@@ -703,7 +703,7 @@ mode = "auto"
 	// classifies the install as KindNpm.
 	oldExe := osExecutable
 	osExecutable = func() (string, error) {
-		return "/tmp/npm-test/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", nil
+		return "/tmp/npm-test/node_modules/@morgan.rebrand/agents-statusline-darwin-arm64/bin/agents-statusline", nil
 	}
 	t.Cleanup(func() { osExecutable = oldExe })
 
@@ -831,7 +831,7 @@ func TestRenderUpdate(t *testing.T) {
 	if !strings.Contains(got, "⬆ v1.2.0") {
 		t.Errorf("expanded should contain '⬆ v1.2.0', got %q", got)
 	}
-	if !strings.Contains(got, "claude-statusline update") {
+	if !strings.Contains(got, "agents-statusline update") {
 		t.Errorf("expanded should contain hint, got %q", got)
 	}
 	if strings.Contains(got, "\x1b[") {
@@ -842,14 +842,14 @@ func TestRenderUpdate(t *testing.T) {
 	_ = saveUpdateCheck(updateCheck{CheckedAt: now.Unix() - 60, Latest: "1.2.0"})
 	oldExe := osExecutable
 	osExecutable = func() (string, error) {
-		return "/tmp/npm-test/node_modules/@morgan.rebrand/claude-statusline-darwin-arm64/bin/claude-statusline", nil
+		return "/tmp/npm-test/node_modules/@morgan.rebrand/agents-statusline-darwin-arm64/bin/agents-statusline", nil
 	}
 	t.Cleanup(func() { osExecutable = oldExe })
 	got, show = RenderSegment(segments.RenderCtx{Now: now, C: palette.Palette{Dim: "", Rst: ""}})
 	if !show {
 		t.Fatal("expected npm expanded form to show")
 	}
-	if !strings.Contains(got, "npm update -g @morgan.rebrand/claude-statusline") {
+	if !strings.Contains(got, "npm update -g @morgan.rebrand/agents-statusline") {
 		t.Errorf("npm hint should contain npm update command, got %q", got)
 	}
 	osExecutable = oldExe
@@ -1142,10 +1142,10 @@ func TestExtractConfinedToDir(t *testing.T) {
 	gz := gzip.NewWriter(f)
 	tw := tar.NewWriter(gz)
 	// A symlink entry masquerading as the binary — must be ignored.
-	_ = tw.WriteHeader(&tar.Header{Name: "claude-statusline", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd", Mode: 0o777})
+	_ = tw.WriteHeader(&tar.Header{Name: "agents-statusline", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd", Mode: 0o777})
 	// A traversal-named regular file whose base still matches the binary name.
 	body := []byte("real binary")
-	_ = tw.WriteHeader(&tar.Header{Name: "../../../../tmp/claude-statusline", Mode: 0o755, Size: int64(len(body)), Typeflag: tar.TypeReg})
+	_ = tw.WriteHeader(&tar.Header{Name: "../../../../tmp/agents-statusline", Mode: 0o755, Size: int64(len(body)), Typeflag: tar.TypeReg})
 	_, _ = tw.Write(body)
 	_ = tw.Close()
 	_ = gz.Close()
@@ -1175,7 +1175,7 @@ func TestExtractRejectsDecompressionBomb(t *testing.T) {
 	gz := gzip.NewWriter(f)
 	tw := tar.NewWriter(gz)
 	body := make([]byte, 1000) // well over the lowered cap
-	_ = tw.WriteHeader(&tar.Header{Name: "claude-statusline", Mode: 0o755, Size: int64(len(body)), Typeflag: tar.TypeReg})
+	_ = tw.WriteHeader(&tar.Header{Name: "agents-statusline", Mode: 0o755, Size: int64(len(body)), Typeflag: tar.TypeReg})
 	_, _ = tw.Write(body)
 	_ = tw.Close()
 	_ = gz.Close()
@@ -1204,7 +1204,7 @@ func TestGoreleaserInjectsBareVersion(t *testing.T) {
 // but leaves fresh files (a concurrent live swap) untouched.
 func TestPreCleanExeStagingStaleOnly(t *testing.T) {
 	dir := t.TempDir()
-	exe := filepath.Join(dir, "claude-statusline")
+	exe := filepath.Join(dir, "agents-statusline")
 	if err := os.WriteFile(exe, []byte("x"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1212,8 +1212,8 @@ func TestPreCleanExeStagingStaleOnly(t *testing.T) {
 	osExecutable = func() (string, error) { return exe, nil }
 	t.Cleanup(func() { osExecutable = old })
 
-	fresh := filepath.Join(dir, ".claude-statusline.new.99999")
-	stale := filepath.Join(dir, ".claude-statusline.old.12345")
+	fresh := filepath.Join(dir, ".agents-statusline.new.99999")
+	stale := filepath.Join(dir, ".agents-statusline.old.12345")
 	_ = os.WriteFile(fresh, nil, 0o644)
 	_ = os.WriteFile(stale, nil, 0o644)
 	oldTime := time.Now().Add(-2 * exeStagingStaleAfter)

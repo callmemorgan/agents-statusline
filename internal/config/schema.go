@@ -9,7 +9,7 @@ package config
 import (
 	"strconv"
 
-	"github.com/callmemorgan/claude-statusline/internal/palette"
+	"github.com/callmemorgan/agents-statusline/internal/palette"
 )
 
 type SettingKind int

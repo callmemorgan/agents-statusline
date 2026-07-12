@@ -1,7 +1,7 @@
 # Spec: Release notes (subcommand + post-upgrade takeover)
 
 Status: shipped in v1.1.0 — historical record; code and CLAUDE.md are truth
-Target: claude-statusline (this repo), Go, `package main`
+Target: agents-statusline (this repo), Go, `package main`
 
 ## Problem
 
@@ -34,7 +34,7 @@ moment where new features get surfaced. We want:
 - Settings live in a top-level **`[release_notes]`** table in config.toml (not
   a segment, no TUI work required).
 - The takeover banner must mention how to see more and that it's
-  configurable, e.g. `claude-statusline release-notes · [release_notes] in
+  configurable, e.g. `agents-statusline release-notes · [release_notes] in
   config.toml`.
 
 ## CHANGELOG.md (new file, repo root)
@@ -119,7 +119,7 @@ Output format (per section), colored via the palette (so `NO_COLOR` /
 `currentPalette(loadConfig())` like other paths do):
 
 ```
-claude-statusline v1.0.2 — 2026-06-05
+agents-statusline v1.0.2 — 2026-06-05
   • fix(install): honor CLAUDE_CONFIG_DIR when resolving settings.json
 ```
 
@@ -155,7 +155,7 @@ to forget; there's a test for it below).
 
 ### Version-seen state
 
-New file `$XDG_STATE_HOME/claude-statusline/last-version.json` (sibling of
+New file `$XDG_STATE_HOME/agents-statusline/last-version.json` (sibling of
 `sessions/` and `plugins/` — use `stateBaseDir()` from state.go):
 
 ```json
@@ -244,12 +244,12 @@ Pure function: `announceLines(note releaseNote, n int, width int, colors palette
 Content, in priority order (then pad with `""` / drop from the end to hit
 exactly `n` lines):
 
-1. Line 1 (always): `✨ claude-statusline updated to v<X.Y.Z>` — if n == 1,
+1. Line 1 (always): `✨ agents-statusline updated to v<X.Y.Z>` — if n == 1,
    instead compress everything to one line:
-   `✨ claude-statusline v<X.Y.Z> — <first bullet, truncated> · claude-statusline release-notes`
+   `✨ agents-statusline v<X.Y.Z> — <first bullet, truncated> · agents-statusline release-notes`
 2. Lines 2..n-1: changelog bullets, ` • <bullet>`, as many as fit.
 3. Last line (when n ≥ 2): the hint —
-   `↳ claude-statusline release-notes · configure: [release_notes] in config.toml`
+   `↳ agents-statusline release-notes · configure: [release_notes] in config.toml`
 
 Every line is ANSI-aware-truncated to `width` (reuse the existing
 width/truncate helpers in render.go that reflow uses — do not write a new
@@ -341,14 +341,14 @@ dirs via `t.TempDir()` + `XDG_STATE_HOME`. New file `releasenotes_test.go`.
    config/state):
 
    ```bash
-   go build -o claude-statusline ./cmd/claude-statusline
+   go build -o agents-statusline ./cmd/agents-statusline
    mkdir -p /tmp/fake-home
-   alias sl='HOME=/tmp/fake-home XDG_STATE_HOME=/tmp/fake-home/state XDG_CONFIG_HOME=/tmp/fake-home/config ./claude-statusline'
+   alias sl='HOME=/tmp/fake-home XDG_STATE_HOME=/tmp/fake-home/state XDG_CONFIG_HOME=/tmp/fake-home/config ./agents-statusline'
    # dev build: takeover must never fire
    echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | sl
    # simulate a release build + upgrade:
-   go build -ldflags "-X github.com/callmemorgan/claude-statusline/internal/version.Version=1.0.9" -o claude-statusline ./cmd/claude-statusline && echo '…payload…' | sl   # records silently (fresh install)
-   go build -ldflags "-X github.com/callmemorgan/claude-statusline/internal/version.Version=1.1.0" -o claude-statusline ./cmd/claude-statusline && echo '…payload…' | sl   # takeover appears
+   go build -ldflags "-X github.com/callmemorgan/agents-statusline/internal/version.Version=1.0.9" -o agents-statusline ./cmd/agents-statusline && echo '…payload…' | sl   # records silently (fresh install)
+   go build -ldflags "-X github.com/callmemorgan/agents-statusline/internal/version.Version=1.1.0" -o agents-statusline ./cmd/agents-statusline && echo '…payload…' | sl   # takeover appears
    sleep 26 && echo '…payload…' | sl                                                           # normal statusline again
    sl release-notes && sl release-notes v1.0.2 && sl release-notes --all
    ```
@@ -356,7 +356,7 @@ dirs via `t.TempDir()` + `XDG_STATE_HOME`. New file `releasenotes_test.go`.
 ## Acceptance criteria
 
 - [ ] `go test ./...` passes; zero golden changes.
-- [ ] `claude-statusline release-notes` prints the installed version's notes;
+- [ ] `agents-statusline release-notes` prints the installed version's notes;
       `release-notes v1.0.2` and `release-notes --all` work; unknown version
       exits 1 with the known-versions hint on stderr.
 - [ ] `--release-notes` flag spelling works (free via existing dispatch).

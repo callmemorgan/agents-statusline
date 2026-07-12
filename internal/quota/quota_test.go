@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
 )
 
 // usageFixture is an anonymized copy of a real /api/oauth/usage response

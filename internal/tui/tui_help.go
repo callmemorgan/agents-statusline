@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/config"
 )
 
 func buildHelpText() string {
 	var b strings.Builder
-	b.WriteString("[yellow::b]claude-statusline configure[-::-]\n\n")
+	b.WriteString("[yellow::b]agents-statusline configure[-::-]\n\n")
 	b.WriteString("Segments are the building blocks of the statusline. Toggle them on or\n")
 	b.WriteString("off, assign them to lines 1-9, recolor them, and tune per-segment\n")
 	b.WriteString("settings in the flyout (o). The preview renders live at your terminal\n")

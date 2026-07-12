@@ -1,6 +1,6 @@
-# claude-statusline example config.
-# Copy to ~/.config/claude-statusline/config.toml and edit, or run
-# `claude-statusline configure` to edit interactively.
+# agents-statusline example config.
+# Copy to ~/.config/agents-statusline/config.toml and edit, or run
+# `agents-statusline configure` to edit interactively.
 
 schema_version = 2
 
@@ -27,6 +27,8 @@ theme = "classic"
 #preset = "cost-tracker"
 
 # Which segments to show, in order. Omit the key for the default set
+# Foreign subscription cache segments are opt-in: usage-codex, usage-grok,
+# usage-agy, and usage-kimi. Refresh their cache with `claude-all-usage`.
 # (plugins are auto-appended); use [] to hide everything.
 segments = [
   "vim-mode",
@@ -119,7 +121,7 @@ iconset = "smooth"
 
 # Session history store — powers $/h burn rates, →NN% rate-limit projections,
 # and the context growth trend. Files live under
-# ${XDG_STATE_HOME:-~/.local/state}/claude-statusline/sessions/.
+# ${XDG_STATE_HOME:-~/.local/state}/agents-statusline/sessions/.
 [state]
 enabled = true
 retention_hours = 48
@@ -128,7 +130,7 @@ retention_hours = 48
 # Single-field plugin — whole stdout becomes the segment value:
 [[plugins]]
 id = "memory"
-command = "~/.config/claude-statusline/plugins/memory.sh"
+command = "~/.config/agents-statusline/plugins/memory.sh"
 line = 1
 desc = "RAM usage"
 preview = "mem 4.2G"  # sample value shown in the TUI preview surfaces
@@ -138,7 +140,7 @@ timeout_ms = 200
 # runs once per render regardless of field count:
 #
 # [[plugins]]
-# command = "~/.config/claude-statusline/plugins/sysinfo.sh"
+# command = "~/.config/agents-statusline/plugins/sysinfo.sh"
 # timeout_ms = 200
 #
 #   [[plugins.fields]]
@@ -158,7 +160,7 @@ timeout_ms = 200
 # across sessions (keyed by command), so environment-level data is consistent.
 # [[plugins]]
 # id = "k8s-context"
-# command = "~/.config/claude-statusline/plugins/k8s.sh"
+# command = "~/.config/agents-statusline/plugins/k8s.sh"
 # async = true
 # refresh_ms = 10000   # consider cache stale after 10s
 # timeout_ms = 8000    # kill the background run after 8s
@@ -174,7 +176,7 @@ timeout_ms = 200
 # "auto" additionally installs it in the background (non-Homebrew, non-npm
 # installs), "off" disables checks entirely (no network, ever).
 # npm installs are excluded from "auto" to avoid fighting the package manager;
-# update those with `npm update -g @morgan.rebrand/claude-statusline`.
+# update those with `npm update -g @morgan.rebrand/agents-statusline`.
 # [update]
 # mode = "notify"
 # check_hours = 24
@@ -187,7 +189,7 @@ timeout_ms = 200
 # api.anthropic.com at most once per refresh_minutes. Only percentages and
 # reset times are cached to disk — never the token. Payload data always
 # wins once Claude Code starts sending the fields. Verify with
-# `claude-statusline quota`.
+# `agents-statusline quota`.
 # [quota_shim]
 # enabled = true
 # refresh_minutes = 5   # 1-1440

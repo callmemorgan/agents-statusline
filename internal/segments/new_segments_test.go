@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
 )
 
 func renderSeg(t *testing.T, p payload.Payload, id string, cfg config.Config) (string, bool) {
@@ -53,13 +53,13 @@ func TestPRSegment(t *testing.T) {
 		t.Errorf("pr no state = %q, %v", got, show)
 	}
 	cfg = config.Config{Settings: map[string]map[string]any{"pr": {"show_url": true}}}
-	p.PR.URL = "https://github.com/callmemorgan/claude-statusline/pull/42"
+	p.PR.URL = "https://github.com/callmemorgan/agents-statusline/pull/42"
 	if got, show := renderSeg(t, p, "pr", cfg); !show || !strings.HasPrefix(got, "https://") {
 		t.Errorf("pr full url = %q, %v", got, show)
 	}
 	p.PR.URL = ""
-	p.Workspace.Repo = payload.Repo{Host: "github.com", Owner: "callmemorgan", Name: "claude-statusline"}
-	if got, show := renderSeg(t, p, "pr", cfg); !show || got != "https://github.com/callmemorgan/claude-statusline/pull/42" {
+	p.Workspace.Repo = payload.Repo{Host: "github.com", Owner: "callmemorgan", Name: "agents-statusline"}
+	if got, show := renderSeg(t, p, "pr", cfg); !show || got != "https://github.com/callmemorgan/agents-statusline/pull/42" {
 		t.Errorf("pr synthesized url = %q, %v", got, show)
 	}
 	p.Workspace.Repo = payload.Repo{}
@@ -73,13 +73,13 @@ func TestRepoSegment(t *testing.T) {
 	if _, show := renderSeg(t, p, "repo", config.Config{}); show {
 		t.Error("repo should hide when Repo.Name is empty")
 	}
-	p.Workspace.Repo = payload.Repo{Owner: "callmemorgan", Name: "claude-statusline"}
-	if got, show := renderSeg(t, p, "repo", config.Config{}); !show || got != "callmemorgan/claude-statusline" {
+	p.Workspace.Repo = payload.Repo{Owner: "callmemorgan", Name: "agents-statusline"}
+	if got, show := renderSeg(t, p, "repo", config.Config{}); !show || got != "callmemorgan/agents-statusline" {
 		t.Errorf("repo default = %q, %v", got, show)
 	}
 	cfg := config.Config{Settings: map[string]map[string]any{"repo": {"show_host": true}}}
 	p.Workspace.Repo.Host = "github.com"
-	if got, show := renderSeg(t, p, "repo", cfg); !show || got != "github.com:callmemorgan/claude-statusline" {
+	if got, show := renderSeg(t, p, "repo", cfg); !show || got != "github.com:callmemorgan/agents-statusline" {
 		t.Errorf("repo with host = %q, %v", got, show)
 	}
 }

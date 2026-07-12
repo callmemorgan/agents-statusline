@@ -38,7 +38,7 @@ func TestFindTopLevelKeySpan(t *testing.T) {
 }
 
 func TestInsertTopLevelKeyPreservesBytes(t *testing.T) {
-	out, err := insertTopLevelKey([]byte(settingsSample), "statusLine", `{"type": "command", "command": "claude-statusline"}`)
+	out, err := insertTopLevelKey([]byte(settingsSample), "statusLine", `{"type": "command", "command": "agents-statusline"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestInsertTopLevelKeyPreservesBytes(t *testing.T) {
 	}
 	// Every original byte sequence survives: the file minus our inserted
 	// line equals the original.
-	stripped := strings.Replace(string(out), "\n  \"statusLine\": {\"type\": \"command\", \"command\": \"claude-statusline\"},", "", 1)
+	stripped := strings.Replace(string(out), "\n  \"statusLine\": {\"type\": \"command\", \"command\": \"agents-statusline\"},", "", 1)
 	if stripped != settingsSample {
 		t.Errorf("original bytes were disturbed:\n%s", out)
 	}
@@ -62,7 +62,7 @@ func TestInsertTopLevelKeyPreservesBytes(t *testing.T) {
 
 func TestInsertIntoEmptyObject(t *testing.T) {
 	for _, in := range []string{"{}", "{}\n", "{\n}\n", "  {   }  "} {
-		out, err := insertTopLevelKey([]byte(in), "statusline", `"claude-statusline"`)
+		out, err := insertTopLevelKey([]byte(in), "statusline", `"agents-statusline"`)
 		if err != nil {
 			t.Fatalf("insert into %q: %v", in, err)
 		}
@@ -70,7 +70,7 @@ func TestInsertIntoEmptyObject(t *testing.T) {
 		if err := json.Unmarshal(out, &parsed); err != nil {
 			t.Fatalf("result does not parse: %v\n%s", err, out)
 		}
-		if parsed["statusline"] != "claude-statusline" {
+		if parsed["statusline"] != "agents-statusline" {
 			t.Errorf("value wrong: %v", parsed)
 		}
 	}
@@ -200,14 +200,14 @@ func TestResolveTargetAgyProbe(t *testing.T) {
 }
 
 func TestBuildClaudeStatusLineValue(t *testing.T) {
-	cmd := "claude-statusline"
+	cmd := "agents-statusline"
 
 	// No options → legacy spaced format with only type and command.
 	got, err := buildClaudeStatusLineValue(cmd, StatusLineOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"type": "command", "command": "claude-statusline"}`
+	want := `{"type": "command", "command": "agents-statusline"}`
 	if got != want {
 		t.Errorf("no flags: got %q, want %q", got, want)
 	}

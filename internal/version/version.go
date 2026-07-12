@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Set via GoReleaser ldflags (-X github.com/callmemorgan/claude-statusline/internal/version.Version=... etc).
+// Set via GoReleaser ldflags (-X github.com/callmemorgan/agents-statusline/internal/version.Version=... etc).
 // Source builds keep "dev" and fall back to module build info below.
 var (
 	Version = "dev"
@@ -50,7 +50,7 @@ func VersionString() (v, c, d string) {
 
 func RunVersion() {
 	v, c, d := VersionString()
-	fmt.Printf("claude-statusline v%s\n", v)
+	fmt.Printf("agents-statusline v%s\n", v)
 	if c != "" {
 		fmt.Printf("  commit: %s\n", c)
 	}

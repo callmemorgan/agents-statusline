@@ -1,7 +1,7 @@
 # Spec: Async plugins (stale-while-revalidate)
 
 Status: implemented
-Target: claude-statusline (this repo), Go, `package main`
+Target: agents-statusline (this repo), Go, `package main`
 
 ## Problem
 
@@ -25,7 +25,7 @@ Add an opt-in `async = true` mode per plugin. Async plugins never block a render
 
 The binary is short-lived (Claude Code execs it per update), so the refresher
 must survive the parent exiting: it is implemented as a **hidden subcommand of
-this same binary** (`claude-statusline plugin-refresh`), spawned detached.
+this same binary** (`agents-statusline plugin-refresh`), spawned detached.
 
 Synchronous plugins (no `async` key, or `async = false`) keep **byte-identical
 current behavior**. The bare no-args render path's behavior for existing
@@ -69,7 +69,7 @@ README plugin section):
 # refreshes it in the background at most every refresh_ms.
 # [[plugins]]
 # id = "k8s-context"
-# command = "~/.config/claude-statusline/plugins/k8s.sh"
+# command = "~/.config/agents-statusline/plugins/k8s.sh"
 # async = true
 # refresh_ms = 10000   # consider cache stale after 10s
 # timeout_ms = 8000    # kill the background run after 8s
@@ -79,8 +79,8 @@ README plugin section):
 
 New directory: sibling of the existing sessions state dir.
 
-- `$XDG_STATE_HOME/claude-statusline/plugins/` (fallback
-  `~/.local/state/claude-statusline/plugins/`). Add a `pluginCacheDir()`
+- `$XDG_STATE_HOME/agents-statusline/plugins/` (fallback
+  `~/.local/state/agents-statusline/plugins/`). Add a `pluginCacheDir()`
   helper next to `stateDir()` in `state.go` (or in `plugins.go`), factoring
   the shared base-dir logic so the two stay consistent.
 - Cache file per plugin: `<key>.out` where `key` is the first 16 hex chars of
@@ -254,7 +254,7 @@ package variable and stub it where needed.
 2. `config.toml.example` — the commented async example block shown above.
 3. `CLAUDE.md` — in the Plugins bullet under "Key subsystems", append one
    sentence: async plugins read a cache under
-   `$XDG_STATE_HOME/claude-statusline/plugins/` and refresh via a detached
+   `$XDG_STATE_HOME/agents-statusline/plugins/` and refresh via a detached
    hidden `plugin-refresh` subcommand. **Copy CLAUDE.md over AGENTS.md after
    editing** (they must stay identical).
 4. Do NOT add `plugin-refresh` to `help.go` or the README command list.
@@ -274,11 +274,11 @@ package variable and stub it where needed.
 8. Full `go test ./...` + manual smoke test:
 
    ```bash
-   go build -o claude-statusline .
+   go build -o agents-statusline .
    # isolated env so the real config is never touched/migrated:
    mkdir -p /tmp/fake-home
    HOME=/tmp/fake-home XDG_STATE_HOME=/tmp/fake-home/state \
-     XDG_CONFIG_HOME=/tmp/fake-home/config ./claude-statusline debug < testdata/payloads/agy-full.json
+     XDG_CONFIG_HOME=/tmp/fake-home/config ./agents-statusline debug < testdata/payloads/agy-full.json
    # then add an async [[plugins]] entry pointing at a script that sleeps 2s
    # and echoes text; render twice: first render shows nothing, a render
    # after ~3s shows the text.

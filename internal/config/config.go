@@ -11,9 +11,9 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/callmemorgan/claude-statusline/internal/palette"
-	"github.com/callmemorgan/claude-statusline/internal/state"
-	"github.com/callmemorgan/claude-statusline/internal/sys"
+	"github.com/callmemorgan/agents-statusline/internal/palette"
+	"github.com/callmemorgan/agents-statusline/internal/state"
+	"github.com/callmemorgan/agents-statusline/internal/sys"
 )
 
 // ─── Config ──────────────────────────────────────────────────────────
@@ -173,6 +173,7 @@ func DefaultConfig() Config {
 			"model", "output-style", "thinking", "version", "duration", "cost-rate", "api-efficiency", "tokens", "prompt-id",
 			"context-window", "rate-limit-5h", "rate-limit-7d",
 			"rate-limit-fable", "rate-limit-sonnet", "rate-limit-opus", "plan-tier",
+			"usage-codex", "usage-grok", "usage-agy", "usage-kimi",
 		},
 		Lines: nil,
 	}
@@ -189,7 +190,7 @@ func ConfigDir() string {
 	if err != nil {
 		home = "~"
 	}
-	return filepath.Join(home, ".config", "claude-statusline")
+	return filepath.Join(home, ".config", "agents-statusline")
 }
 
 func ConfigPath() string {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/segments"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/segments"
 )
 
 // useTempConfigDir points ConfigDir at a temp dir for the duration of a test.

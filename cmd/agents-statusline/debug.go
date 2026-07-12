@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
 )
 
 // ─── Debug Schema ────────────────────────────────────────────────────

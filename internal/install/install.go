@@ -2,7 +2,7 @@ package install
 
 // ─── Install / Uninstall ─────────────────────────────────────────────
 //
-// `claude-statusline install` wires the binary into the host tool's settings
+// `agents-statusline install` wires the binary into the host tool's settings
 // file without reformatting it: the JSON is parse-gated, then the statusLine
 // key is spliced in with surgical byte edits — every other byte of the file
 // (key order, indentation, number formatting) is preserved. Unparseable
@@ -23,8 +23,8 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/callmemorgan/claude-statusline/internal/payload"
-	"github.com/callmemorgan/claude-statusline/internal/sys"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/sys"
 )
 
 // ─── JSON splicing primitives ────────────────────────────────────────
@@ -220,20 +220,20 @@ type claudeStatusLine struct {
 	Padding              *int   `json:"padding,omitempty"`
 }
 
-// resolveCommand returns "claude-statusline" when PATH resolves to this very
+// resolveCommand returns "agents-statusline" when PATH resolves to this very
 // binary, otherwise the absolute path of the running executable (covering
 // built-from-source and hand-downloaded installs).
 func resolveCommand() string {
 	exe, err := os.Executable()
 	if err != nil {
-		return "claude-statusline"
+		return "agents-statusline"
 	}
 	if real, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = real
 	}
-	if p, err := exec.LookPath("claude-statusline"); err == nil {
+	if p, err := exec.LookPath("agents-statusline"); err == nil {
 		if rp, err := filepath.EvalSymlinks(p); err == nil && rp == exe {
-			return "claude-statusline"
+			return "agents-statusline"
 		}
 	}
 	return exe
@@ -566,7 +566,7 @@ func verifyInstall(t installTarget) {
 	}
 	fmt.Println()
 	fmt.Println("Restart Claude Code to pick it up.")
-	fmt.Println("Customize anytime:  claude-statusline configure")
+	fmt.Println("Customize anytime:  agents-statusline configure")
 	fmt.Println("Update checks:      notify (configure via [update] in config.toml)")
 }
 

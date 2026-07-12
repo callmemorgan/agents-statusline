@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const extPath = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
-	"../npm/claude-statusline/extensions/pi-statusline.ts",
+	"../npm/agents-statusline/extensions/pi-statusline.ts",
 );
 
 const handlers = new Map();

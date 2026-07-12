@@ -1,0 +1,40 @@
+{
+	"name": "@morgan.rebrand/agents-statusline",
+	"version": "0.0.0",
+	"description": "Statusline renderer for Claude Code, Antigravity CLI, and Pi",
+	"license": "MIT",
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-coding-agent",
+		"extension",
+		"statusline"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/callmemorgan/agents-statusline.git"
+	},
+	"homepage": "https://github.com/callmemorgan/agents-statusline",
+	"bin": {
+		"agents-statusline": "bin/agents-statusline.js"
+	},
+	"files": ["bin/", "extensions/", "README.md"],
+	"engines": {
+		"node": ">=14"
+	},
+	"pi": {
+		"extensions": ["./extensions/pi-statusline.ts"]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"optionalDependencies": {
+		"@morgan.rebrand/agents-statusline-darwin-arm64": "0.0.0",
+		"@morgan.rebrand/agents-statusline-darwin-x64": "0.0.0",
+		"@morgan.rebrand/agents-statusline-linux-arm": "0.0.0",
+		"@morgan.rebrand/agents-statusline-linux-arm64": "0.0.0",
+		"@morgan.rebrand/agents-statusline-linux-x64": "0.0.0",
+		"@morgan.rebrand/agents-statusline-win32-arm64": "0.0.0",
+		"@morgan.rebrand/agents-statusline-win32-x64": "0.0.0"
+	}
+}

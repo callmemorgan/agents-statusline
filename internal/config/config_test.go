@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/palette"
+	"github.com/callmemorgan/agents-statusline/internal/palette"
 )
 
 // useTempConfigDir points ConfigDir at a temp dir for the duration of a test.

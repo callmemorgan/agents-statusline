@@ -1,4 +1,4 @@
-## claude-statusline dev tasks.
+## agents-statusline dev tasks.
 ## Go is the primary language; JS/TS (npm shim, build script, pi extension) is linted with Biome.
 
 GO_LINT      := golangci-lint
@@ -23,7 +23,7 @@ lint-js:
 fmt: fmt-go fmt-js
 fmt-go:
 	gofmt -w .
-	goimports -w -local github.com/callmemorgan/claude-statusline . 2>/dev/null || true
+	goimports -w -local github.com/callmemorgan/agents-statusline . 2>/dev/null || true
 fmt-js:
 	@[ -x $(BIOME) ] || $(MAKE) install-tools
 	$(BIOME) format --write npm/ scripts/
@@ -36,7 +36,7 @@ test:
 
 ## Build the binary.
 build:
-	go build -o claude-statusline ./cmd/claude-statusline
+	go build -o agents-statusline ./cmd/agents-statusline
 
 ## Full pre-commit gate: lint + vet + test.
 check: lint vet test

@@ -1,22 +1,22 @@
-# @morgan.rebrand/claude-statusline-win32-arm64
+# @morgan.rebrand/agents-statusline-win32-arm64
 
-Prebuilt [claude-statusline](https://github.com/callmemorgan/claude-statusline) binary for **Windows on ARM64** (win32/arm64).
+Prebuilt [agents-statusline](https://github.com/callmemorgan/agents-statusline) binary for **Windows on ARM64** (win32/arm64).
 
-This package is an optional dependency of [`@morgan.rebrand/claude-statusline`](https://www.npmjs.com/package/@morgan.rebrand/claude-statusline). Most users should install the main package, which automatically pulls the correct platform binary:
+This package is an optional dependency of [`@morgan.rebrand/agents-statusline`](https://www.npmjs.com/package/@morgan.rebrand/agents-statusline). Most users should install the main package, which automatically pulls the correct platform binary:
 
 ```bash
-npm i -g @morgan.rebrand/claude-statusline
+npm i -g @morgan.rebrand/agents-statusline
 ```
 
 If you really want this binary package directly:
 
 ```bash
-npm i -g @morgan.rebrand/claude-statusline-win32-arm64
+npm i -g @morgan.rebrand/agents-statusline-win32-arm64
 ```
 
-Then run `claude-statusline install` to wire it into Claude Code, Antigravity, or Pi.
+Then run `agents-statusline install` to wire it into Claude Code, Antigravity, or Pi.
 
 ## Documentation
 
-- Main package and full docs: <https://www.npmjs.com/package/@morgan.rebrand/claude-statusline>
-- Source repository: <https://github.com/callmemorgan/claude-statusline>
+- Main package and full docs: <https://www.npmjs.com/package/@morgan.rebrand/agents-statusline>
+- Source repository: <https://github.com/callmemorgan/agents-statusline>

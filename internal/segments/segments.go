@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/ansi"
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/palette"
-	"github.com/callmemorgan/claude-statusline/internal/payload"
-	"github.com/callmemorgan/claude-statusline/internal/state"
+	"github.com/callmemorgan/agents-statusline/internal/ansi"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/foreignusage"
+	"github.com/callmemorgan/agents-statusline/internal/palette"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/state"
 )
 
 const barWidth = 20
@@ -309,6 +310,43 @@ func renderRateLimitOpus(ctx RenderCtx) (string, bool) {
 	return rateLimitSegment("Opus", ctx.P.RateLimits.Opus(), 7*24*3600, "rl_opus", ctx)
 }
 
+func renderForeignCodex(ctx RenderCtx) (string, bool) { return renderForeignUsage("codex", ctx) }
+func renderForeignGrok(ctx RenderCtx) (string, bool)  { return renderForeignUsage("grok", ctx) }
+func renderForeignAGY(ctx RenderCtx) (string, bool)   { return renderForeignUsage("antigravity", ctx) }
+func renderForeignKimi(ctx RenderCtx) (string, bool)  { return renderForeignUsage("kimi", ctx) }
+
+func renderForeignUsage(provider string, ctx RenderCtx) (string, bool) {
+	if ctx.Foreign == nil {
+		return "", false
+	}
+	usage, ok := ctx.Foreign.Providers[provider]
+	if !ok {
+		return "", false
+	}
+	if len(usage.Windows) == 0 {
+		if usage.State == "" || usage.State == "unavailable" {
+			return "", false
+		}
+		return ctx.C.Dim + provider + ":" + usage.State + ctx.C.Rst, true
+	}
+	parts := make([]string, 0, len(usage.Windows))
+	for _, window := range usage.Windows {
+		pct := int(window.UsedPercent + 0.5)
+		color := pctColorWithSettings(pct, ctx.C, ctx.S)
+		part := color + window.Label + " " + strconv.Itoa(pct) + "%" + ctx.C.Rst
+		if ctx.S.Bool("show_bar") {
+			part += " " + ProgressBarWithIconset(pct, color, ctx.C.Dim, ctx.C, ctx.S.Int("bar_width"), ctx.S.Str("iconset"))
+		}
+		if ctx.S.Bool("show_countdown") && window.ResetAt != "" {
+			if reset, err := time.Parse(time.RFC3339, window.ResetAt); err == nil && reset.After(ctx.Now) {
+				part += ctx.C.Dim + " (" + shortDuration(reset.Sub(ctx.Now)) + ")" + ctx.C.Rst
+			}
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, " "), true
+}
+
 func renderCostRate(ctx RenderCtx) (string, bool) {
 	if ctx.State == nil {
 		return "", false
@@ -487,6 +525,10 @@ func allSegmentInfos() []Info {
 		{ID: "rate-limit-fable", Line: 3, Desc: "Fable 5 weekly included-quota bar with countdown and projection", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, true, barWidth, IconsetNames(), config.ProjectionSpecs(180)...), NeedsState: true, Render: renderRateLimitFable},
 		{ID: "rate-limit-sonnet", Line: 3, Desc: "Sonnet weekly quota bar with countdown and projection", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, true, barWidth, IconsetNames(), config.ProjectionSpecs(180)...), NeedsState: true, Render: renderRateLimitSonnet},
 		{ID: "rate-limit-opus", Line: 3, Desc: "Opus weekly quota bar with countdown and projection", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, true, barWidth, IconsetNames(), config.ProjectionSpecs(180)...), NeedsState: true, Render: renderRateLimitOpus},
+		{ID: "usage-codex", Line: 4, Desc: "Codex subscription usage windows from the claude-all cache", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, false, barWidth, IconsetNames()), Render: renderForeignCodex},
+		{ID: "usage-grok", Line: 4, Desc: "Grok subscription usage windows from the claude-all cache", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, false, barWidth, IconsetNames()), Render: renderForeignGrok},
+		{ID: "usage-agy", Line: 4, Desc: "Antigravity subscription usage windows from the claude-all cache", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, false, barWidth, IconsetNames()), Render: renderForeignAGY},
+		{ID: "usage-kimi", Line: 4, Desc: "Kimi subscription usage windows from the claude-all cache", PrimaryColor: "Dim", Settings: config.BarSettingSpecs(true, false, false, barWidth, IconsetNames()), Render: renderForeignKimi},
 	}
 }
 
@@ -825,6 +867,7 @@ type RenderCtx struct {
 	C       palette.Palette
 	S       config.Settings
 	State   *state.SessionState // nil unless the segment declares NeedsState
+	Foreign *foreignusage.Cache // sanitized cache; nil when missing or malformed
 	Cfg     config.Config       // resolved config, rarely needed (e.g. update segment)
 	Width   int
 	Now     time.Time

@@ -2,7 +2,7 @@ package releasenotes
 
 // ─── Release Notes ───────────────────────────────────────────────────
 //
-// `claude-statusline release-notes` prints notes for the current or any past
+// `agents-statusline release-notes` prints notes for the current or any past
 // version, sourced from the embedded CHANGELOG.md (no network). After an
 // upgrade, the render path briefly replaces the normal statusline output
 // with a short announcement of what's new; both flows share the same
@@ -20,13 +20,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/ansi"
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/palette"
-	"github.com/callmemorgan/claude-statusline/internal/render"
-	"github.com/callmemorgan/claude-statusline/internal/state"
-	"github.com/callmemorgan/claude-statusline/internal/sys"
-	"github.com/callmemorgan/claude-statusline/internal/version"
+	"github.com/callmemorgan/agents-statusline/internal/ansi"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/palette"
+	"github.com/callmemorgan/agents-statusline/internal/render"
+	"github.com/callmemorgan/agents-statusline/internal/state"
+	"github.com/callmemorgan/agents-statusline/internal/sys"
+	"github.com/callmemorgan/agents-statusline/internal/version"
 )
 
 //go:embed CHANGELOG.md
@@ -360,7 +360,7 @@ func bulletDisplayText(b releaseBullet) string {
 }
 
 func printReleaseNote(n releaseNote, c palette.Palette) {
-	header := fmt.Sprintf("claude-statusline v%s", n.Version)
+	header := fmt.Sprintf("agents-statusline v%s", n.Version)
 	if n.Date != "" {
 		header += " — " + n.Date
 	}
@@ -480,13 +480,13 @@ func announceLines(note releaseNote, n int, budgets []int, c palette.Palette, pa
 	// line statusline still shows something useful.
 	var out []string
 	if n == 1 {
-		hdr := "✨ claude-statusline v" + note.Version
+		hdr := "✨ agents-statusline v" + note.Version
 		if len(note.Bullets) > 0 {
 			hdr += " — " + bulletDisplayText(note.Bullets[0])
 		}
 		out = []string{hdr}
 	} else {
-		hdr := "✨ claude-statusline updated to v" + note.Version
+		hdr := "✨ agents-statusline updated to v" + note.Version
 		out = make([]string, 0, n)
 		out = append(out, hdr)
 		for i := range min(n-1, len(note.Bullets)) {

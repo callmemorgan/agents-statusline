@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/sys"
+	"github.com/callmemorgan/agents-statusline/internal/sys"
 )
 
 type GitStatusInfo struct {
@@ -31,13 +31,13 @@ type GitStatusInfo struct {
 
 func gitCacheDir() string {
 	if x := os.Getenv("XDG_CACHE_HOME"); x != "" {
-		return filepath.Join(x, "claude-statusline")
+		return filepath.Join(x, "agents-statusline")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "~"
 	}
-	return filepath.Join(home, ".cache", "claude-statusline")
+	return filepath.Join(home, ".cache", "agents-statusline")
 }
 
 func gitCachePath() string {

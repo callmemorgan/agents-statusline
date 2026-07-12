@@ -1,10 +1,10 @@
 #!/bin/bash
-# Memory monitoring plugin for claude-statusline
+# Memory monitoring plugin for agents-statusline
 # Outputs key:value lines for multi-field consumption.
 #
 # Config entry:
 #   {
-#     "command": "~/.config/claude-statusline/plugins/memory.sh",
+#     "command": "~/.config/agents-statusline/plugins/memory.sh",
 #     "timeout_ms": 200,
 #     "fields": [
 #       {"id": "mem-used",     "line": 1, "desc": "RAM used"},

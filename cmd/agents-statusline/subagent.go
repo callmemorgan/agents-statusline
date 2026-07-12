@@ -15,8 +15,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/callmemorgan/claude-statusline/internal/ansi"
-	"github.com/callmemorgan/claude-statusline/internal/palette"
+	"github.com/callmemorgan/agents-statusline/internal/ansi"
+	"github.com/callmemorgan/agents-statusline/internal/palette"
 )
 
 const maxSubagentInput = 1 << 20 // 1 MiB

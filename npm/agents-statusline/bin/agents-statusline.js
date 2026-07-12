@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const { spawnSync } = require("node:child_process");
 
-const pkgFamily = "@morgan.rebrand/claude-statusline-";
+const pkgFamily = "@morgan.rebrand/agents-statusline-";
 const platformPackages = {
 	"darwin/arm64": "darwin-arm64",
 	"darwin/x64": "darwin-x64",
@@ -14,7 +14,7 @@ function platform() {
 	const key = `${process.platform}/${process.arch}`;
 	if (platformPackages[key]) return platformPackages[key];
 	console.error(
-		`claude-statusline: unsupported platform ${key}. Supported: ${Object.keys(platformPackages).join(", ")}.`,
+		`agents-statusline: unsupported platform ${key}. Supported: ${Object.keys(platformPackages).join(", ")}.`,
 	);
 	process.exit(1);
 }
@@ -26,7 +26,7 @@ function runBinary(bin) {
 	});
 	if (r.error) {
 		console.error(
-			`claude-statusline: could not run ${bin}: ${r.error.message}`,
+			`agents-statusline: could not run ${bin}: ${r.error.message}`,
 		);
 		process.exit(1);
 	}
@@ -34,7 +34,7 @@ function runBinary(bin) {
 }
 
 function main() {
-	const bin = process.env.CLAUDE_STATUSLINE_BIN;
+	const bin = process.env.AGENTS_STATUSLINE_BIN;
 	if (bin) {
 		runBinary(bin);
 	}
@@ -42,15 +42,15 @@ function main() {
 	const pkg = pkgFamily + platform();
 	const binName =
 		process.platform === "win32"
-			? "claude-statusline.exe"
-			: "claude-statusline";
+			? "agents-statusline.exe"
+			: "agents-statusline";
 	let resolved;
 	try {
 		resolved = require.resolve(`${pkg}/bin/${binName}`);
 	} catch (e) {
 		if (e && e.code === "MODULE_NOT_FOUND") {
 			console.error(
-				`claude-statusline: optional dependency ${pkg} is missing. Re-run "npm install -g @morgan.rebrand/claude-statusline", or set CLAUDE_STATUSLINE_BIN to the absolute path of a claude-statusline binary.`,
+				`agents-statusline: optional dependency ${pkg} is missing. Re-run "npm install -g @morgan.rebrand/agents-statusline", or set AGENTS_STATUSLINE_BIN to the absolute path of a agents-statusline binary.`,
 			);
 			process.exit(1);
 		}

@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
 )
 
 func useTempStateDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", dir)
-	return filepath.Join(dir, "claude-statusline", "sessions")
+	return filepath.Join(dir, "agents-statusline", "sessions")
 }
 
 func costPayload(c float64) payload.Payload {

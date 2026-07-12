@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/callmemorgan/claude-statusline/internal/payload"
-	"github.com/callmemorgan/claude-statusline/internal/sys"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/sys"
 )
 
 const (
@@ -69,13 +69,13 @@ type SessionState struct {
 
 func StateBaseDir() string {
 	if x := os.Getenv("XDG_STATE_HOME"); x != "" {
-		return filepath.Join(x, "claude-statusline")
+		return filepath.Join(x, "agents-statusline")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "~"
 	}
-	return filepath.Join(home, ".local", "state", "claude-statusline")
+	return filepath.Join(home, ".local", "state", "agents-statusline")
 }
 
 func StateDir() string {

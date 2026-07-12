@@ -1,6 +1,6 @@
  [normal] │ my-project │ my-project
 
- +2 dirs │ callmemorgan/claude-statusline
+ +2 dirs │ callmemorgan/agents-statusline
 
  #42 (pending) │ feature/test (my-project) │ +100/-50
  cache:3.96% │ $1.23 │ [Claude Sonnet 4.6 ⬆]

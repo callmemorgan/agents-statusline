@@ -5,9 +5,9 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/callmemorgan/claude-statusline/internal/config"
-	"github.com/callmemorgan/claude-statusline/internal/payload"
-	"github.com/callmemorgan/claude-statusline/internal/segments"
+	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
+	"github.com/callmemorgan/agents-statusline/internal/segments"
 )
 
 // ─── Flyout Helpers ──────────────────────────────────────────────────

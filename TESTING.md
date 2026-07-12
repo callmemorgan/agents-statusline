@@ -27,7 +27,7 @@ What follows is the **manual** checklist: smoke tests against the real binary an
 ## Build
 
 ```bash
-go build -o claude-statusline .
+go build -o agents-statusline .
 ```
 
 ## Smoke tests
@@ -35,7 +35,7 @@ go build -o claude-statusline .
 ### Minimal payload
 
 ```bash
-echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./claude-statusline
+echo '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"~"}}' | ./agents-statusline
 ```
 
 Expect: directory + model + tokens + empty context bar; timing suffix on line 1.
@@ -43,7 +43,7 @@ Expect: directory + model + tokens + empty context bar; timing suffix on line 1.
 ### Full Claude Code payload
 
 ```bash
-cat <<'JSON' | ./claude-statusline
+cat <<'JSON' | ./agents-statusline
 {
   "session_id": "manual-test",
   "session_name": "my-project",
@@ -68,7 +68,7 @@ Expect: all Claude Code segments — vim mode, session name, directory, `+1 dir`
 ### Full Antigravity (agy) payload
 
 ```bash
-cat <<'JSON' | ./claude-statusline
+cat <<'JSON' | ./agents-statusline
 {
   "conversation_id": "fbce29fe-0688-4fba-8cc1-0b769834c6d7",
   "product": "antigravity",
@@ -89,7 +89,7 @@ Expect: UUID trimmed to `fbce29fe`, `file://` stripped, plan tier and agent stat
 ### Full pi payload
 
 ```bash
-cat <<'JSON' | ./claude-statusline
+cat <<'JSON' | ./agents-statusline
 {
   "cwd": "/Users/me/code/my-project",
   "session_id": "pi:manual-test",
@@ -109,19 +109,19 @@ Expect: directory, model, and context bar; no cost, rate limits, or burn-rate pr
 
 ```bash
 P='testdata/payloads/claude-full.json'
-printf 'theme = "tokyo-night"\n' > /tmp/csl-test-home/.config/claude-statusline/config.toml
-COLORTERM=truecolor          ./claude-statusline < $P   # 38;2;… escapes
-COLORTERM= TERM=xterm-256color TERM_PROGRAM= ./claude-statusline < $P   # 38;5;… escapes
-COLORTERM= TERM=xterm TERM_PROGRAM=          ./claude-statusline < $P   # basic 16
-NO_COLOR=1                   ./claude-statusline < $P   # no escapes at all
+printf 'theme = "tokyo-night"\n' > /tmp/csl-test-home/.config/agents-statusline/config.toml
+COLORTERM=truecolor          ./agents-statusline < $P   # 38;2;… escapes
+COLORTERM= TERM=xterm-256color TERM_PROGRAM= ./agents-statusline < $P   # 38;5;… escapes
+COLORTERM= TERM=xterm TERM_PROGRAM=          ./agents-statusline < $P   # basic 16
+NO_COLOR=1                   ./agents-statusline < $P   # no escapes at all
 ```
 
 ### Migration
 
 ```bash
-mkdir -p /tmp/csl-test-home/.config/claude-statusline
-cp ~/.config/claude-statusline/config.json.bak /tmp/csl-test-home/.config/claude-statusline/config.json  # or any v0.3 config
-HOME=/tmp/csl-test-home ./claude-statusline < testdata/payloads/claude-full.json
+mkdir -p /tmp/csl-test-home/.config/agents-statusline
+cp ~/.config/agents-statusline/config.json.bak /tmp/csl-test-home/.config/agents-statusline/config.json  # or any v0.3 config
+HOME=/tmp/csl-test-home ./agents-statusline < testdata/payloads/claude-full.json
 ```
 
 Expect: one stderr line about migration; `config.toml` created, `config.json.bak` kept; second run silent; rendering identical to v0.3.
@@ -129,10 +129,10 @@ Expect: one stderr line about migration; `config.toml` created, `config.json.bak
 ### Install / uninstall
 
 ```bash
-HOME=/tmp/csl-test-home ./claude-statusline install --dry-run
-HOME=/tmp/csl-test-home ./claude-statusline install --yes      # backup + splice + verified sample render
-HOME=/tmp/csl-test-home ./claude-statusline install --yes      # "Already installed"
-HOME=/tmp/csl-test-home ./claude-statusline uninstall --yes
+HOME=/tmp/csl-test-home ./agents-statusline install --dry-run
+HOME=/tmp/csl-test-home ./agents-statusline install --yes      # backup + splice + verified sample render
+HOME=/tmp/csl-test-home ./agents-statusline install --yes      # "Already installed"
+HOME=/tmp/csl-test-home ./agents-statusline uninstall --yes
 ```
 
 Expect: only the `statusLine` key changes — every other byte of settings.json is preserved. A JSONC settings file aborts untouched with a paste-able snippet.
@@ -140,15 +140,15 @@ Expect: only the `statusLine` key changes — every other byte of settings.json 
 ### Errors and edge cases
 
 ```bash
-echo 'not json' | ./claude-statusline          # falls back to minimal render
-./claude-statusline bogus; echo $?             # unknown command → exit 2
-./claude-statusline version                    # version, commit, date, go
-echo '{}' | ./claude-statusline debug          # schema table + config warnings
+echo 'not json' | ./agents-statusline          # falls back to minimal render
+./agents-statusline bogus; echo $?             # unknown command → exit 2
+./agents-statusline version                    # version, commit, date, go
+echo '{}' | ./agents-statusline debug          # schema table + config warnings
 ```
 
 ## --configure TUI checklist
 
-Run `HOME=/tmp/csl-test-home ./claude-statusline configure` in a real terminal:
+Run `HOME=/tmp/csl-test-home ./agents-statusline configure` in a real terminal:
 
 - [ ] **Toggle / line / reorder**: `space`, `1-9`, `←/→`, `⇧↑/↓` behave; preview updates live; status strip shows yellow ● once dirty
 - [ ] **Save & stay**: `s` flashes `✓ Saved to …config.toml` and stays; quit after save is instant
@@ -175,7 +175,7 @@ Point a `[[plugins]]` entry at a script that prints `key:value` lines; verify th
 ## Performance
 
 ```bash
-time (for i in $(seq 100); do ./claude-statusline < testdata/payloads/claude-full.json > /dev/null; done)
+time (for i in $(seq 100); do ./agents-statusline < testdata/payloads/claude-full.json > /dev/null; done)
 ```
 
 Expect well under 1 second for 100 renders (state recording included).
