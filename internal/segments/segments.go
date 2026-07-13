@@ -339,6 +339,12 @@ func renderForeignUsage(provider string, ctx RenderCtx) (string, bool) {
 	}
 	parts := make([]string, 0, len(usage.Windows))
 	for _, window := range usage.Windows {
+		// OpenAI has temporarily suspended the five-hour Codex limit. Keep the
+		// cached window intact so it can be restored without changing the cache
+		// contract, but do not present a limit that is not currently enforced.
+		if provider == "codex" && window.ID == "5h" {
+			continue
+		}
 		pct := int(window.UsedPercent + 0.5)
 		color := pctColorWithSettings(pct, ctx.C, ctx.S)
 		part := color + window.Label + " " + strconv.Itoa(pct) + "%" + ctx.C.Rst
@@ -351,6 +357,9 @@ func renderForeignUsage(provider string, ctx RenderCtx) (string, bool) {
 			}
 		}
 		parts = append(parts, part)
+	}
+	if len(parts) == 0 {
+		return "", false
 	}
 	return strings.Join(parts, " "), true
 }

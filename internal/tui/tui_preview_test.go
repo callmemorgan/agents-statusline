@@ -115,7 +115,7 @@ func TestPreviewShowsEverySubscriptionProvider(t *testing.T) {
 	foreign := previewForeignUsage(now)
 	for _, tc := range []struct{ id, want string }{
 		{"usage-claude", "Claude 5h"},
-		{"usage-codex", "Codex 5h"},
+		{"usage-codex", "Codex weekly"},
 		{"usage-grok", "Grok weekly"},
 		{"usage-agy", "Antigravity weekly"},
 		{"usage-kimi", "Kimi weekly"},
@@ -132,6 +132,9 @@ func TestPreviewShowsEverySubscriptionProvider(t *testing.T) {
 		})
 		if !show || !strings.Contains(out, tc.want) {
 			t.Errorf("%s = %q, show=%v; want %q", tc.id, out, show, tc.want)
+		}
+		if tc.id == "usage-codex" && strings.Contains(out, "Codex 5h") {
+			t.Errorf("%s = %q; temporarily suspended 5h limit should be hidden", tc.id, out)
 		}
 	}
 }
