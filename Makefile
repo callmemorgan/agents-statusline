@@ -1,5 +1,5 @@
 ## agents-statusline dev tasks.
-## Go is the primary language; JS/TS (npm shim, build script, pi extension) is linted with Biome.
+## Go is the primary language; JS/TS (npm shim and Pi extension) is linted with Biome.
 
 GO_LINT      := golangci-lint
 BIOME        := ./node_modules/.bin/biome

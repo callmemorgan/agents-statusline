@@ -629,7 +629,7 @@ func resolveLatestTag() (string, error) {
 }
 
 // assetName returns the GoReleaser asset filename for a given
-// (goos, goarch) pair. Mirrors the template in .goreleaser.yaml exactly —
+// (goos, goarch) pair. This is the historical public artifact naming contract;
 // a rename in that file must fail TestAssetName.
 func assetName(goos, goarch string) string {
 	osTitle := strings.ToUpper(goos[:1]) + strings.ToLower(goos[1:])

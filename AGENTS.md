@@ -14,7 +14,7 @@ make fmt         # gofmt + goimports, and biome format on npm/ + scripts/
 make install-tools  # golangci-lint (brew) + biome (npm install)
 ```
 
-Go is the primary language; the JS/TS (npm shim, `scripts/*.mjs`, Pi extension) is linted/formatted with Biome, not gofmt. The release workflow runs both, so `make check` before tagging.
+Go is the primary language; the JS/TS (npm shim, `scripts/*.mjs`, Pi extension) is linted/formatted with Biome, not gofmt. Run `make check` before publishing changes.
 
 ```bash
 go build -o agents-statusline ./cmd/agents-statusline
@@ -62,7 +62,7 @@ state file  → loadState()/Record() ───────┘            └→ 
 - **Plugins** (`internal/plugins`) — executable commands from `[[plugins]]`; single-field (whole stdout) or multi-field (`key:value` lines, one exec per turn). Context via `STATUSLINE_*` env vars. Async plugins read a cache under `$XDG_STATE_HOME/agents-statusline/plugins/` and refresh via a detached hidden `plugin-refresh` subcommand.
 - **Release notes** (`releasenotes.go`) — embedded `CHANGELOG.md` (`go:embed`) with optional per-bullet `[N]` importance markers, `release-notes` subcommand (including `vX.Y.Z..vA.B.C` cross-version summaries), and the post-upgrade render-path takeover (`maybeReleaseTakeover` in `runRender`). The takeover sorts bullets by importance, surfaces the highest-importance bullets across the whole upgrade span, and expands up to `[release_notes].max_lines` (default 10; `0` or `"status-line"` keeps the statusline's own height). Window-anchor state at `$XDG_STATE_HOME/agents-statusline/last-version.json`. Settings in the `[release_notes]` config table.
 - **Auto-update** (`update.go`) — background check for new releases, `update` segment, `update`/`update verify` subcommands, and detached `update-check` worker. Default mode is `notify` (segment only); `auto` cross-compiles to `brew upgrade agents-statusline` for Homebrew installs or atomic self-swap (`download → verify-sig → sha256-verify → extract → smoke-test → rename`) for manual installs. npm installs are detected (`kindNpm`) and excluded from `auto` self-swap so the binary never fights the package manager; update npm installs with `npm update -g @morgan.rebrand/agents-statusline`. Pi installs use the same npm package and are covered by the same rule; update them with `pi update --extension npm:@morgan.rebrand/agents-statusline` or `pi update`. Cache at `$XDG_STATE_HOME/agents-statusline/update.json`. The render-path trigger is `maybeSpawnUpdateCheck` (one `os.ReadFile`, one detached spawn at most per `check_hours`). `!isReleaseVersion(current)` short-circuits the whole feature (dev, dirty, Go pseudo-versions), mirroring the release-notes carve-out so tests/goldens stay inert.
-  - **Signature verification** (`verifyChecksumsSigReal`) authenticates `checksums.txt` against the embedded `cosign.pub` before trusting any digest (fail-closed, pure `crypto/ecdsa`, no runtime cosign). It reads the signature from **either** `messageSignature.signature` (newer sigstore bundle) **or** top-level `base64Signature` (legacy cosign bundle) — the bytes are identical; which field cosign emits depends on the resolved cosign version. To keep published bundles stable and readable by already-installed binaries, `scripts/sign-checksums.sh` (the GoReleaser `signs` cmd) signs then **normalizes** the bundle to the lean `{"messageSignature":{"signature":…}}` shape.
+  - **Signature verification** (`verifyChecksumsSigReal`) authenticates `checksums.txt` against the embedded `cosign.pub` before trusting any digest (fail-closed, pure `crypto/ecdsa`, no runtime cosign). It reads the signature from **either** `messageSignature.signature` (newer sigstore bundle) **or** top-level `base64Signature` (legacy cosign bundle).
   - **Update-outcome confirmation**: the install path writes `update-result.json` (`from`/`to`/`method`/`verified`/`at`); `renderUpdate` shows `✓ updated to vX` for ~5 min when the running version matches `to` (checked before the mode==off guard, so a manual `update` still confirms). `update verify` runs the same signature check on demand and prints `cosignKeyFingerprint()`.
   - **Homebrew tap refresh**: `brew upgrade` runs with `HOMEBREW_NO_AUTO_UPDATE=1`, so `refreshBrewTap` (seam `refreshBrewTapFn`) first `git pull`s our tap's checkout (`brew --repository callmemorgan/tap`) before both brew call sites — otherwise a stale local tap makes brew report "already installed" against an old formula. Best-effort: any failure falls through to the upgrade against whatever's cached.
 - **Install** (`install.go`) — settings.json wiring via parse-gated byte splicing (never reformats the user's file; unparseable JSON aborts with a manual snippet); always verifies by piping a sample payload through the configured command.
@@ -79,40 +79,15 @@ state file  → loadState()/Record() ───────┘            └→ 
   - `feat(segment): add git-stash segment`
   - `fix(update): refresh the Homebrew tap before brew upgrade`
   - `docs: changelog for v1.3.2`
-  - `ci: resolve release-workflow warnings`
   - `refactor: tryAcquireLock takes a staleness duration`
   - `chore: ignore .worktrees/`
   
   Use lowercase after the colon, imperative mood, and keep the summary under 72 characters. History before this convention is frozen; do not rewrite it.
 - **`CLAUDE.md` is a symlink to this file.** Edit `AGENTS.md`; `CLAUDE.md` follows automatically.
 
-## Releases
+## Publishing
 
-Releases are cut by pushing a `vX.Y.Z` git tag — `.github/workflows/release.yml` runs GoReleaser (`.goreleaser.yaml`) to build darwin/linux/windows binaries, inject the version via ldflags (`-X github.com/callmemorgan/agents-statusline/internal/version.Version=…`), and sign with cosign. The `version` *segment* displays the calling tool's version from the payload; `agents-statusline version` shows this binary's.
-
-**Before tagging, you MUST update `CHANGELOG.md`.** Add a new `## vX.Y.Z — YYYY-MM-DD` section at the top for the version you are about to tag. The release-notes feature embeds `CHANGELOG.md` at build time, so if you skip this, the new bullets won't be reachable from `agents-statusline release-notes` and the post-upgrade takeover will have nothing to show. `internal/releasenotes/CHANGELOG.md` is a hard link to the same file, so `git add CHANGELOG.md` stages both paths. Keep the existing section format (`## vX.Y.Z — YYYY-MM-DD` header, `- ` bullets, newest first). Bullets may carry a leading `[N]` importance marker: ordinary items use 0–5, critical/pinned items can use much larger values (e.g. 99999) to force top placement. Bullets without a marker default to importance 0.
-
-Pushing a tag triggers `.github/workflows/release.yml`. The workflow first runs `go test ./...`, `golangci-lint`, and Node checks (syntax-checks `npm/agents-statusline/bin/agents-statusline.js` and `scripts/build-npm.mjs`, builds the Go binary, exercises the npm shim with a real payload via `AGENTS_STATUSLINE_BIN`, and smoke-tests the Pi TypeScript extension via `scripts/test-pi-extension.mjs`) before GoReleaser builds and publishes the release.
-
-### npm distribution
-
-Every GitHub release is also published to npm as `@morgan.rebrand/agents-statusline` with per-platform optional dependencies (`@morgan.rebrand/agents-statusline-<os>-<cpu>`). The main package contains the small Node shim in `npm/agents-statusline/bin/agents-statusline.js` and the Pi extension in `npm/agents-statusline/extensions/pi-statusline.ts`; `scripts/build-npm.mjs` repacks the GoReleaser archives under `dist/` into the platform packages and the main package. The `npm-publish` job in `.github/workflows/release.yml` runs it automatically using npm OIDC trusted publishing (no long-lived token).
-
-To set it up:
-1. Create an npm account and the `@morgan.rebrand` organization.
-2. Bootstrap each package on npm once. npm (unlike PyPI) **requires a package to already exist before a trusted publisher can be configured for it**, so the first publish must be a manual, authenticated one — there is no "let the workflow create them" path. Log in (`npm login`), then `npm publish --access public` a placeholder `0.0.0` of the main package (its committed source under `npm/agents-statusline/` is publishable as-is) and of each `@morgan.rebrand/agents-statusline-<os>-<cpu>` package (a minimal `package.json` with `name`/`version: 0.0.0`/`os`/`cpu`/`repository` is enough). Publish the 7 platform packages first, the main package last. After the first tagged release, the `0.0.0` placeholders can be `npm unpublish`ed per-version (main first — it depends on the platform `0.0.0`s).
-
-   Platform packages: `darwin-arm64`, `darwin-x64`, `linux-arm`, `linux-arm64`, `linux-x64`, `win32-arm64`, `win32-x64`.
-3. In each package's **Trusted Publisher** settings on npmjs.com, add a **GitHub Actions** publisher (this is why step 2 is mandatory — the form only appears once the package exists):
-   - Organization or user: `callmemorgan`
-   - Repository: `agents-statusline`
-   - Workflow filename: `release.yml` (bare filename, not a path)
-   - Environment: leave blank — the `npm-publish` job does not declare a GitHub Environment
-   - Allowed actions: check **Allow `npm publish`** (leave `npm stage publish` unchecked)
-4. Confirm `.github/workflows/release.yml` grants `id-token: write` (the `npm-publish` job already does).
-5. Push a `vX.Y.Z` tag. The `release` job builds binaries and uploads `dist/`; the `npm-publish` job downloads it, runs `scripts/build-npm.mjs`, and publishes all packages with `--provenance`.
-
-The publishes are idempotent: `npm view` checks skip any package/version already on the registry, so re-running the job is safe. The main package's `optionalDependencies` are pinned to the exact same version, so installing `@morgan.rebrand/agents-statusline@X.Y.Z` always pulls platform binaries built from the same tag.
+This repository intentionally has no GitHub Actions release or package-publishing workflow. Publishing binaries, Homebrew updates, or npm packages is a manual maintainer operation. Keep `CHANGELOG.md` current when creating a versioned build because the binary embeds it for release notes.
 
 ## Adding a new built-in segment
 

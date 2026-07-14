@@ -46,7 +46,7 @@ agents-statusline install
 
 Requires Node 14+. npm installs a small JS shim that `spawnSync`s the correct per-platform binary from `optionalDependencies`; Homebrew and manual installs remain the low-latency recommendation because each render pays the cost of one Node process spawn. If you already have another `agents-statusline` on your `$PATH` (for example a Go install at `$(go env GOPATH)/bin/agents-statusline` or `~/.local/bin/agents-statusline`), npm may not be the one executed — check with `which agents-statusline`.
 
-> npm packages are built and published automatically with each GitHub release.
+> This repository does not run automated release or package-publishing workflows, so packaged builds may lag the source.
 
 **Pi:**
 
@@ -68,23 +68,6 @@ pi update
 # update packages only, without touching pi itself
 pi update --extensions
 ```
-
-**Prebuilt binaries:**
-
-Download a binary from the [releases page](https://github.com/callmemorgan/agents-statusline/releases). Each release ships a `checksums.txt` signed with a key-based cosign bundle (`checksums.txt.bundle`); the public key is [`release/cosign.pub`](release/cosign.pub) in this repo. Verify the signature, then the asset's checksum:
-
-```bash
-cosign verify-blob \
-  --key release/cosign.pub \
-  --bundle checksums.txt.bundle \
-  --insecure-ignore-tlog \
-  checksums.txt
-shasum -a 256 -c checksums.txt --ignore-missing
-```
-
-`--insecure-ignore-tlog` skips the online transparency-log inclusion check so verification works offline against just the embedded key — it does not weaken the signature check itself. The self-update path performs this same key-based verification in-process — no `cosign` needed at runtime.
-
-> **macOS note:** Downloaded binaries are not notarized. If Gatekeeper blocks the binary on first run, run `xattr -d com.apple.quarantine /path/to/agents-statusline`, or use Homebrew/`go install` instead.
 
 **Build from source:**
 

@@ -2,7 +2,7 @@
 
 A fast, themeable statusline for [Claude Code](https://claude.ai/code), [Antigravity](https://antigravity.google/product/antigravity-cli) (`agy`), and [Pi](https://pi.dev) — your session's cost, context, and limits at a glance.
 
-This npm package installs a small Node shim that selects and spawns the correct prebuilt Go binary for your platform via `optionalDependencies`. It is published automatically with each GitHub release.
+This npm package installs a small Node shim that selects and spawns the correct prebuilt Go binary for your platform via `optionalDependencies`. The source repository does not run automated package publishing, so packaged builds may lag the source.
 
 ## Install
 

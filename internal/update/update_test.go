@@ -294,7 +294,7 @@ func TestAssetName(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.goos+"_"+tc.goarch, func(t *testing.T) {
 			if got := assetName(tc.goos, tc.goarch); got != tc.want {
-				t.Errorf("assetName(%q, %q) = %q, want %q (must match .goreleaser.yaml template)",
+				t.Errorf("assetName(%q, %q) = %q, want %q",
 					tc.goos, tc.goarch, got, tc.want)
 			}
 		})
@@ -1183,20 +1183,6 @@ func TestExtractRejectsDecompressionBomb(t *testing.T) {
 
 	if _, err := extractAsset(tarGzPath, "bomb.tar.gz"); err == nil {
 		t.Error("oversized decompressed payload should be rejected")
-	}
-}
-
-// TestGoreleaserInjectsBareVersion guards the smokeTest invariant: smokeTest
-// requires the staged binary's `version` output to contain the bare tag, which
-// only holds if GoReleaser injects {{.Version}} (no leading v) into
-// internal/version.Version.
-func TestGoreleaserInjectsBareVersion(t *testing.T) {
-	data, err := os.ReadFile("../../.goreleaser.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "internal/version.Version={{.Version}}") {
-		t.Error(".goreleaser.yaml must inject the bare {{.Version}} into internal/version.Version (smokeTest depends on it)")
 	}
 }
 
