@@ -182,6 +182,12 @@ timeout_ms = 200
 # mode = "notify"
 # check_hours = 24
 
+# Subscription usage for Codex, Grok, Antigravity, and Kimi is cached so the
+# render path never blocks on network I/O. A detached worker refreshes stale
+# data after each render.
+# [foreign_usage]
+# refresh_minutes = 1   # 1-1440
+
 # OAuth quota shim: fills the Fable/Sonnet/Opus weekly rate-limit bars from
 # Claude's OAuth usage endpoint (the data behind `claude /usage`) until
 # Claude Code's statusline payload carries those fields natively. Opt-in:

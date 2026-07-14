@@ -83,6 +83,8 @@ Configuration:
                from Claude's OAuth usage endpoint (Claude Code does not
                send model-class windows in the statusline payload):
                enabled (default false), refresh_minutes (1-1440, default 5)
+  [foreign_usage] refresh cadence for Codex/Grok/Antigravity/Kimi usage:
+               refresh_minutes (1-1440, default 1)
   [[plugins]]  custom executable segments — see README.md
 
 Line 1 segments — Session & workspace:

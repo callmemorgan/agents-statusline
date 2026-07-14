@@ -730,6 +730,19 @@ Source builds (`version = "dev"`) short-circuit the whole feature: no check, no 
 
 ---
 
+## Provider usage refresh
+
+The Codex, Grok, Antigravity, and Kimi bars refresh once per minute by default and share the foreign-usage cache and cadence:
+
+```toml
+[foreign_usage]
+refresh_minutes = 1   # 1..1440, default 1
+```
+
+The Claude bars (`usage-claude` and the `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` segments) refresh only when the opt-in `[quota_shim]` bridge below is enabled — they have no data source otherwise — and follow the separate `[quota_shim].refresh_minutes` setting (default 5) because Claude has a different OAuth source. Refreshes are detached and stale-while-revalidate: the current render returns immediately with cached values, and the next render observes the update.
+
+---
+
 ## OAuth quota shim
 
 Claude Code does not include the model-class weekly windows (Fable/Sonnet/Opus) in the statusline payload — they exist only in its internal `/usage` data — so the `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` segments have no wire source. The quota shim is what feeds them:
@@ -765,7 +778,7 @@ When enabled, a detached worker (same shape as the async plugin refresh and the 
 - Remember: zero values hide `cost`, `duration`, `lines-changed`, `tokens`, etc.
 - `rate_limits` only appears for Claude Pro/Max after the first API call
 - `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` are fed only by the `[quota_shim]` OAuth bridge (Claude Code does not send model-class windows in the statusline payload) — enable it in config.toml and check `agents-statusline quota`
-- `usage-claude` reads the OAuth quota cache; Codex/Grok/Antigravity/Kimi usage reads `foreign-usage.json`. Each render uses cached values immediately and launches one detached `claude-all-usage` refresh when the foreign cache is at least one minute old, so the next render gets fresh bars without blocking the statusline.
+- `usage-claude` reads the OAuth quota cache (requires `[quota_shim].enabled = true`); Codex/Grok/Antigravity/Kimi usage reads `foreign-usage.json`. Set `[quota_shim].refresh_minutes` for Claude (default 5) and `[foreign_usage].refresh_minutes` for the other providers (default 1); both accept 1-1440. Each render uses cached values immediately and launches a detached refresh when the relevant cache is stale, so the next render gets fresh bars without blocking the statusline.
 - Burn rates, projections, and trends need ~5 minutes of session history
 - `agent-name` only appears when running with `--agent`; `vim-mode` only with vim mode on
 

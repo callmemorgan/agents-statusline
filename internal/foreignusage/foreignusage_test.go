@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/callmemorgan/agents-statusline/internal/config"
 	"github.com/callmemorgan/agents-statusline/internal/state"
 )
 
@@ -38,7 +39,7 @@ func TestEnvironmentWithRefreshPathAddsHomebrewNodeLocations(t *testing.T) {
 	}
 }
 
-func TestMaybeRefreshHonorsOneMinuteTTL(t *testing.T) {
+func TestMaybeRefreshHonorsConfiguredTTL(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	if err := os.MkdirAll(state.StateBaseDir(), 0o700); err != nil {
 		t.Fatal(err)
@@ -51,20 +52,22 @@ func TestMaybeRefreshHonorsOneMinuteTTL(t *testing.T) {
 	t.Cleanup(func() { spawnRefresh = spawnRefreshReal })
 
 	now := time.Now()
-	MaybeRefresh(now)
+	minutes := 3
+	cfg := config.ForeignUsageConfig{RefreshMinutes: &minutes}
+	MaybeRefresh(cfg, now)
 	if spawned != 0 {
 		t.Fatalf("fresh cache spawned %d refreshes", spawned)
 	}
 
-	old := now.Add(-RefreshInterval)
+	old := now.Add(-cfg.RefreshEvery())
 	if err := os.Chtimes(Path(), old, old); err != nil {
 		t.Fatal(err)
 	}
-	MaybeRefresh(now)
+	MaybeRefresh(cfg, now)
 	if spawned != 1 {
 		t.Fatalf("expired cache spawned %d refreshes, want 1", spawned)
 	}
-	MaybeRefresh(now)
+	MaybeRefresh(cfg, now)
 	if spawned != 1 {
 		t.Fatalf("lock allowed duplicate refresh: %d", spawned)
 	}
@@ -75,7 +78,7 @@ func TestMaybeRefreshMissingCacheSpawns(t *testing.T) {
 	spawned := 0
 	spawnRefresh = func() error { spawned++; return nil }
 	t.Cleanup(func() { spawnRefresh = spawnRefreshReal })
-	MaybeRefresh(time.Now())
+	MaybeRefresh(config.ForeignUsageConfig{}, time.Now())
 	if spawned != 1 {
 		t.Fatalf("missing cache spawned %d refreshes, want 1", spawned)
 	}

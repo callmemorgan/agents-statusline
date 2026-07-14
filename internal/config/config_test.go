@@ -318,6 +318,51 @@ func TestUpdateConfigMergePreserves(t *testing.T) {
 	}
 }
 
+func TestProviderUsageRefreshConfig(t *testing.T) {
+	dir := useTempConfigDir(t)
+	writeConfigFile(t, dir, `
+[quota_shim]
+enabled = true
+refresh_minutes = 2
+
+[foreign_usage]
+refresh_minutes = 3
+`)
+	cfg := LoadConfig()
+	if got := cfg.QuotaShim.RefreshEvery(); got != 2*time.Minute {
+		t.Errorf("quota refresh = %v, want 2m", got)
+	}
+	if got := cfg.ForeignUsage.RefreshEvery(); got != 3*time.Minute {
+		t.Errorf("foreign refresh = %v, want 3m", got)
+	}
+	if got := (QuotaShimConfig{}).RefreshEvery(); got != 5*time.Minute {
+		t.Errorf("default quota refresh = %v, want 5m", got)
+	}
+	if got := (ForeignUsageConfig{}).RefreshEvery(); got != time.Minute {
+		t.Errorf("default foreign refresh = %v, want 1m", got)
+	}
+
+	zero := 0
+	tooHigh := 1441
+	cfg = Config{
+		QuotaShim:    QuotaShimConfig{RefreshMinutes: &zero},
+		ForeignUsage: ForeignUsageConfig{RefreshMinutes: &tooHigh},
+	}
+	warns := ValidateConfig(&cfg)
+	if cfg.QuotaShim.RefreshMinutes != nil || cfg.ForeignUsage.RefreshMinutes != nil {
+		t.Fatalf("invalid refresh values were not reset: %+v", cfg)
+	}
+	warned := make(map[string]bool, len(warns))
+	for _, warning := range warns {
+		warned[warning.Path] = true
+	}
+	for _, path := range []string{"quota_shim.refresh_minutes", "foreign_usage.refresh_minutes"} {
+		if !warned[path] {
+			t.Errorf("missing %s warning: %v", path, warns)
+		}
+	}
+}
+
 func TestPresetSegmentIDsExist(t *testing.T) {
 	for _, p := range LayoutPresets {
 		for _, id := range p.Segments {
