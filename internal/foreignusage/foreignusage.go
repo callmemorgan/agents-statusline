@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/callmemorgan/agents-statusline/internal/config"
 	"github.com/callmemorgan/agents-statusline/internal/state"
 	"github.com/callmemorgan/agents-statusline/internal/sys"
 )
 
-const RefreshInterval = time.Minute
 const staleLockTolerance = 30 * time.Second
 
 type Window struct {
@@ -57,12 +57,12 @@ func spawnRefreshReal() error {
 	return cmd.Process.Release()
 }
 
-// MaybeRefresh starts one detached refresh when the cache is at least one
-// minute old. The current render keeps using the cached value; a later render
-// observes the atomic rewrite performed by claude-all-usage.
-func MaybeRefresh(now time.Time) {
+// MaybeRefresh starts one detached refresh when the cache is older than the
+// configured cadence. The current render keeps using the cached value; a later
+// render observes the atomic rewrite performed by claude-all-usage.
+func MaybeRefresh(cfg config.ForeignUsageConfig, now time.Time) {
 	info, err := os.Stat(Path())
-	if err == nil && now.Sub(info.ModTime()) < RefreshInterval {
+	if err == nil && now.Sub(info.ModTime()) < cfg.RefreshEvery() {
 		return
 	}
 	if err := os.MkdirAll(state.StateBaseDir(), 0o755); err != nil {

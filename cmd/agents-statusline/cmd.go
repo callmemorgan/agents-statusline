@@ -153,7 +153,7 @@ func runRender(debug bool) {
 	// post-render side effect, and it never blocks: the worker is
 	// detached, returns immediately, and respects `mode = "off"`.
 	update.MaybeSpawnUpdateCheck(cfg.Update, start)
-	foreignusage.MaybeRefresh(start)
+	foreignusage.MaybeRefresh(cfg.ForeignUsage, start)
 }
 
 // initSegments initializes the segment registry and registers plugin segments.

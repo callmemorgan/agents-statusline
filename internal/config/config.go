@@ -74,6 +74,7 @@ type Config struct {
 	Plugins       []PluginDef               `toml:"plugins,omitempty"`
 	Update        UpdateConfig              `toml:"update,omitempty"`
 	QuotaShim     QuotaShimConfig           `toml:"quota_shim,omitempty"`
+	ForeignUsage  ForeignUsageConfig        `toml:"foreign_usage,omitempty"`
 }
 
 // QuotaShimConfig is the [quota_shim] table: an opt-in bridge that fills the
@@ -92,6 +93,19 @@ func (q QuotaShimConfig) RefreshEvery() time.Duration {
 		return 5 * time.Minute
 	}
 	return time.Duration(*q.RefreshMinutes) * time.Minute
+}
+
+// ForeignUsageConfig controls the cache refresh used by the Codex, Grok,
+// Antigravity, and Kimi subscription-usage segments.
+type ForeignUsageConfig struct {
+	RefreshMinutes *int `toml:"refresh_minutes,omitempty"` // 1..1440, default 1
+}
+
+func (f ForeignUsageConfig) RefreshEvery() time.Duration {
+	if f.RefreshMinutes == nil {
+		return time.Minute
+	}
+	return time.Duration(*f.RefreshMinutes) * time.Minute
 }
 
 // UpdateConfig is the [update] table in config.toml. Mode "" or unset means
@@ -302,6 +316,7 @@ func MergeWithDefaults(loaded Config) Config {
 	cfg.ReleaseNotes = loaded.ReleaseNotes
 	cfg.Update = loaded.Update
 	cfg.QuotaShim = loaded.QuotaShim
+	cfg.ForeignUsage = loaded.ForeignUsage
 	if loaded.Segments == nil {
 		inSegments := make(map[string]bool, len(cfg.Segments))
 		for _, id := range cfg.Segments {
@@ -469,6 +484,10 @@ func ValidateConfig(cfg *Config) []ConfigWarning {
 	if m := cfg.QuotaShim.RefreshMinutes; m != nil && (*m < 1 || *m > 1440) {
 		warns = append(warns, ConfigWarning{Path: "quota_shim.refresh_minutes", Msg: fmt.Sprintf("%d out of range 1-1440 (using 5)", *m)})
 		cfg.QuotaShim.RefreshMinutes = nil
+	}
+	if m := cfg.ForeignUsage.RefreshMinutes; m != nil && (*m < 1 || *m > 1440) {
+		warns = append(warns, ConfigWarning{Path: "foreign_usage.refresh_minutes", Msg: fmt.Sprintf("%d out of range 1-1440 (using 1)", *m)})
+		cfg.ForeignUsage.RefreshMinutes = nil
 	}
 	return warns
 }
