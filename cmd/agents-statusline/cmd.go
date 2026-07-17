@@ -132,7 +132,7 @@ func runRender(debug bool) {
 
 	width := payload.TerminalWidth(p)
 	style := render.StyleFor(cfg, colors)
-	lines := render.Statusline(render.Input{P: p, C: colors, Cfg: cfg, State: st, Foreign: foreignusage.Load(), Width: width, Now: start})
+	lines := render.Statusline(render.Input{P: p, C: colors, Cfg: cfg, State: st, Foreign: foreignusage.Load(quota.CachePath(cfg.QuotaShim)), Width: width, Now: start})
 
 	lines = releasenotes.MaybeTakeover(cfg.ReleaseNotes, lines, colors, width, style.Padding, start)
 

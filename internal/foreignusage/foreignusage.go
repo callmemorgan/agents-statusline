@@ -126,7 +126,11 @@ func touchCache() {
 	}
 }
 
-func Load() *Cache {
+// Load reads the sanitized foreign-provider cache and merges the Claude
+// account windows from the quota shim's cache. claudeQuotaPath is the
+// profile-scoped shim cache path (quota.CachePath) so multi-profile setups
+// surface the same account the shim tracks; empty skips the merge.
+func Load(claudeQuotaPath string) *Cache {
 	data, err := os.ReadFile(Path())
 	var cache Cache
 	if err == nil {
@@ -135,7 +139,7 @@ func Load() *Cache {
 	if cache.Providers == nil {
 		cache.Providers = make(map[string]Provider)
 	}
-	if claude, ok := loadClaudeUsage(); ok {
+	if claude, ok := loadClaudeUsage(claudeQuotaPath); ok {
 		cache.Providers["claude"] = claude
 	}
 	if len(cache.Providers) == 0 {
@@ -155,8 +159,11 @@ type claudeCache struct {
 	SevenDay *claudeCacheEntry `json:"seven_day"`
 }
 
-func loadClaudeUsage() (Provider, bool) {
-	data, err := os.ReadFile(filepath.Join(state.StateBaseDir(), "quota-shim.json"))
+func loadClaudeUsage(path string) (Provider, bool) {
+	if path == "" {
+		return Provider{}, false
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return Provider{}, false
 	}

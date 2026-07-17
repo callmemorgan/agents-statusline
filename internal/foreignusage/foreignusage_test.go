@@ -20,7 +20,7 @@ func TestLoadSanitizedCache(t *testing.T) {
 	if err := os.WriteFile(Path(), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cache := Load()
+	cache := Load(filepath.Join(state.StateBaseDir(), "quota-shim.json"))
 	if cache == nil || cache.Providers["grok"].Windows[0].UsedPercent != 42 {
 		t.Fatalf("cache = %#v", cache)
 	}
@@ -90,10 +90,11 @@ func TestLoadMergesClaudeQuotaCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	data := []byte(`{"five_hour":{"display_name":"Claude 5h","used_percentage":32,"resets_at":1783900800},"seven_day":{"display_name":"Claude weekly","used_percentage":18}}`)
-	if err := os.WriteFile(filepath.Join(state.StateBaseDir(), "quota-shim.json"), data, 0o600); err != nil {
+	quotaPath := filepath.Join(state.StateBaseDir(), "quota-shim-ef26ec72.json") // a profile-scoped shim cache
+	if err := os.WriteFile(quotaPath, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cache := Load()
+	cache := Load(quotaPath)
 	if cache == nil {
 		t.Fatal("Load() = nil")
 	}

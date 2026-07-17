@@ -200,3 +200,8 @@ timeout_ms = 200
 # [quota_shim]
 # enabled = true
 # refresh_minutes = 5   # 1-1440
+# Running multiple Claude Code profiles side by side (e.g. via a shell
+# function that sets CLAUDE_CONFIG_DIR)? Claude Code keys its keychain item
+# by config dir, so point the shim at the profile you want tracked — the
+# default ~/.claude profile is used when this is unset.
+# claude_config_dir = "~/.claude-personal"

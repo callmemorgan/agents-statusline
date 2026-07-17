@@ -94,18 +94,26 @@ func TestParseUsageScopedWins(t *testing.T) {
 	}
 }
 
-func writeCache(t *testing.T, entries []cacheEntry) {
+func writeCacheAt(t *testing.T, path string, entries []cacheEntry) {
 	t.Helper()
 	data, err := json.Marshal(cacheFile{FetchedAt: time.Now().Unix(), ModelScoped: entries})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Dir(cachePath()), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(cachePath(), data, 0o600); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// writeCache writes the default profile's cache; tests calling it also clear
+// CLAUDE_CONFIG_DIR so a developer's own profile env can't skew the key.
+func writeCache(t *testing.T, entries []cacheEntry) {
+	t.Helper()
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	writeCacheAt(t, cachePath(""), entries)
 }
 
 func shimEnabled() config.QuotaShimConfig {
@@ -175,7 +183,7 @@ func TestMaybeInjectStaleCacheSpawnsRefresh(t *testing.T) {
 	pct := 67.0
 	writeCache(t, []cacheEntry{{DisplayName: "Fable", UsedPercentage: &pct}})
 	old := time.Now().Add(-time.Hour)
-	if err := os.Chtimes(cachePath(), old, old); err != nil {
+	if err := os.Chtimes(cachePath(""), old, old); err != nil {
 		t.Fatal(err)
 	}
 
@@ -198,6 +206,7 @@ func TestMaybeInjectStaleCacheSpawnsRefresh(t *testing.T) {
 
 func TestMaybeInjectMissingCacheSpawnsButInjectsNothing(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	spawned := 0
 	spawnRefresh = func() error { spawned++; return nil }
 	t.Cleanup(func() { spawnRefresh = spawnRefreshReal })
@@ -219,5 +228,178 @@ func TestAccessTokenFromCredentials(t *testing.T) {
 	}
 	if _, err := accessTokenFromCredentials([]byte(`{}`)); err == nil {
 		t.Error("empty credentials should error")
+	}
+}
+
+func TestKeychainServiceName(t *testing.T) {
+	if got := keychainServiceName(""); got != "Claude Code-credentials" {
+		t.Errorf("default profile service = %q, want unsuffixed", got)
+	}
+	// sha256("/Users/morgan/.claude-personal")[:8] == "ef26ec72", verified
+	// against a real Claude Code-managed keychain item on the host that
+	// exports CLAUDE_CONFIG_DIR="$HOME/.claude-personal" for that profile.
+	const want = "Claude Code-credentials-ef26ec72"
+	if got := keychainServiceName("/Users/morgan/.claude-personal"); got != want {
+		t.Errorf("scoped profile service = %q, want %q", got, want)
+	}
+}
+
+func TestResolveClaudeConfigDir(t *testing.T) {
+	t.Run("unset falls back to default profile", func(t *testing.T) {
+		t.Setenv("CLAUDE_CONFIG_DIR", "")
+		if got := resolveClaudeConfigDir(config.QuotaShimConfig{}); got != "" {
+			t.Errorf("got %q, want empty", got)
+		}
+	})
+
+	t.Run("env is used when config value is unset", func(t *testing.T) {
+		t.Setenv("CLAUDE_CONFIG_DIR", "/tmp/env-profile")
+		if got := resolveClaudeConfigDir(config.QuotaShimConfig{}); got != "/tmp/env-profile" {
+			t.Errorf("got %q, want env value", got)
+		}
+	})
+
+	t.Run("explicit config wins over env", func(t *testing.T) {
+		t.Setenv("CLAUDE_CONFIG_DIR", "/tmp/env-profile")
+		cfg := config.QuotaShimConfig{ClaudeConfigDir: "/tmp/configured-profile"}
+		if got := resolveClaudeConfigDir(cfg); got != "/tmp/configured-profile" {
+			t.Errorf("got %q, want configured value", got)
+		}
+	})
+
+	t.Run("leading tilde expands against home", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		cfg := config.QuotaShimConfig{ClaudeConfigDir: "~/.claude-personal"}
+		want := filepath.Join(home, ".claude-personal")
+		if got := resolveClaudeConfigDir(cfg); got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+}
+
+func TestProfileCacheKeying(t *testing.T) {
+	// Default profile keeps the legacy filenames for backward compat.
+	if got := filepath.Base(cachePath("")); got != "quota-shim.json" {
+		t.Errorf("default cache = %q, want quota-shim.json", got)
+	}
+	if got := filepath.Base(lockPath("")); got != "quota-shim.lock" {
+		t.Errorf("default lock = %q, want quota-shim.lock", got)
+	}
+	// A scoped profile appends the same 8-hex suffix as the keychain service
+	// (sha256("/Users/morgan/.claude-personal")[:8] == "ef26ec72").
+	const dir = "/Users/morgan/.claude-personal"
+	if got := filepath.Base(cachePath(dir)); got != "quota-shim-ef26ec72.json" {
+		t.Errorf("scoped cache = %q, want quota-shim-ef26ec72.json", got)
+	}
+	if got := filepath.Base(lockPath(dir)); got != "quota-shim-ef26ec72.lock" {
+		t.Errorf("scoped lock = %q, want quota-shim-ef26ec72.lock", got)
+	}
+	// The cache/lock suffix and the keychain suffix must never diverge.
+	wantSuffix := "-" + keychainServiceName(dir)[len("Claude Code-credentials-"):]
+	if got := profileSuffix(dir); got != wantSuffix {
+		t.Errorf("profileSuffix = %q, keychain suffix = %q", got, wantSuffix)
+	}
+}
+
+func TestCachePathResolvesProfileInProcess(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "/Users/morgan/.claude-personal")
+	if got := filepath.Base(CachePath(config.QuotaShimConfig{})); got != "quota-shim-ef26ec72.json" {
+		t.Errorf("env-scoped CachePath = %q, want quota-shim-ef26ec72.json", got)
+	}
+	// Config beats env for the cache key too, matching token discovery.
+	cfg := config.QuotaShimConfig{ClaudeConfigDir: "/tmp/other-profile"}
+	if got := CachePath(cfg); got != cachePath("/tmp/other-profile") {
+		t.Errorf("configured CachePath = %q, want %q", got, cachePath("/tmp/other-profile"))
+	}
+}
+
+func TestMaybeInjectReadsProfileScopedCache(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	spawnRefresh = func() error { return nil }
+	t.Cleanup(func() { spawnRefresh = spawnRefreshReal })
+
+	const profile = "/tmp/scoped-profile"
+	defaultPct, scopedPct := 11.0, 67.0
+	writeCacheAt(t, cachePath(""), []cacheEntry{{DisplayName: "Fable", UsedPercentage: &defaultPct}})
+	writeCacheAt(t, cachePath(profile), []cacheEntry{{DisplayName: "Fable", UsedPercentage: &scopedPct}})
+
+	var p payload.Payload
+	MaybeInject(&p, config.QuotaShimConfig{Enabled: true, ClaudeConfigDir: profile}, time.Now())
+	if got := p.RateLimits.Fable(); got.UsedPercentage == nil || *got.UsedPercentage != 67 {
+		t.Fatalf("scoped profile injected %+v, want the scoped cache's 67%%", got)
+	}
+
+	var q payload.Payload
+	MaybeInject(&q, config.QuotaShimConfig{Enabled: true}, time.Now())
+	if got := q.RateLimits.Fable(); got.UsedPercentage == nil || *got.UsedPercentage != 11 {
+		t.Fatalf("default profile injected %+v, want the default cache's 11%%", got)
+	}
+}
+
+// TestMaybeInjectStaleScopedCacheLocksScopedPath checks the spawn path keys
+// the lock by profile: a stale scoped cache must acquire the profile-scoped
+// lock, not the default quota-shim.lock, before spawning the worker.
+func TestMaybeInjectStaleScopedCacheLocksScopedPath(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	spawned := 0
+	spawnRefresh = func() error { spawned++; return nil }
+	t.Cleanup(func() { spawnRefresh = spawnRefreshReal })
+
+	const profile = "/tmp/scoped-profile"
+	pct := 67.0
+	writeCacheAt(t, cachePath(profile), []cacheEntry{{DisplayName: "Fable", UsedPercentage: &pct}})
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(cachePath(profile), old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	var p payload.Payload
+	MaybeInject(&p, config.QuotaShimConfig{Enabled: true, ClaudeConfigDir: profile}, time.Now())
+	if spawned != 1 {
+		t.Errorf("stale scoped cache spawned %d refreshes, want 1", spawned)
+	}
+	if _, err := os.Stat(lockPath(profile)); err != nil {
+		t.Errorf("profile-scoped lock not acquired: %v", err)
+	}
+	if _, err := os.Stat(lockPath("")); !os.IsNotExist(err) {
+		t.Error("spawn took the default profile's lock")
+	}
+}
+
+// TestRunRefreshUsesProfileScopedPaths runs the real worker entry point with
+// CLAUDE_CONFIG_DIR inherited via env (exactly how the spawned process gets
+// it) and no reachable token, and checks the failure path lands on the
+// profile-scoped cache and releases the profile-scoped lock — proving the
+// worker re-derives the same key as the render path that spawned it.
+func TestRunRefreshUsesProfileScopedPaths(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	config.ConfigDirOverride = t.TempDir() // empty config dir -> defaults
+	t.Cleanup(func() { config.ConfigDirOverride = "" })
+	profile := filepath.Join(t.TempDir(), "scoped-profile") // no keychain entry, no .credentials.json
+	t.Setenv("CLAUDE_CONFIG_DIR", profile)
+	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "")
+	t.Setenv("HOME", t.TempDir()) // hide any real ~/.claude/.credentials.json
+
+	if err := os.MkdirAll(filepath.Dir(lockPath(profile)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lockPath(profile), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := RunRefresh(); err != nil {
+		t.Fatalf("RunRefresh: %v", err)
+	}
+	if _, err := os.Stat(lockPath(profile)); !os.IsNotExist(err) {
+		t.Error("profile-scoped lock not released")
+	}
+	if _, err := os.Stat(cachePath(profile)); err != nil {
+		t.Errorf("fetch failure should write the profile-scoped cache: %v", err)
+	}
+	if _, err := os.Stat(cachePath("")); !os.IsNotExist(err) {
+		t.Error("worker touched the default profile's cache")
 	}
 }
