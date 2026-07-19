@@ -103,7 +103,7 @@ func TestMigrateSchemaV2DoesNotReaddAfterSave(t *testing.T) {
 schema_version = 1
 segments = ["rate-limit-7d", "model"]
 `)
-	cfg := LoadConfig()
+	cfg := loadConfigForTest(t)
 	// User removes fable and saves (schema bumps to current).
 	filtered := cfg.Segments[:0]
 	for _, id := range cfg.Segments {
@@ -115,7 +115,7 @@ segments = ["rate-limit-7d", "model"]
 	if err := SaveConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
-	cfg2 := LoadConfig()
+	cfg2 := loadConfigForTest(t)
 	for _, id := range cfg2.Segments {
 		if id == "rate-limit-fable" {
 			t.Fatalf("fable re-added after user removed and saved: %v", cfg2.Segments)
@@ -141,7 +141,7 @@ func TestMigrateLegacyJSONInsertsFableBeforeWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := LoadConfig()
+	cfg := loadConfigForTest(t)
 	want := []string{"model", "rate-limit-5h", "rate-limit-7d", "rate-limit-fable", "cost"}
 	if len(cfg.Segments) != len(want) {
 		t.Fatalf("in-memory segments = %v, want %v", cfg.Segments, want)
@@ -168,7 +168,7 @@ func TestMigrateLegacyJSONInsertsFableBeforeWrite(t *testing.T) {
 		t.Errorf("written config.toml must stamp schema_version = 2:\n%s", text)
 	}
 	// Reload must keep fable (schema already current; no re-migration needed).
-	cfg2 := LoadConfig()
+	cfg2 := loadConfigForTest(t)
 	if len(cfg2.Segments) != len(want) {
 		t.Fatalf("reload segments = %v, want %v", cfg2.Segments, want)
 	}
@@ -186,7 +186,7 @@ func TestMigrateLegacyJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := LoadConfig()
+	cfg := loadConfigForTest(t)
 
 	// Converted values survived.
 	if len(cfg.Segments) != 3 || cfg.Segments[0] != "model" {
@@ -225,7 +225,7 @@ func TestMigrateLegacyJSON(t *testing.T) {
 	if err := os.WriteFile(jsonPath, []byte(`{"segments": ["vim-mode"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg2 := LoadConfig()
+	cfg2 := loadConfigForTest(t)
 	if len(cfg2.Segments) != 3 {
 		t.Errorf("TOML must win over a reappearing config.json: %v", cfg2.Segments)
 	}
@@ -237,7 +237,7 @@ func TestMigrateMalformedJSONLeftAlone(t *testing.T) {
 	if err := os.WriteFile(jsonPath, []byte("{broken"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg := LoadConfig()
+	cfg := loadConfigForTest(t)
 	if len(cfg.Segments) != len(DefaultConfig().Segments) {
 		t.Error("malformed legacy config should fall back to defaults")
 	}
@@ -255,7 +255,7 @@ func TestMigratePreservesNilSegments(t *testing.T) {
 		[]byte(`{"plugins": [{"id": "mem", "command": "x"}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg := LoadConfig()
+	cfg := loadConfigForTest(t)
 	// nil segments → defaults + auto-appended plugin.
 	if cfg.Segments[len(cfg.Segments)-1] != "mem" {
 		t.Errorf("plugin not auto-appended after migration: %v", cfg.Segments)
@@ -268,7 +268,7 @@ func TestMigratePreservesNilSegments(t *testing.T) {
 		t.Errorf("nil segments must stay omitted in TOML so auto-append survives:\n%s", tomlData)
 	}
 	// And the next plain TOML load behaves the same.
-	cfg2 := LoadConfig()
+	cfg2 := loadConfigForTest(t)
 	if cfg2.Segments[len(cfg2.Segments)-1] != "mem" {
 		t.Errorf("auto-append broken after TOML round-trip: %v", cfg2.Segments)
 	}

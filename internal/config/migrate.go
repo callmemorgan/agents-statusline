@@ -109,7 +109,7 @@ func migrateConfigSchema(cfg *Config) []ConfigWarning {
 	}
 	var warns []ConfigWarning
 	// v1 → v2: anyone with the weekly 7d bar also gets Fable's weekly included
-	// quota bar (rate-limit-fable, fed by the [quota_shim] bridge), placed right
+	// quota bar (rate-limit-fable, fed by the proxy usage cache), placed right
 	// after rate-limit-7d and inheriting its line + bar settings when unset.
 	if cfg.SchemaVersion < 2 {
 		if insertSegmentAfter(cfg, "rate-limit-7d", "rate-limit-fable") {

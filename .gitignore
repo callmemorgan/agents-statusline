@@ -1,4 +1,5 @@
 /claude-statusline
+/agents-statusline
 !npm/claude-statusline
 !npm/claude-statusline/**
 /claude-statusline.exe

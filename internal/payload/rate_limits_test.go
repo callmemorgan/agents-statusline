@@ -29,7 +29,7 @@ func TestModelClassAccessorsReadModelScoped(t *testing.T) {
 
 // TestModelClassFieldsNotOnTheWire pins the intentional absence: Claude
 // Code's statusline payload does not send model-class weekly windows, so the
-// parser must ignore any such keys (they arrive via the quota shim instead).
+// parser must ignore any such keys (they arrive via the proxy cache instead).
 func TestModelClassFieldsNotOnTheWire(t *testing.T) {
 	raw := []byte(`{
 		"model": {"display_name": "Claude Fable 5"},

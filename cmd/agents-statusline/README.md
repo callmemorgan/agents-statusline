@@ -18,16 +18,6 @@ The core renderer is a single static binary (one TOML dependency); the interacti
 
 ## Install
 
-**macOS — Homebrew (recommended):**
-
-```bash
-brew tap callmemorgan/tap
-brew install agents-statusline
-agents-statusline install
-```
-
-Upgrade later with `brew upgrade agents-statusline`.
-
 **Any platform — `go install`:**
 
 ```bash
@@ -37,54 +27,19 @@ agents-statusline install
 
 Requires Go 1.22+. Make sure `$(go env GOPATH)/bin` is on your `$PATH`.
 
-**Any platform — npm:**
-
-```bash
-npm i -g @morgan.rebrand/agents-statusline
-agents-statusline install
-```
-
-Requires Node 14+. npm installs a small JS shim that `spawnSync`s the correct per-platform binary from `optionalDependencies`; Homebrew and manual installs remain the low-latency recommendation because each render pays the cost of one Node process spawn. If you already have another `agents-statusline` on your `$PATH` (for example a Go install at `$(go env GOPATH)/bin/agents-statusline` or `~/.local/bin/agents-statusline`), npm may not be the one executed — check with `which agents-statusline`.
-
-> npm packages are built and published automatically with each GitHub release.
-
-**Pi:**
-
-```bash
-pi install npm:@morgan.rebrand/agents-statusline
-```
-
-This installs the package as a Pi extension. The extension wires the renderer into Pi's footer and refreshes on session/turn/model events. No separate `agents-statusline install` step is needed inside Pi.
-
-> The Pi extension resolves the Go binary from the same `@morgan.rebrand/agents-statusline` npm package (via its per-platform `optionalDependencies`). Because Pi owns the files, the binary's own self-swapper leaves Pi installs alone and points you at `pi update` instead. If you want to use a local build while developing, set `AGENTS_STATUSLINE_BIN` to the absolute path of a `agents-statusline` binary before launching Pi.
-
-Upgrade later with Pi's own package manager:
-
-```bash
-# update this package only
-pi update --extension npm:@morgan.rebrand/agents-statusline
-# update Pi and all packages (skips pinned specs)
-pi update
-# update packages only, without touching pi itself
-pi update --extensions
-```
-
 **Prebuilt binaries:**
 
-Download a binary from the [releases page](https://github.com/callmemorgan/agents-statusline/releases). Each release ships a `checksums.txt` signed with a key-based cosign bundle (`checksums.txt.bundle`); the public key is [`release/cosign.pub`](release/cosign.pub) in this repo. Verify the signature, then the asset's checksum:
+Download the archive for your platform from the [releases page](https://github.com/callmemorgan/agents-statusline/releases). Each release includes `checksums.txt`, its raw P-256 signature (`checksums.txt.sig`), and the updater-compatible bundle (`checksums.txt.bundle`). Verify before installing:
 
 ```bash
-cosign verify-blob \
-  --key release/cosign.pub \
-  --bundle checksums.txt.bundle \
-  --insecure-ignore-tlog \
+openssl dgst -sha256 \
+  -verify internal/update/release/cosign.pub \
+  -signature checksums.txt.sig \
   checksums.txt
 shasum -a 256 -c checksums.txt --ignore-missing
 ```
 
-`--insecure-ignore-tlog` skips the online transparency-log inclusion check so verification works offline against just the embedded key — it does not weaken the signature check itself. The self-update path performs this same key-based verification in-process — no `cosign` needed at runtime.
-
-> **macOS note:** Downloaded binaries are not notarized. If Gatekeeper blocks the binary on first run, run `xattr -d com.apple.quarantine /path/to/agents-statusline`, or use Homebrew/`go install` instead.
+The same public key is embedded in the binary, so `agents-statusline update verify` performs the signature check without OpenSSL. Homebrew, npm, and Pi packages are not currently published for this fork.
 
 **Build from source:**
 
@@ -225,10 +180,10 @@ Segments that receive no data from the active tool hide themselves automatically
 | `context-window` | 3 | all three | Usage bar with color-coded %, growth trend arrow, and time-to-compact estimate (`↗ ~35m`) |
 | `rate-limit-5h` | 3 | Claude Code | 5-hour rate limit bar with countdown and burn-rate projection (`→58%`) (Pro/Max only) |
 | `rate-limit-7d` | 3 | Claude Code | 7-day weekly rate limit bar with countdown and burn-rate projection (Pro/Max only) |
-| `rate-limit-fable` | 3 | Claude Code | Fable 5 weekly included-quota bar, fed by the opt-in `[quota_shim]` OAuth bridge (Claude Code does not send this data in the statusline payload) — self-hides without it. On upgrade, configs that already list `rate-limit-7d` get this segment inserted after it (schema v2) |
-| `rate-limit-sonnet` | 3 | Claude Code | Sonnet weekly quota bar via the `[quota_shim]` bridge — self-hides without it |
-| `rate-limit-opus` | 3 | Claude Code | Opus weekly quota bar via the `[quota_shim]` bridge — self-hides without it |
-| `usage-claude` | 4 | Claude Code | Unified Claude subscription 5-hour and weekly bars from the `[quota_shim]` OAuth cache — visible regardless of the active gateway model |
+| `rate-limit-fable` | 3 | Claude Code | Fable 5 weekly included-quota bar from the proxy-backed subscription cache (Claude Code does not send this data in the statusline payload) — self-hides without it. On upgrade, configs that already list `rate-limit-7d` get this segment inserted after it (schema v2) |
+| `rate-limit-sonnet` | 3 | Claude Code | Sonnet weekly quota bar from the proxy-backed subscription cache — self-hides without it |
+| `rate-limit-opus` | 3 | Claude Code | Opus weekly quota bar from the proxy-backed subscription cache — self-hides without it |
+| `usage-claude` | 4 | Claude Code | Unified Claude subscription 5-hour and weekly bars from the proxy-backed cache — visible regardless of the active gateway model |
 
 ### Harness support
 
@@ -272,7 +227,7 @@ No segment is gated by tool name — each one renders when the active harness se
 
 ✓ renders · ✗ no data, stays hidden.
 
-¹ Claude Code's statusline pipes `five_hour` and `seven_day` only — the model-class windows are not statusline payload fields, so the Fable/Sonnet/Opus segments are fed exclusively by the opt-in `[quota_shim]` OAuth bridge and stay hidden without it. See [OAuth quota shim](#oauth-quota-shim).
+¹ Claude Code's statusline pipes `five_hour` and `seven_day` only — the model-class windows are not statusline payload fields, so the Fable/Sonnet/Opus segments are fed by CLIProxyAPI's normalized subscription-usage response and stay hidden without it.
 
 ### Burn rates, projections, and trends
 
@@ -628,7 +583,7 @@ Claude Code sends this JSON structure via stdin:
 - `pr` — only while an open PR is found for the current branch
 - `worktree` — only during `--worktree` sessions
 - `rate_limits` — only for Claude Pro/Max subscribers after the first API response
-- model-class weekly windows (Fable/Sonnet/Opus) — **not statusline payload fields**: Claude Code's statusline builder never emits them, so the binary does not parse them from the wire. The opt-in `[quota_shim]` bridge supplies them from the OAuth usage endpoint instead
+- model-class weekly windows (Fable/Sonnet/Opus) — **not statusline payload fields**: Claude Code's statusline builder never emits them, so the binary does not parse them from the wire. CLIProxyAPI supplies them through its normalized subscription-usage response instead
 
 **Fields that may be `null`:**
 - `context_window.current_usage` — before the first API call and after `/compact`
@@ -732,33 +687,18 @@ Source builds (`version = "dev"`) short-circuit the whole feature: no check, no 
 
 ## Provider usage refresh
 
-The Codex, Grok, Antigravity, and Kimi bars refresh once per minute by default and share the foreign-usage cache and cadence:
+The Claude, Codex, Grok, Antigravity, and Kimi bars refresh once per minute by default and share one proxy-backed cache and cadence:
 
 ```toml
 [foreign_usage]
 refresh_minutes = 1   # 1..1440, default 1
 ```
 
-The Claude bars (`usage-claude` and the `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` segments) refresh only when the opt-in `[quota_shim]` bridge below is enabled — they have no data source otherwise — and follow the separate `[quota_shim].refresh_minutes` setting (default 5) because Claude has a different OAuth source. Refreshes are detached and stale-while-revalidate: the current render returns immediately with cached values, and the next render observes the update.
+The detached refresher calls `${ANTHROPIC_BASE_URL}/v1/subscription-usage` with `ANTHROPIC_AUTH_TOKEN`, matching `claude-all`. Outside that launcher it falls back to `http://127.0.0.1:8317` and `~/.cli-proxy-api/client-key`. Provider OAuth tokens remain inside CLIProxyAPI. The current render returns immediately with cached values; a stale or missing cache starts one background refresh, and a later render observes the atomic rewrite.
 
----
+Claude Code does not include model-class weekly windows (Fable/Sonnet/Opus) in the statusline payload. CLIProxyAPI returns those windows with `scope: "model"`; the render path injects them before recording state, preserving reset countdowns and burn-rate projections. Payload data wins if Claude Code ever supplies the windows itself.
 
-## OAuth quota shim
-
-Claude Code does not include the model-class weekly windows (Fable/Sonnet/Opus) in the statusline payload — they exist only in its internal `/usage` data — so the `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` segments have no wire source. The quota shim is what feeds them:
-
-```toml
-[quota_shim]
-enabled = true
-refresh_minutes = 5   # 1..1440, default 5
-```
-
-When enabled, a detached worker (same shape as the async plugin refresh and the update check — the render path never touches the network) fetches `api.anthropic.com/api/oauth/usage` — the data behind `claude /usage` — at most once per `refresh_minutes` and caches the model-class weekly windows to `quota-shim.json` under the state dir. The render path injects them into the in-memory rate-limit state (never parsed from the wire), so the bars render exactly as if Claude Code had sent the fields — reset countdowns and burn-rate projections included.
-
-- **Opt-in.** Enabling it means the background worker reads your Claude Code OAuth token — `$CLAUDE_CODE_OAUTH_TOKEN`, the macOS keychain (`Claude Code-credentials`), or `.credentials.json` under `$CLAUDE_CONFIG_DIR` / `~/.claude` — and calls api.anthropic.com on your behalf. Only percentages and reset times are written to disk, never the token.
-- **Sole source, by design.** The binary deliberately does not parse model-class windows from the statusline payload — Claude Code never sends them, and guessing at a future wire format is worse than adding real parsing when (if) it ships. At that point wire data should take precedence over the shim.
-- **Unofficial endpoint.** It may change shape or disappear; every failure is soft — empty cache, hidden segments, backoff via the cache mtime.
-- **Verify with `agents-statusline quota`**: prints shim/cache state plus a live fetch of the windows.
+Run `agents-statusline quota` to perform one foreground proxy fetch and inspect all normalized provider windows.
 
 ---
 
@@ -777,8 +717,8 @@ When enabled, a detached worker (same shape as the async plugin refresh and the 
 - Check `debug` output to see if the fields are present in the payload
 - Remember: zero values hide `cost`, `duration`, `lines-changed`, `tokens`, etc.
 - `rate_limits` only appears for Claude Pro/Max after the first API call
-- `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` are fed only by the `[quota_shim]` OAuth bridge (Claude Code does not send model-class windows in the statusline payload) — enable it in config.toml and check `agents-statusline quota`
-- `usage-claude` reads the OAuth quota cache (requires `[quota_shim].enabled = true`); Codex/Grok/Antigravity/Kimi usage reads `foreign-usage.json`. Set `[quota_shim].refresh_minutes` for Claude (default 5) and `[foreign_usage].refresh_minutes` for the other providers (default 1); both accept 1-1440. Each render uses cached values immediately and launches a detached refresh when the relevant cache is stale, so the next render gets fresh bars without blocking the statusline.
+- `rate-limit-fable` / `rate-limit-sonnet` / `rate-limit-opus` require CLIProxyAPI's normalized Claude model windows; check `agents-statusline quota` if they are absent
+- All subscription segments read `foreign-usage.json`. Set `[foreign_usage].refresh_minutes` for the proxy-backed refresh cadence (default 1, range 1-1440); each render uses cached values immediately and launches a detached refresh when stale.
 - Burn rates, projections, and trends need ~5 minutes of session history
 - `agent-name` only appears when running with `--agent`; `vim-mode` only with vim mode on
 

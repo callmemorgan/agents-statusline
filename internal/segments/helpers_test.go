@@ -1,7 +1,6 @@
 package segments
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -149,28 +148,5 @@ func TestNewPayloadSegments(t *testing.T) {
 	p.Email = "morgan@skyslope.com"
 	if got, _ := render(p, "email"); got != "morgan@…" {
 		t.Errorf("email = %q", got)
-	}
-}
-
-func TestFilterSegments(t *testing.T) {
-	Init()
-	all := All()
-	if got := Filter(all, ""); len(got) != len(all) {
-		t.Errorf("empty query should return all, got %d/%d", len(got), len(all))
-	}
-	got := Filter(all, "rate")
-	for _, s := range got {
-		if !strings.Contains(s.ID, "rate") && !strings.Contains(strings.ToLower(s.Desc), "rate") {
-			t.Errorf("unexpected match %q", s.ID)
-		}
-	}
-	if len(got) < 6 { // rate-limit-5h/7d/fable/sonnet/opus + cost-rate
-		t.Errorf("expected at least 6 'rate' matches, got %d", len(got))
-	}
-	if got := Filter(all, "GIT"); len(got) == 0 {
-		t.Error("filter should be case-insensitive")
-	}
-	if got := Filter(all, "zzzznope"); len(got) != 0 {
-		t.Errorf("expected no matches, got %d", len(got))
 	}
 }

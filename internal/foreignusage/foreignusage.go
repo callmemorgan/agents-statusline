@@ -1,11 +1,14 @@
-// Package foreignusage reads the sanitized subscription cache written by
-// claude-all-usage. It never performs network I/O or reads provider tokens.
+// Package foreignusage refreshes and reads the sanitized subscription cache
+// exposed by CLIProxyAPI. It only handles the proxy client credential; provider
+// tokens remain owned by the proxy.
 package foreignusage
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,17 +16,22 @@ import (
 	"time"
 
 	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
 	"github.com/callmemorgan/agents-statusline/internal/state"
 	"github.com/callmemorgan/agents-statusline/internal/sys"
 )
 
 const staleLockTolerance = 30 * time.Second
+const refreshTimeout = 15 * time.Second
+
+var refreshHTTPClient = &http.Client{Timeout: refreshTimeout}
 
 type Window struct {
 	ID          string  `json:"id"`
 	Label       string  `json:"label"`
 	UsedPercent float64 `json:"usedPercent"`
 	ResetAt     string  `json:"resetAt,omitempty"`
+	Scope       string  `json:"scope,omitempty"`
 }
 
 type Provider struct {
@@ -59,7 +67,7 @@ func spawnRefreshReal() error {
 
 // MaybeRefresh starts one detached refresh when the cache is older than the
 // configured cadence. The current render keeps using the cached value; a later
-// render observes the atomic rewrite performed by claude-all-usage.
+// render observes the atomic rewrite performed by the detached worker.
 func MaybeRefresh(cfg config.ForeignUsageConfig, now time.Time) {
 	info, err := os.Stat(Path())
 	if err == nil && now.Sub(info.ModTime()) < cfg.RefreshEvery() {
@@ -79,44 +87,104 @@ func MaybeRefresh(cfg config.ForeignUsageConfig, now time.Time) {
 // RunRefresh implements the hidden foreign-usage-refresh worker.
 func RunRefresh() error {
 	defer func() { _ = os.Remove(lockPath()) }()
-	command, err := refreshCommand()
+	cache, err := fetchProxyUsage()
 	if err != nil {
 		touchCache()
-		return err
-	}
-	cmd := exec.Command(command)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil
-	cmd.Env = environmentWithRefreshPath(os.Environ())
-	if err := cmd.Run(); err != nil {
-		touchCache()
 		return fmt.Errorf("refresh provider usage: %w", err)
+	}
+	if err := writeCache(cache); err != nil {
+		return fmt.Errorf("write provider usage cache: %w", err)
 	}
 	return nil
 }
 
-func environmentWithRefreshPath(environment []string) []string {
-	prefix := strings.Join([]string{"/opt/homebrew/bin", "/usr/local/bin"}, string(os.PathListSeparator))
-	for index, entry := range environment {
-		if strings.HasPrefix(strings.ToUpper(entry), "PATH=") {
-			copy := append([]string(nil), environment...)
-			copy[index] = "PATH=" + prefix + string(os.PathListSeparator) + entry[strings.IndexByte(entry, '=')+1:]
-			return copy
-		}
+func fetchProxyUsage() (*Cache, error) {
+	endpoint, errEndpoint := proxyUsageEndpoint()
+	if errEndpoint != nil {
+		return nil, errEndpoint
 	}
-	return append(append([]string(nil), environment...), "PATH="+prefix)
+	token, errToken := proxyToken()
+	if errToken != nil {
+		return nil, errToken
+	}
+	req, errRequest := http.NewRequest(http.MethodGet, endpoint, nil)
+	if errRequest != nil {
+		return nil, errRequest
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, errDo := refreshHTTPClient.Do(req)
+	if errDo != nil {
+		return nil, errDo
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("proxy returned HTTP %d", resp.StatusCode)
+	}
+	var cache Cache
+	if errDecode := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&cache); errDecode != nil {
+		return nil, errDecode
+	}
+	if cache.Providers == nil {
+		return nil, fmt.Errorf("proxy response has no providers")
+	}
+	return &cache, nil
 }
 
-func refreshCommand() (string, error) {
-	if exe, err := os.Executable(); err == nil {
-		candidate := filepath.Join(filepath.Dir(exe), "claude-all-usage")
-		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
-			return candidate, nil
-		}
+func proxyUsageEndpoint() (string, error) {
+	base := strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL"))
+	if base == "" {
+		base = "http://127.0.0.1:8317"
 	}
-	if command, err := exec.LookPath("claude-all-usage"); err == nil {
-		return command, nil
+	parsed, errParse := url.Parse(base)
+	if errParse != nil {
+		return "", errParse
 	}
-	return "", errors.New("claude-all-usage not found next to agents-statusline or on PATH")
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("invalid proxy base URL %q", base)
+	}
+	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/v1/subscription-usage"
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String(), nil
+}
+
+func proxyToken() (string, error) {
+	if token := strings.TrimSpace(os.Getenv("ANTHROPIC_AUTH_TOKEN")); token != "" {
+		return token, nil
+	}
+	home, errHome := os.UserHomeDir()
+	if errHome != nil {
+		return "", errHome
+	}
+	path := filepath.Join(home, ".cli-proxy-api", "client-key")
+	data, errRead := os.ReadFile(path)
+	if errRead != nil {
+		return "", fmt.Errorf("read proxy credential %s: %w", path, errRead)
+	}
+	token := strings.TrimSpace(string(data))
+	if token == "" {
+		return "", fmt.Errorf("empty proxy credential: %s", path)
+	}
+	return token, nil
+}
+
+func writeCache(cache *Cache) error {
+	if err := os.MkdirAll(state.StateBaseDir(), 0o700); err != nil {
+		return err
+	}
+	data, errMarshal := json.Marshal(cache)
+	if errMarshal != nil {
+		return errMarshal
+	}
+	tmp := fmt.Sprintf("%s.%d.tmp", Path(), os.Getpid())
+	defer func() { _ = os.Remove(tmp) }()
+	if errWrite := os.WriteFile(tmp, data, 0o600); errWrite != nil {
+		return errWrite
+	}
+	if errChmod := os.Chmod(tmp, 0o600); errChmod != nil {
+		return errChmod
+	}
+	return os.Rename(tmp, Path())
 }
 
 func touchCache() {
@@ -126,21 +194,12 @@ func touchCache() {
 	}
 }
 
-// Load reads the sanitized foreign-provider cache and merges the Claude
-// account windows from the quota shim's cache. claudeQuotaPath is the
-// profile-scoped shim cache path (quota.CachePath) so multi-profile setups
-// surface the same account the shim tracks; empty skips the merge.
-func Load(claudeQuotaPath string) *Cache {
+// Load reads the sanitized all-provider cache written by the proxy refresher.
+func Load() *Cache {
 	data, err := os.ReadFile(Path())
 	var cache Cache
 	if err == nil {
 		_ = json.Unmarshal(data, &cache)
-	}
-	if cache.Providers == nil {
-		cache.Providers = make(map[string]Provider)
-	}
-	if claude, ok := loadClaudeUsage(claudeQuotaPath); ok {
-		cache.Providers["claude"] = claude
 	}
 	if len(cache.Providers) == 0 {
 		return nil
@@ -148,48 +207,47 @@ func Load(claudeQuotaPath string) *Cache {
 	return &cache
 }
 
-type claudeCacheEntry struct {
-	DisplayName    string   `json:"display_name"`
-	UsedPercentage *float64 `json:"used_percentage"`
-	ResetsAt       *int64   `json:"resets_at"`
-}
-
-type claudeCache struct {
-	FiveHour *claudeCacheEntry `json:"five_hour"`
-	SevenDay *claudeCacheEntry `json:"seven_day"`
-}
-
-func loadClaudeUsage(path string) (Provider, bool) {
-	if path == "" {
-		return Provider{}, false
+// MaybeInjectClaudeModelScoped fills model-class windows from the proxy cache
+// when Claude Code's statusline payload does not provide them itself.
+func MaybeInjectClaudeModelScoped(p *payload.Payload, cache *Cache) {
+	if p == nil || cache == nil || len(p.RateLimits.ModelScoped) > 0 {
+		return
 	}
-	data, err := os.ReadFile(path)
+	claude, ok := cache.Providers["claude"]
+	if !ok {
+		return
+	}
+	for _, window := range claude.Windows {
+		if window.Scope != "model" {
+			continue
+		}
+		percent := window.UsedPercent
+		var resetsAt *int64
+		if parsed, errParse := time.Parse(time.RFC3339Nano, window.ResetAt); errParse == nil {
+			seconds := parsed.Unix()
+			resetsAt = &seconds
+		}
+		p.RateLimits.ModelScoped = append(p.RateLimits.ModelScoped, payload.ModelScopedLimit{
+			DisplayName: window.Label, UsedPercentage: &percent, ResetsAt: resetsAt,
+		})
+	}
+}
+
+// RunStatus performs one foreground proxy fetch for manual verification.
+func RunStatus(w io.Writer) error {
+	cache, err := fetchProxyUsage()
 	if err != nil {
-		return Provider{}, false
+		return err
 	}
-	var cache claudeCache
-	if json.Unmarshal(data, &cache) != nil {
-		return Provider{}, false
-	}
-	windows := make([]Window, 0, 2)
-	appendWindow := func(id, fallback string, entry *claudeCacheEntry) {
-		if entry == nil || entry.UsedPercentage == nil {
-			return
+	fmt.Fprintf(w, "proxy subscription usage: %d provider(s)\n", len(cache.Providers))
+	for providerName, provider := range cache.Providers {
+		if len(provider.Windows) == 0 {
+			fmt.Fprintf(w, "%s: %s (%s)\n", providerName, provider.State, provider.Mode)
+			continue
 		}
-		label := entry.DisplayName
-		if label == "" {
-			label = fallback
+		for _, window := range provider.Windows {
+			fmt.Fprintf(w, "%s: %s %.0f%% used\n", providerName, window.Label, window.UsedPercent)
 		}
-		reset := ""
-		if entry.ResetsAt != nil {
-			reset = time.Unix(*entry.ResetsAt, 0).UTC().Format(time.RFC3339)
-		}
-		windows = append(windows, Window{ID: id, Label: label, UsedPercent: *entry.UsedPercentage, ResetAt: reset})
 	}
-	appendWindow("5h", "Claude 5h", cache.FiveHour)
-	appendWindow("weekly", "Claude weekly", cache.SevenDay)
-	if len(windows) == 0 {
-		return Provider{}, false
-	}
-	return Provider{Mode: "authoritative", State: "available", Windows: windows}, true
+	return nil
 }

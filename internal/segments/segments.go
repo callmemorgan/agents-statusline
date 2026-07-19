@@ -575,22 +575,6 @@ func All() []Info {
 	return registry
 }
 
-// Filter returns the segments whose ID or description contains the query
-// (case-insensitive). An empty query returns everything.
-func Filter(all []Info, query string) []Info {
-	q := strings.ToLower(strings.TrimSpace(query))
-	if q == "" {
-		return all
-	}
-	var out []Info
-	for _, s := range all {
-		if strings.Contains(strings.ToLower(s.ID), q) || strings.Contains(strings.ToLower(s.Desc), q) {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
 // ─── Helpers ─────────────────────────────────────────────────────────
 
 func gitBranch(dir string) string {

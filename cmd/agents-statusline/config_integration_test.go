@@ -26,6 +26,12 @@ func writeConfigFile(t *testing.T, dir, content string) {
 	}
 }
 
+func loadConfigForTest(t *testing.T) config.Config {
+	t.Helper()
+	cfg, _ := config.LoadConfigWarn()
+	return cfg
+}
+
 func TestSaveConfigRoundTripWithSegments(t *testing.T) {
 	useTempConfigDir(t)
 	in := config.Config{
@@ -38,7 +44,7 @@ func TestSaveConfigRoundTripWithSegments(t *testing.T) {
 	if err := config.SaveConfig(in); err != nil {
 		t.Fatal(err)
 	}
-	out := config.LoadConfig()
+	out := loadConfigForTest(t)
 	initSegments(nil)
 	seg, _ := segments.ByID("context-window")
 	if s := config.SettingsFor(out, seg.ID, seg.Settings); s.Int("bar_width") != 30 {
@@ -91,7 +97,7 @@ func TestMigrateLegacyJSONWithSegments(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := config.LoadConfig()
+	cfg := loadConfigForTest(t)
 
 	initSegments(nil)
 	seg, _ := segments.ByID("context-window")

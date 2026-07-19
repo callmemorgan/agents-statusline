@@ -10,6 +10,12 @@ import (
 	"github.com/callmemorgan/agents-statusline/internal/palette"
 )
 
+func loadConfigForTest(t *testing.T) Config {
+	t.Helper()
+	cfg, _ := LoadConfigWarn()
+	return cfg
+}
+
 // useTempConfigDir points ConfigDir at a temp dir for the duration of a test.
 func useTempConfigDir(t *testing.T) string {
 	t.Helper()
@@ -28,7 +34,7 @@ func writeConfigFile(t *testing.T, dir, content string) {
 
 func TestLoadConfigDefaultsWhenMissing(t *testing.T) {
 	useTempConfigDir(t)
-	cfg := LoadConfig()
+	cfg := loadConfigForTest(t)
 	def := DefaultConfig()
 	if len(cfg.Segments) != len(def.Segments) {
 		t.Errorf("expected default segments, got %d", len(cfg.Segments))
@@ -55,7 +61,7 @@ func TestLoadConfigExplicitEmptySegments(t *testing.T) {
 id = "mem"
 command = "x"
 `)
-	cfg := LoadConfig()
+	cfg := loadConfigForTest(t)
 	if len(cfg.Segments) != 0 {
 		t.Errorf("explicit [] must hide everything (no plugin auto-append), got %v", cfg.Segments)
 	}
@@ -77,7 +83,7 @@ command = "y"
   [[plugins.fields]]
   id = "swap"
 `)
-	cfg := LoadConfig()
+	cfg := loadConfigForTest(t)
 	got := map[string]bool{}
 	for _, id := range cfg.Segments {
 		got[id] = true
@@ -107,7 +113,7 @@ func TestSaveConfigRoundTrip(t *testing.T) {
 	if err := SaveConfig(in); err != nil {
 		t.Fatal(err)
 	}
-	out := LoadConfig()
+	out := loadConfigForTest(t)
 	if len(out.Segments) != 2 || out.Segments[0] != "model" {
 		t.Errorf("segments not round-tripped: %v", out.Segments)
 	}
@@ -125,7 +131,7 @@ func TestSaveConfigRoundTrip(t *testing.T) {
 func TestPresetConfigKey(t *testing.T) {
 	dir := useTempConfigDir(t)
 	writeConfigFile(t, dir, `preset = "quota-watch"`)
-	cfg := LoadConfig()
+	cfg := loadConfigForTest(t)
 	if len(cfg.Segments) != 7 || cfg.Segments[0] != "model" {
 		t.Errorf("preset segments not applied: %v", cfg.Segments)
 	}
@@ -138,7 +144,7 @@ func TestPresetConfigKey(t *testing.T) {
 
 	// Explicit segments beat the preset; explicit theme beats the suggestion.
 	writeConfigFile(t, dir, "preset = \"quota-watch\"\ntheme = \"nord\"\nsegments = [\"model\"]\n")
-	cfg = LoadConfig()
+	cfg = loadConfigForTest(t)
 	if len(cfg.Segments) != 1 {
 		t.Errorf("explicit segments should beat preset: %v", cfg.Segments)
 	}
@@ -233,7 +239,7 @@ func TestUpdateConfigRoundTripAndValidation(t *testing.T) {
 mode = "auto"
 check_hours = 12
 `)
-	cfg := LoadConfig()
+	cfg := loadConfigForTest(t)
 	if cfg.Update.Mode != "auto" {
 		t.Errorf("mode not loaded: %q", cfg.Update.Mode)
 	}
@@ -256,7 +262,7 @@ check_hours = 12
 	if err := SaveConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
-	loaded := LoadConfig()
+	loaded := loadConfigForTest(t)
 	if loaded.Update.Mode != "auto" || loaded.Update.CheckHours == nil || *loaded.Update.CheckHours != 12 {
 		t.Errorf("round-trip lost [update]: %+v", loaded.Update)
 	}
@@ -321,45 +327,25 @@ func TestUpdateConfigMergePreserves(t *testing.T) {
 func TestProviderUsageRefreshConfig(t *testing.T) {
 	dir := useTempConfigDir(t)
 	writeConfigFile(t, dir, `
-[quota_shim]
-enabled = true
-refresh_minutes = 2
-
-[foreign_usage]
-refresh_minutes = 3
-`)
-	cfg := LoadConfig()
-	if got := cfg.QuotaShim.RefreshEvery(); got != 2*time.Minute {
-		t.Errorf("quota refresh = %v, want 2m", got)
-	}
+	[foreign_usage]
+	refresh_minutes = 3
+	`)
+	cfg := loadConfigForTest(t)
 	if got := cfg.ForeignUsage.RefreshEvery(); got != 3*time.Minute {
-		t.Errorf("foreign refresh = %v, want 3m", got)
-	}
-	if got := (QuotaShimConfig{}).RefreshEvery(); got != 5*time.Minute {
-		t.Errorf("default quota refresh = %v, want 5m", got)
+		t.Errorf("provider refresh = %v, want 3m", got)
 	}
 	if got := (ForeignUsageConfig{}).RefreshEvery(); got != time.Minute {
-		t.Errorf("default foreign refresh = %v, want 1m", got)
+		t.Errorf("default provider refresh = %v, want 1m", got)
 	}
 
-	zero := 0
 	tooHigh := 1441
-	cfg = Config{
-		QuotaShim:    QuotaShimConfig{RefreshMinutes: &zero},
-		ForeignUsage: ForeignUsageConfig{RefreshMinutes: &tooHigh},
-	}
+	cfg = Config{ForeignUsage: ForeignUsageConfig{RefreshMinutes: &tooHigh}}
 	warns := ValidateConfig(&cfg)
-	if cfg.QuotaShim.RefreshMinutes != nil || cfg.ForeignUsage.RefreshMinutes != nil {
+	if cfg.ForeignUsage.RefreshMinutes != nil {
 		t.Fatalf("invalid refresh values were not reset: %+v", cfg)
 	}
-	warned := make(map[string]bool, len(warns))
-	for _, warning := range warns {
-		warned[warning.Path] = true
-	}
-	for _, path := range []string{"quota_shim.refresh_minutes", "foreign_usage.refresh_minutes"} {
-		if !warned[path] {
-			t.Errorf("missing %s warning: %v", path, warns)
-		}
+	if len(warns) != 1 || warns[0].Path != "foreign_usage.refresh_minutes" {
+		t.Fatalf("warnings = %#v", warns)
 	}
 }
 

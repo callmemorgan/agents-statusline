@@ -15,7 +15,6 @@ import (
 	"github.com/callmemorgan/agents-statusline/internal/palette"
 	"github.com/callmemorgan/agents-statusline/internal/payload"
 	"github.com/callmemorgan/agents-statusline/internal/plugins"
-	"github.com/callmemorgan/agents-statusline/internal/quota"
 	"github.com/callmemorgan/agents-statusline/internal/releasenotes"
 	"github.com/callmemorgan/agents-statusline/internal/render"
 	"github.com/callmemorgan/agents-statusline/internal/segments"
@@ -57,18 +56,13 @@ func dispatch() {
 				os.Exit(1)
 			}
 			return
-		case "quota-refresh":
-			if err := quota.RunRefresh(); err != nil {
-				os.Exit(1)
-			}
-			return
 		case "foreign-usage-refresh":
 			if err := foreignusage.RunRefresh(); err != nil {
 				os.Exit(1)
 			}
 			return
 		case "quota":
-			if err := quota.RunStatus(os.Stdout); err != nil {
+			if err := foreignusage.RunStatus(os.Stdout); err != nil {
 				fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 				os.Exit(1)
 			}
@@ -122,17 +116,17 @@ func runRender(debug bool) {
 	}
 	initSegments(cfg.Plugins)
 
-	// OAuth quota shim: fill the model-class weekly windows from the cached
-	// usage-endpoint data when the payload lacks them (opt-in, one ReadFile).
-	// Runs before state.Record so burn-rate projections see the shim values.
-	quota.MaybeInject(&p, cfg.QuotaShim, start)
+	usageCache := foreignusage.Load()
+	// Fill Claude model-class weekly windows from the proxy-backed cache before
+	// state.Record so burn-rate projections see the same normalized data.
+	foreignusage.MaybeInjectClaudeModelScoped(&p, usageCache)
 
 	st := state.LoadState(cfg.State, segments.FirstNonEmpty(p.SessionID, p.ConversationID), start)
 	st.Record(p, start)
 
 	width := payload.TerminalWidth(p)
 	style := render.StyleFor(cfg, colors)
-	lines := render.Statusline(render.Input{P: p, C: colors, Cfg: cfg, State: st, Foreign: foreignusage.Load(quota.CachePath(cfg.QuotaShim)), Width: width, Now: start})
+	lines := render.Statusline(render.Input{P: p, C: colors, Cfg: cfg, State: st, Foreign: usageCache, Width: width, Now: start})
 
 	lines = releasenotes.MaybeTakeover(cfg.ReleaseNotes, lines, colors, width, style.Padding, start)
 

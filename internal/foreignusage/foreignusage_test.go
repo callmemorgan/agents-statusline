@@ -1,13 +1,14 @@
 package foreignusage
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/callmemorgan/agents-statusline/internal/config"
+	"github.com/callmemorgan/agents-statusline/internal/payload"
 	"github.com/callmemorgan/agents-statusline/internal/state"
 )
 
@@ -20,22 +21,32 @@ func TestLoadSanitizedCache(t *testing.T) {
 	if err := os.WriteFile(Path(), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cache := Load(filepath.Join(state.StateBaseDir(), "quota-shim.json"))
+	cache := Load()
 	if cache == nil || cache.Providers["grok"].Windows[0].UsedPercent != 42 {
 		t.Fatalf("cache = %#v", cache)
 	}
 }
 
-func TestEnvironmentWithRefreshPathAddsHomebrewNodeLocations(t *testing.T) {
-	got := environmentWithRefreshPath([]string{"HOME=/tmp/home", "PATH=/usr/bin:/bin"})
-	var path string
-	for _, entry := range got {
-		if strings.HasPrefix(entry, "PATH=") {
-			path = entry
+func TestFetchProxyUsageUsesGatewayEnvironment(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/subscription-usage" {
+			t.Fatalf("path = %q", r.URL.Path)
 		}
+		if got := r.Header.Get("Authorization"); got != "Bearer proxy-key" {
+			t.Fatalf("authorization = %q", got)
+		}
+		_, _ = w.Write([]byte(`{"fetchedAt":"2026-07-19T12:00:00Z","providers":{"claude":{"mode":"authoritative","state":"available","windows":[{"id":"5h","label":"Claude 5h","usedPercent":22}]}}}`))
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "proxy-key")
+
+	cache, err := fetchProxyUsage()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.HasPrefix(path, "PATH=/opt/homebrew/bin:/usr/local/bin:") {
-		t.Fatalf("PATH = %q", path)
+	if got := cache.Providers["claude"].Windows[0].UsedPercent; got != 22 {
+		t.Fatalf("Claude used percent = %v", got)
 	}
 }
 
@@ -84,28 +95,31 @@ func TestMaybeRefreshMissingCacheSpawns(t *testing.T) {
 	}
 }
 
-func TestLoadMergesClaudeQuotaCache(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	if err := os.MkdirAll(state.StateBaseDir(), 0o700); err != nil {
-		t.Fatal(err)
+func TestMaybeInjectClaudeModelScoped(t *testing.T) {
+	cache := &Cache{Providers: map[string]Provider{"claude": {Windows: []Window{
+		{ID: "5h", Label: "Claude 5h", UsedPercent: 12},
+		{ID: "model-fable", Label: "Fable", UsedPercent: 67, ResetAt: "2026-07-20T12:00:00Z", Scope: "model"},
+	}}}}
+	var p payload.Payload
+	MaybeInjectClaudeModelScoped(&p, cache)
+	if len(p.RateLimits.ModelScoped) != 1 {
+		t.Fatalf("model scoped = %#v", p.RateLimits.ModelScoped)
 	}
-	data := []byte(`{"five_hour":{"display_name":"Claude 5h","used_percentage":32,"resets_at":1783900800},"seven_day":{"display_name":"Claude weekly","used_percentage":18}}`)
-	quotaPath := filepath.Join(state.StateBaseDir(), "quota-shim-ef26ec72.json") // a profile-scoped shim cache
-	if err := os.WriteFile(quotaPath, data, 0o600); err != nil {
-		t.Fatal(err)
+	got := p.RateLimits.ModelScoped[0]
+	if got.DisplayName != "Fable" || got.UsedPercentage == nil || *got.UsedPercentage != 67 || got.ResetsAt == nil {
+		t.Fatalf("Fable = %#v", got)
 	}
-	cache := Load(quotaPath)
-	if cache == nil {
-		t.Fatal("Load() = nil")
-	}
-	claude := cache.Providers["claude"]
-	if claude.Mode != "authoritative" || len(claude.Windows) != 2 {
-		t.Fatalf("claude = %#v", claude)
-	}
-	if claude.Windows[0].Label != "Claude 5h" || claude.Windows[0].UsedPercent != 32 {
-		t.Fatalf("five-hour window = %#v", claude.Windows[0])
-	}
-	if claude.Windows[1].Label != "Claude weekly" || claude.Windows[1].UsedPercent != 18 {
-		t.Fatalf("weekly window = %#v", claude.Windows[1])
+}
+
+func TestMaybeInjectClaudeModelScopedPayloadWins(t *testing.T) {
+	cachePercent, payloadPercent := 67.0, 12.0
+	cache := &Cache{Providers: map[string]Provider{"claude": {Windows: []Window{
+		{ID: "model-fable", Label: "Fable", UsedPercent: cachePercent, Scope: "model"},
+	}}}}
+	p := payload.Payload{}
+	p.RateLimits.ModelScoped = []payload.ModelScopedLimit{{DisplayName: "Fable", UsedPercentage: &payloadPercent}}
+	MaybeInjectClaudeModelScoped(&p, cache)
+	if len(p.RateLimits.ModelScoped) != 1 || *p.RateLimits.ModelScoped[0].UsedPercentage != 12 {
+		t.Fatalf("payload model scoped overwritten: %#v", p.RateLimits.ModelScoped)
 	}
 }

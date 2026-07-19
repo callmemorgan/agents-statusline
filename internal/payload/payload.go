@@ -123,10 +123,10 @@ type RateLimits struct {
 	FiveHour LimitWindow `json:"five_hour"`
 	SevenDay LimitWindow `json:"seven_day"`
 	// ModelScoped carries the model-class weekly windows (Fable/Sonnet/Opus).
-	// Claude Code's statusline payload does not send them — the OAuth quota
-	// shim (internal/quota) injects them after parsing, which is why the
-	// field is excluded from JSON. If Claude Code ever ships them on the
-	// wire, add parsing back then, against the real field names.
+	// Claude Code's statusline payload does not send them. The proxy-backed
+	// subscription cache injects them after parsing, which is why the field is
+	// excluded from JSON. If Claude Code ever ships them on the wire, add
+	// parsing back then against the real field names.
 	ModelScoped []ModelScopedLimit `json:"-"`
 }
 
@@ -141,35 +141,6 @@ type ModelScopedLimit struct {
 	DisplayName    string
 	UsedPercentage *float64 // 0–100 when present
 	ResetsAt       *int64   // unix seconds
-}
-
-// ParseResetsAt parses a resets_at value that may be unix seconds (number)
-// or an RFC3339 timestamp string. Shared with the OAuth quota shim, which
-// receives the same wire convention.
-func ParseResetsAt(raw json.RawMessage) *int64 {
-	if len(raw) == 0 || string(raw) == "null" {
-		return nil
-	}
-	// Number (unix seconds, possibly float from JSON).
-	var n float64
-	if err := json.Unmarshal(raw, &n); err == nil {
-		v := int64(n)
-		return &v
-	}
-	// RFC3339 / RFC3339Nano string.
-	var s string
-	if err := json.Unmarshal(raw, &s); err != nil || s == "" {
-		return nil
-	}
-	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
-		v := t.Unix()
-		return &v
-	}
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		v := t.Unix()
-		return &v
-	}
-	return nil
 }
 
 // scoped returns the first ModelScoped entry whose display_name contains
@@ -265,7 +236,7 @@ func SamplePayload() Payload {
 		RateLimits: RateLimits{
 			FiveHour: LimitWindow{UsedPercentage: &pct50, ResetsAt: &reset5h},
 			SevenDay: LimitWindow{UsedPercentage: &pct30, ResetsAt: &reset7d},
-			// The model-class windows arrive via the quota shim, never the
+			// The model-class windows arrive via the proxy cache, never the
 			// wire; the preview seeds them the same way.
 			ModelScoped: []ModelScopedLimit{
 				{DisplayName: "Fable", UsedPercentage: &pct40, ResetsAt: &reset7d},

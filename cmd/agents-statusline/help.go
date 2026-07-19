@@ -42,9 +42,8 @@ Commands:
                Flags: --check (resolve + report only, never install).
                Subcommand: verify (check the latest release's signature
                against the embedded key, then exit; installs nothing).
-  quota        Fetch Claude's OAuth usage endpoint and print the model-class
-               weekly windows plus [quota_shim] cache state — verifies the
-               quota shim end-to-end.
+  quota        Fetch CLIProxyAPI's normalized subscription usage and print
+               all provider windows.
   help         Show this message.
   (none)       Read the JSON payload from stdin and print the statusline —
                this is how Claude Code invokes the binary.
@@ -79,11 +78,8 @@ Configuration:
   [update]     background update check + segment: mode (notify|auto|off,
                default notify), check_hours (1-168, default 24);
                auto is a no-op for npm installs
-  [quota_shim] opt-in bridge that feeds the Fable/Sonnet/Opus weekly bars
-               from Claude's OAuth usage endpoint (Claude Code does not
-               send model-class windows in the statusline payload):
-               enabled (default false), refresh_minutes (1-1440, default 5)
-  [foreign_usage] refresh cadence for Codex/Grok/Antigravity/Kimi usage:
+  [foreign_usage] proxy-backed refresh cadence for Claude/Codex/Grok/
+               Antigravity/Kimi usage:
                refresh_minutes (1-1440, default 1)
   [[plugins]]  custom executable segments — see README.md
 
@@ -124,13 +120,13 @@ Line 3 segments — Usage bars:
   context-window  Usage bar with growth trend and time-to-compact ↗ ~35m (both)
   rate-limit-5h     5-hour quota bar, countdown, burn-rate projection →58%
   rate-limit-7d     7-day weekly quota bar, countdown, burn-rate projection
-  rate-limit-fable  Fable 5 weekly included-quota bar, fed by the opt-in
-                    [quota_shim] bridge (not in the statusline payload)
-  rate-limit-sonnet Sonnet weekly quota bar (via [quota_shim])
-  rate-limit-opus   Opus weekly quota bar (via [quota_shim])
+  rate-limit-fable  Fable 5 weekly included-quota bar from CLIProxyAPI
+                    (not in the statusline payload)
+  rate-limit-sonnet Sonnet weekly quota bar from CLIProxyAPI
+  rate-limit-opus   Opus weekly quota bar from CLIProxyAPI
                     (rate limits: Claude Code Pro/Max only)
   usage-claude      Claude 5-hour and weekly subscription bars from the
-                    [quota_shim] OAuth cache (visible in claude-all)
+                    proxy-backed cache (visible in claude-all)
 
 Segments hide automatically when their source data is missing or zero.
 Burn rates, projections, and trends appear after ~5 minutes of session

@@ -73,37 +73,11 @@ type Config struct {
 	ReleaseNotes  ReleaseNotesConfig        `toml:"release_notes,omitempty"`
 	Plugins       []PluginDef               `toml:"plugins,omitempty"`
 	Update        UpdateConfig              `toml:"update,omitempty"`
-	QuotaShim     QuotaShimConfig           `toml:"quota_shim,omitempty"`
 	ForeignUsage  ForeignUsageConfig        `toml:"foreign_usage,omitempty"`
 }
 
-// QuotaShimConfig is the [quota_shim] table: an opt-in bridge that fills the
-// model-class weekly rate-limit windows (Fable/Sonnet/Opus) from Claude's
-// OAuth usage endpoint until Claude Code's statusline payload carries them
-// natively. Off by default: enabling it means the background worker reads
-// the Claude Code OAuth token (keychain or credentials file) and calls
-// api.anthropic.com on the user's behalf.
-type QuotaShimConfig struct {
-	Enabled        bool `toml:"enabled,omitempty"`
-	RefreshMinutes *int `toml:"refresh_minutes,omitempty"` // 1..1440, default 5
-	// ClaudeConfigDir points the shim at a specific Claude Code profile (the
-	// same value you'd export as CLAUDE_CONFIG_DIR for that profile, e.g.
-	// "~/.claude-personal") instead of the default ~/.claude profile. Claude
-	// Code namespaces its keychain item per config dir; this tells the shim
-	// which one to read. Empty means the default profile (unchanged
-	// behavior).
-	ClaudeConfigDir string `toml:"claude_config_dir,omitempty"`
-}
-
-func (q QuotaShimConfig) RefreshEvery() time.Duration {
-	if q.RefreshMinutes == nil {
-		return 5 * time.Minute
-	}
-	return time.Duration(*q.RefreshMinutes) * time.Minute
-}
-
-// ForeignUsageConfig controls the cache refresh used by the Codex, Grok,
-// Antigravity, and Kimi subscription-usage segments.
+// ForeignUsageConfig controls the proxy-backed cache refresh used by all
+// subscription-usage segments, including Claude model-scoped windows.
 type ForeignUsageConfig struct {
 	RefreshMinutes *int `toml:"refresh_minutes,omitempty"` // 1..1440, default 1
 }
@@ -232,11 +206,6 @@ func (w ConfigWarning) String() string {
 	return w.Path + ": " + w.Msg
 }
 
-func LoadConfig() Config {
-	cfg, _ := LoadConfigWarn()
-	return cfg
-}
-
 // LoadConfigWarn loads the TOML config (migrating a legacy config.json first
 // if present), merges defaults, and normalizes invalid values. Warnings are
 // surfaced by --debug and the TUI; the render path ignores them unless
@@ -322,7 +291,6 @@ func MergeWithDefaults(loaded Config) Config {
 	cfg.State = loaded.State
 	cfg.ReleaseNotes = loaded.ReleaseNotes
 	cfg.Update = loaded.Update
-	cfg.QuotaShim = loaded.QuotaShim
 	cfg.ForeignUsage = loaded.ForeignUsage
 	if loaded.Segments == nil {
 		inSegments := make(map[string]bool, len(cfg.Segments))
@@ -487,10 +455,6 @@ func ValidateConfig(cfg *Config) []ConfigWarning {
 	if h := cfg.Update.CheckHours; h != nil && (*h < 1 || *h > 168) {
 		warns = append(warns, ConfigWarning{Path: "update.check_hours", Msg: fmt.Sprintf("%d out of range 1-168 (using 24)", *h)})
 		cfg.Update.CheckHours = nil
-	}
-	if m := cfg.QuotaShim.RefreshMinutes; m != nil && (*m < 1 || *m > 1440) {
-		warns = append(warns, ConfigWarning{Path: "quota_shim.refresh_minutes", Msg: fmt.Sprintf("%d out of range 1-1440 (using 5)", *m)})
-		cfg.QuotaShim.RefreshMinutes = nil
 	}
 	if m := cfg.ForeignUsage.RefreshMinutes; m != nil && (*m < 1 || *m > 1440) {
 		warns = append(warns, ConfigWarning{Path: "foreign_usage.refresh_minutes", Msg: fmt.Sprintf("%d out of range 1-1440 (using 1)", *m)})

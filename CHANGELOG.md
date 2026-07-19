@@ -7,6 +7,11 @@ much larger values (e.g. 99999) to force top placement. Bullets without a
 marker default to importance 0.
 -->
 
+## v1.8.4 — 2026-07-19
+- [5] **One proxy-backed subscription cache.** Claude, Codex, Grok, Antigravity, and Kimi usage now comes from CLIProxyAPI's normalized `/v1/subscription-usage` endpoint. Provider credentials stay in the proxy, while the render path keeps its one-minute stale-while-revalidate cache and never waits on the network.
+- [4] **Removed the direct Claude OAuth shim.** Deleted the keychain/token discovery package, per-profile shim caches and locks, `[quota_shim]` config, and the legacy `quota-refresh` worker alias. `agents-statusline quota` remains as the foreground proxy verification command.
+- [2] **Dead-code sweep.** Removed the remaining unreachable config, payload-reset, and segment-filter helpers and ignored the repo-local build artifact.
+
 ## v1.8.3 — 2026-07-09
 - [4] **Model-class windows are shim-only now.** Removed the speculative statusline-payload parsing of `seven_day_overage_included` / `seven_day_sonnet` / `seven_day_opus` / `model_scoped` — Claude Code does not send these fields to the statusline, so the binary no longer pretends to read them from the wire. The Fable/Sonnet/Opus bars are fed exclusively by the opt-in `[quota_shim]` OAuth bridge; if Claude Code ever ships the fields, wire parsing will return against the real schema.
 

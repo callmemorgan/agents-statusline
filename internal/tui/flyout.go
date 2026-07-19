@@ -197,7 +197,7 @@ func flyoutPreviewPayload(segID string, base payload.Payload) payload.Payload {
 }
 
 // setModelScoped upserts one model-class weekly window on the preview
-// payload. On the render path these entries come from the quota shim, never
+// payload. On the render path these entries come from the proxy cache, never
 // the wire (rate_limits.model_scoped is not a statusline payload field).
 func setModelScoped(p *payload.Payload, name string, pct int, resetsAt *int64) {
 	for i := range p.RateLimits.ModelScoped {

@@ -27,8 +27,8 @@ theme = "classic"
 #preset = "cost-tracker"
 
 # Which segments to show, in order. Omit the key for the default set
-# Foreign subscription cache segments are opt-in: usage-codex, usage-grok,
-# usage-agy, and usage-kimi. Refresh their cache with `claude-all-usage`.
+# Proxy-backed subscription cache segments are opt-in: usage-claude,
+# usage-codex, usage-grok, usage-agy, and usage-kimi.
 # (plugins are auto-appended); use [] to hide everything.
 segments = [
   "vim-mode",
@@ -182,26 +182,9 @@ timeout_ms = 200
 # mode = "notify"
 # check_hours = 24
 
-# Subscription usage for Codex, Grok, Antigravity, and Kimi is cached so the
-# render path never blocks on network I/O. A detached worker refreshes stale
-# data after each render.
+# Subscription usage for Claude, Codex, Grok, Antigravity, and Kimi is cached
+# so the render path never blocks on network I/O. A detached worker refreshes
+# stale data from CLIProxyAPI after each render; provider credentials stay in
+# the proxy.
 # [foreign_usage]
 # refresh_minutes = 1   # 1-1440
-
-# OAuth quota shim: fills the Fable/Sonnet/Opus weekly rate-limit bars from
-# Claude's OAuth usage endpoint (the data behind `claude /usage`) until
-# Claude Code's statusline payload carries those fields natively. Opt-in:
-# when enabled, a detached background worker reads your Claude Code OAuth
-# token (macOS keychain or ~/.claude/.credentials.json) and calls
-# api.anthropic.com at most once per refresh_minutes. Only percentages and
-# reset times are cached to disk — never the token. Payload data always
-# wins once Claude Code starts sending the fields. Verify with
-# `agents-statusline quota`.
-# [quota_shim]
-# enabled = true
-# refresh_minutes = 5   # 1-1440
-# Running multiple Claude Code profiles side by side (e.g. via a shell
-# function that sets CLAUDE_CONFIG_DIR)? Claude Code keys its keychain item
-# by config dir, so point the shim at the profile you want tracked — the
-# default ~/.claude profile is used when this is unset.
-# claude_config_dir = "~/.claude-personal"
